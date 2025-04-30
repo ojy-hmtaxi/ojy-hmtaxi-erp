@@ -6,6 +6,8 @@
 {{ sidebar() }}
 {% endblock %}
 
+{% block title %}배차 관리{% endblock %}
+
 {% block content %}
 <!DOCTYPE html>
 <html lang="ko">
@@ -401,6 +403,10 @@
             -webkit-overflow-scrolling: touch;
             width: 95%;
             justify-content: space-between;
+        }
+
+        .top-nav {
+            margin-left: 100px;
         }
     </style>
 </head>

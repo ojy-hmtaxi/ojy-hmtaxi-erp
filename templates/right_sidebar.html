@@ -54,6 +54,48 @@
         height: 100%;
         overflow-y: auto;
     }
+
+    /* 메시지 스타일 */
+    .message {
+        background-color: #f7f7f7;
+        padding: 10px;
+        margin-bottom: 10px;
+        border-radius: 5px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .message.current-user {
+        background-color: #fff9c4;
+    }
+
+    .message-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 5px;
+        font-size: 0.9em;
+    }
+
+    .message-content {
+        word-break: break-all;
+    }
+
+    .delete-form {
+        margin-top: 5px;
+        text-align: right;
+    }
+
+    .delete-btn {
+        background: none;
+        border: none;
+        color: #dc3545;
+        cursor: pointer;
+        font-size: 0.8em;
+        padding: 2px 5px;
+    }
+
+    .delete-btn:hover {
+        text-decoration: underline;
+    }
 </style>
 
 <div class="right-sidebar collapsed" id="rightSidebar">
@@ -69,9 +111,9 @@
             </form>
             <div class="messages">
                 {% for message in messages %}
-                <div class="message">
+                <div class="message {% if current_user and current_user.name == message.author.name %}current-user{% endif %}">
                     <div class="message-header">
-                        <span class="author">{{ message.author.username }}</span>
+                        <span class="author">{{ message.author.name }}</span>
                         <span class="timestamp">{{ message.timestamp.strftime('%Y-%m-%d %H:%M') }}</span>
                     </div>
                     <div class="message-content">{{ message.content }}</div>

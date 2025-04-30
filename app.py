@@ -146,7 +146,7 @@ def calculate_salary():
                     session['salary_data'] = salary_data
                     session['salary_calculated'] = True
                     
-                    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(30).all()
+                    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
                     return render_template('index.html', 
                                         salary_data=salary_data,
                                         calculated=True,
@@ -542,8 +542,8 @@ def accident():
 @login_required
 def add_message():
     content = request.form.get('content', '').strip()
-    if len(content) > 50:
-        flash('메시지는 50자 이내로 작성해주세요.', 'error')
+    if len(content) > 60:
+        flash('메시지는 60자 이내로 작성해주세요.', 'error')
         return redirect(url_for('calculate_salary'))
     
     if content:
