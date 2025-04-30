@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar %}
+{% from "right_sidebar.html" import right_sidebar %}
+
+{% block sidebar %}
+{{ sidebar() }}
+{% endblock %}
+
+{% block title %}대시보드{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- 상단 통계 카드 -->
+    <div class="row">
+        <div class="col-md-3">
+            <div class="stat-card">
+                <h5>최종수입금</h5>
+                <h2>{{ total_income|default('0') }}원</h2>
+                <p><i class="fas fa-arrow-up me-1"></i>+{{ income_change|default('0') }}원 ({{ income_percent|default('0') }}%)</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <h5>미터금액</h5>
+                <h2>{{ meter_amount|default('0') }}원</h2>
+                <p><i class="fas fa-arrow-up me-1"></i>+{{ meter_change|default('0') }}원 ({{ meter_percent|default('0') }}%)</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <h5>운행건수</h5>
+                <h2>{{ trip_count|default('0') }}건</h2>
+                <p><i class="fas fa-arrow-up me-1"></i>+{{ trip_change|default('0') }}건 ({{ trip_percent|default('0') }}%)</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <h5>운행거리</h5>
+                <h2>{{ distance|default('0') }}km</h2>
+                <p><i class="fas fa-arrow-up me-1"></i>+{{ distance_change|default('0') }}km ({{ distance_percent|default('0') }}%)</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 배차 현황 -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">배차 현황</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>총 운행수</span>
+                        <strong>{{ total_trips|default('228') }}건</strong>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>주간</span>
+                        <strong>{{ day_trips|default('57') }}건</strong>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>야간</span>
+                        <strong>{{ night_trips|default('57') }}건</strong>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>일차</span>
+                        <strong>{{ daily_trips|default('114') }}건</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 운행일보 제출현황 -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">운행일보 제출현황</h5>
+        </div>
+        <div class="card-body">
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>제출건수</span>
+                        <strong>{{ submitted_reports|default('50') }}건</strong>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>미제출건수</span>
+                        <strong>{{ unsubmitted_reports|default('178') }}건</strong>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>제출률</span>
+                        <strong>{{ submission_rate|default('21.93') }}%</strong>
+                    </div>
+                </div>
+            </div>
+            <div class="progress">
+                <div class="progress-bar" role="progressbar" style="width: {{ submission_rate|default('21.93') }}%"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{ right_sidebar(messages, current_user) }}
+{% endblock %} 

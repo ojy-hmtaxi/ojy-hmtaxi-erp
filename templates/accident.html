@@ -1,0 +1,578 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar %}
+{% from "right_sidebar.html" import right_sidebar %}
+
+{% block sidebar %}
+{{ sidebar() }}
+{% endblock %}
+
+{% block content %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>한미ERP - 사고 관리</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            background-color: #f5f5f5;
+        }
+        .main-content {
+            margin-left: 100px;
+            margin-right: auto;
+            padding: 20px;
+            flex: 1;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .error {
+            color: red;
+            margin-bottom: 15px;
+        }
+        .excel-upload {
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .upload-result {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #e8f5e9;
+            border-radius: 4px;
+            display: none;
+        }
+        .upload-result.show {
+            display: block;
+        }
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .table th, .table td {
+            padding: 8px;
+            border: 1px solid #ddd;
+            text-align: left;
+            font-size: 12px;
+        }
+        .table th {
+            background-color: #f2f2f2;
+        }
+        .table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        /* 탭 스타일 */
+        .tabs {
+            margin-top: 20px;
+        }
+        .tab-buttons {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        .tab-button {
+            padding: 10px 20px;
+            background-color: #b0b0b0;
+            border: none;
+            cursor: pointer;
+            margin-right: 5px;
+            border-radius: 4px 4px 0 0;
+        }
+        .tab-button.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+            padding: 20px;
+            background-color: white;
+            border-radius: 0 4px 4px 4px;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .summary-section {
+            margin-bottom: 30px;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .summary-section h3 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .summary-item {
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        .summary-item strong {
+            color: #555;
+            margin-right: 10px;
+        }
+        /* 정렬 버튼 스타일 */
+        .sort-btn {
+            background: none;
+            border: none;
+            padding: 0 5px;
+            cursor: pointer;
+            color: #666;
+            font-size: 12px;
+        }
+        .sort-btn:hover {
+            color: #4CAF50;
+        }
+        .sort-btn.active {
+            color: #4CAF50;
+        }
+        th {
+            position: relative;
+            white-space: nowrap;
+        }
+        .sort-icons {
+            display: inline-block;
+            margin-left: 5px;
+        }
+        /* 줄바꿈된 텍스트의 행간 조정 */
+        .slash-to-br {
+            line-height: 1.5;
+        }
+        .slash-to-br br {
+            margin: 3px 0;
+            content: "";
+            display: block;
+        }
+        /* 미결 상태 스타일 */
+        .status-pending {
+            color: red;
+        }
+        tr.pending-row {
+            background-color: #ffe6e6 !important;
+        }
+        /* 짝수 행의 미결 상태도 동일한 배경색 유지 */
+        tr.pending-row:nth-child(even) {
+            background-color: #ffe6e6 !important;
+        }
+        /* 치료지급, 수리지급 컬럼 스타일 */
+        .payment-column {
+            color: #00008B;
+        }
+    </style>
+</head>
+<body>
+    {{ right_sidebar(messages, current_user) }}
+    <div class="main-content">
+        <div class="container">
+            <h1>사고 관리</h1>
+            
+            {% if error %}
+            <div class="error">{{ error }}</div>
+            {% endif %}
+            
+            <div class="excel-upload">
+                <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                    <div class="form-group">
+                        <label for="excel_file">엑셀 파일 선택:</label>
+                        <input type="file" id="excel_file" name="excel_file" accept=".xlsx,.xls" required>
+                    </div>
+                    <button type="submit">사고 데이터 불러오기</button>
+                </form>
+                <div id="uploadResult" class="upload-result"></div>
+            </div>
+            
+            {% if accident_data %}
+            <div class="tabs">
+                <div class="tab-buttons">
+                    <button class="tab-button active" onclick="openTab(event, 'at-fault')">가해사고</button>
+                    <button class="tab-button" onclick="openTab(event, 'not-at-fault')">피해사고</button>
+                    <button class="tab-button" onclick="openTab(event, 'summary')">요약</button>
+                </div>
+                
+                <div id="at-fault" class="tab-content active">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>사고번호</th>
+                                <th>사고일시</th>
+                                <th>차량번호</th>
+                                <th>기사명</th>
+                                <th>사고원인</th>
+                                <th>접보사항</th>
+                                <th>상해</th>
+                                <th>피해자</th>
+                                <th class="payment-column">치료지급</th>
+                                <th>운전자</th>
+                                <th>차종</th>
+                                <th class="payment-column">수리지급</th>
+                                <th>처리여부</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for accident in accident_data.at_fault %}
+                            <tr {% if accident.처리여부 == '미결' %}class="pending-row"{% endif %}>
+                                <td>{{ accident.사고번호 }}</td>
+                                <td>{{ accident.사고일시 }}</td>
+                                <td>{{ accident.차량번호 }}</td>
+                                <td>{{ accident.기사명 }}</td>
+                                <td>{{ accident.사고원인 }}</td>
+                                <td>{{ accident.접보사항 }}</td>
+                                <td>{{ accident.상해 }}</td>
+                                <td class="slash-to-br">{{ accident.피해자 }}</td>
+                                <td class="slash-to-br payment-column">{{ accident.치료지급 }}</td>
+                                <td class="slash-to-br">{{ accident.운전자 }}</td>
+                                <td class="slash-to-br">{{ accident.차종 }}</td>
+                                <td class="slash-to-br payment-column">{{ accident.수리지급 }}</td>
+                                <td {% if accident.처리여부 == '미결' %}class="status-pending"{% endif %}>{{ accident.처리여부 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div id="not-at-fault" class="tab-content">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>사고번호</th>
+                                <th>사고일시</th>
+                                <th>차량번호</th>
+                                <th>기사명</th>
+                                <th>사고원인</th>
+                                <th class="payment-column">피해견적</th>
+                                <th>입금일</th>
+                                <th class="payment-column">금액</th>
+                                <th>처리여부</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for accident in accident_data.not_at_fault %}
+                            <tr {% if accident.처리여부 == '미결' %}class="pending-row"{% endif %}>
+                                <td>{{ accident.사고번호 }}</td>
+                                <td>{{ accident.사고일시 }}</td>
+                                <td>{{ accident.차량번호 }}</td>
+                                <td>{{ accident.기사명 }}</td>
+                                <td>{{ accident.사고원인 }}</td>
+                                <td class="payment-column">{{ accident.피해견적 }}</td>
+                                <td>{{ accident.입금일 }}</td>
+                                <td class="payment-column">{{ accident.금액 }}</td>
+                                <td {% if accident.처리여부 == '미결' %}class="status-pending"{% endif %}>{{ accident.처리여부 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div id="summary" class="tab-content">
+                    <div class="summary-section">
+                        <h3>전체 현황</h3>
+                        <div class="summary-item">
+                            <strong>총 사고 건수:</strong> {{ accident_data.summary.total_count }}건
+                        </div>
+                        <div class="summary-item">
+                            <strong>가해사고:</strong> {{ accident_data.summary.at_fault_count }}건
+                        </div>
+                        <div class="summary-item">
+                            <strong>피해사고:</strong> {{ accident_data.summary.not_at_fault_count }}건
+                        </div>
+                        <div class="summary-item">
+                            <strong>가해 미결 처리 사고:</strong> {{ accident_data.summary.at_fault_pending_count }}건
+                        </div>
+                        <div class="summary-item">
+                            <strong>피해 미결 처리 사고:</strong> {{ accident_data.summary.not_at_fault_pending_count }}건
+                        </div>
+                    </div>
+
+                    <div class="summary-section">
+                        <h3>기사별 통계</h3>
+                        <table class="table" id="driver-table">
+                            <thead>
+                                <tr>
+                                    <th>
+                                        기사명
+                                        <div class="sort-icons">
+                                            <button class="sort-btn" onclick="sortTable('driver-table', 0, 'asc')" title="오름차순">▲</button>
+                                            <button class="sort-btn" onclick="sortTable('driver-table', 0, 'desc')" title="내림차순">▼</button>
+                                        </div>
+                                    </th>
+                                    <th>
+                                        가해사고
+                                        <div class="sort-icons">
+                                            <button class="sort-btn" onclick="sortTable('driver-table', 1, 'asc')" title="오름차순">▲</button>
+                                            <button class="sort-btn" onclick="sortTable('driver-table', 1, 'desc')" title="내림차순">▼</button>
+                                        </div>
+                                    </th>
+                                    <th>
+                                        누적 수리지급
+                                        <div class="sort-icons">
+                                            <button class="sort-btn" onclick="sortTable('driver-table', 2, 'asc')" title="오름차순">▲</button>
+                                            <button class="sort-btn" onclick="sortTable('driver-table', 2, 'desc')" title="내림차순">▼</button>
+                                        </div>
+                                    </th>
+                                    <th>
+                                        누적 치료지급
+                                        <div class="sort-icons">
+                                            <button class="sort-btn" onclick="sortTable('driver-table', 3, 'asc')" title="오름차순">▲</button>
+                                            <button class="sort-btn" onclick="sortTable('driver-table', 3, 'desc')" title="내림차순">▼</button>
+                                        </div>
+                                    </th>
+                                    <th>
+                                        피해사고
+                                        <div class="sort-icons">
+                                            <button class="sort-btn" onclick="sortTable('driver-table', 4, 'asc')" title="오름차순">▲</button>
+                                            <button class="sort-btn" onclick="sortTable('driver-table', 4, 'desc')" title="내림차순">▼</button>
+                                        </div>
+                                    </th>
+                                    <th>
+                                        누적 피해견적
+                                        <div class="sort-icons">
+                                            <button class="sort-btn" onclick="sortTable('driver-table', 5, 'asc')" title="오름차순">▲</button>
+                                            <button class="sort-btn" onclick="sortTable('driver-table', 5, 'desc')" title="내림차순">▼</button>
+                                        </div>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for driver in accident_data.summary.driver_stats %}
+                                <tr>
+                                    <td>{{ driver.name }}</td>
+                                    <td data-value="{{ driver.at_fault_count }}">{{ driver.at_fault_count }}건</td>
+                                    <td class="payment-column" data-value="{{ driver.repair_payment.replace(',', '') }}">{{ driver.repair_payment }}</td>
+                                    <td class="payment-column" data-value="{{ driver.treatment_payment.replace(',', '') }}">{{ driver.treatment_payment }}</td>
+                                    <td data-value="{{ driver.not_at_fault_count }}">{{ driver.not_at_fault_count }}건</td>
+                                    <td class="payment-column" data-value="{{ driver.damage_estimate.replace(',', '') }}">{{ driver.damage_estimate }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="summary-section">
+                        <h3>차량별 통계</h3>
+                        <table class="table" id="vehicle-table">
+                            <thead>
+                                <tr>
+                                    <th>
+                                        차량번호
+                                        <div class="sort-icons">
+                                            <button class="sort-btn" onclick="sortTable('vehicle-table', 0, 'asc')" title="오름차순">▲</button>
+                                            <button class="sort-btn" onclick="sortTable('vehicle-table', 0, 'desc')" title="내림차순">▼</button>
+                                        </div>
+                                    </th>
+                                    <th>
+                                        가해사고
+                                        <div class="sort-icons">
+                                            <button class="sort-btn" onclick="sortTable('vehicle-table', 1, 'asc')" title="오름차순">▲</button>
+                                            <button class="sort-btn" onclick="sortTable('vehicle-table', 1, 'desc')" title="내림차순">▼</button>
+                                        </div>
+                                    </th>
+                                    <th>
+                                        피해사고
+                                        <div class="sort-icons">
+                                            <button class="sort-btn" onclick="sortTable('vehicle-table', 2, 'asc')" title="오름차순">▲</button>
+                                            <button class="sort-btn" onclick="sortTable('vehicle-table', 2, 'desc')" title="내림차순">▼</button>
+                                        </div>
+                                    </th>
+                                    <th>
+                                        누적 피해견적
+                                        <div class="sort-icons">
+                                            <button class="sort-btn" onclick="sortTable('vehicle-table', 3, 'asc')" title="오름차순">▲</button>
+                                            <button class="sort-btn" onclick="sortTable('vehicle-table', 3, 'desc')" title="내림차순">▼</button>
+                                        </div>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for vehicle in accident_data.summary.vehicle_stats %}
+                                <tr>
+                                    <td>{{ vehicle.number }}</td>
+                                    <td data-value="{{ vehicle.at_fault_count }}">{{ vehicle.at_fault_count }}건</td>
+                                    <td data-value="{{ vehicle.not_at_fault_count }}">{{ vehicle.not_at_fault_count }}건</td>
+                                    <td class="payment-column" data-value="{{ vehicle.damage_estimate.replace(',', '') }}">{{ vehicle.damage_estimate }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        function openTab(evt, tabName) {
+            var tabcontent = document.getElementsByClassName("tab-content");
+            for (var i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].classList.remove("active");
+            }
+
+            var tabbuttons = document.getElementsByClassName("tab-button");
+            for (var i = 0; i < tabbuttons.length; i++) {
+                tabbuttons[i].classList.remove("active");
+            }
+
+            document.getElementById(tabName).classList.add("active");
+            evt.currentTarget.classList.add("active");
+        }
+
+        // 테이블 정렬 함수
+        function sortTable(tableId, columnIndex, direction) {
+            var table = document.getElementById(tableId);
+            var tbody = table.getElementsByTagName('tbody')[0];
+            var rows = Array.from(tbody.getElementsByTagName('tr'));
+            var headers = table.getElementsByTagName('th');
+
+            // 이전 정렬 상태 초기화
+            for (var i = 0; i < headers.length; i++) {
+                headers[i].querySelectorAll('.sort-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+            }
+
+            // 현재 정렬 버튼 활성화
+            var currentHeader = headers[columnIndex];
+            var sortBtn = currentHeader.querySelector(direction === 'asc' ? '.sort-btn:first-child' : '.sort-btn:last-child');
+            sortBtn.classList.add('active');
+
+            // 정렬
+            rows.sort(function(a, b) {
+                var aValue = a.cells[columnIndex].getAttribute('data-value') || a.cells[columnIndex].textContent;
+                var bValue = b.cells[columnIndex].getAttribute('data-value') || b.cells[columnIndex].textContent;
+
+                // 숫자 정렬
+                if (!isNaN(aValue) && !isNaN(bValue)) {
+                    aValue = parseFloat(aValue);
+                    bValue = parseFloat(bValue);
+                }
+
+                if (direction === 'asc') {
+                    return aValue > bValue ? 1 : -1;
+                } else {
+                    return aValue < bValue ? 1 : -1;
+                }
+            });
+
+            // 정렬된 행 다시 삽입
+            rows.forEach(function(row) {
+                tbody.appendChild(row);
+            });
+        }
+
+        // '/' 기호를 줄바꿈으로 변환하고 숫자에 1000단위 쉼표를 적용하는 함수
+        function convertSlashToBr() {
+            var elements = document.getElementsByClassName('slash-to-br');
+            for (var i = 0; i < elements.length; i++) {
+                var text = elements[i].textContent;
+                // '/' 기호를 줄바꿈으로 변환
+                var lines = text.split('/');
+                var processedLines = lines.map(function(line) {
+                    // 숫자인 경우 1000단위 쉼표 적용
+                    if (!isNaN(line.trim()) && line.trim() !== '') {
+                        return parseInt(line.trim()).toLocaleString();
+                    }
+                    return line;
+                });
+                elements[i].innerHTML = processedLines.join('<br>');
+            }
+        }
+
+        // 페이지 로드 시 실행
+        window.onload = function() {
+            convertSlashToBr();
+        };
+
+        document.getElementById('uploadForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            fetch('', {
+                method: 'POST',
+                body: formData
+            }).then(response => {
+                if (response.ok) {
+                    const file = document.getElementById('excel_file').files[0];
+                    const now = new Date();
+                    const dateStr = now.getFullYear() + '-' + 
+                                  String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                                  String(now.getDate()).padStart(2, '0');
+                    const timeStr = String(now.getHours()).padStart(2, '0') + ':' + 
+                                  String(now.getMinutes()).padStart(2, '0');
+                    
+                    const uploadMessage = `<${file.name}> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${dateStr} | ${timeStr} | 업로더: {{ current_user.name }})`;
+                    const resultDiv = document.getElementById('uploadResult');
+                    resultDiv.textContent = uploadMessage;
+                    resultDiv.classList.add('show');
+                    
+                    // 메시지를 localStorage에 저장
+                    localStorage.setItem('accidentUploadMessage', uploadMessage);
+                }
+            }).catch(error => {
+                console.error('Error:', error);
+            });
+        });
+
+        // 페이지 로드 시 저장된 메시지 복원
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedMessage = localStorage.getItem('accidentUploadMessage');
+            if (savedMessage) {
+                const resultDiv = document.getElementById('uploadResult');
+                resultDiv.textContent = savedMessage;
+                resultDiv.classList.add('show');
+            }
+        });
+
+        // 새 파일이 선택되면 이전 메시지 삭제
+        document.getElementById('excel_file').addEventListener('change', function() {
+            localStorage.removeItem('accidentUploadMessage');
+            const resultDiv = document.getElementById('uploadResult');
+            resultDiv.textContent = '';
+            resultDiv.classList.remove('show');
+        });
+    </script>
+</body>
+</html>
+{% endblock %} 

@@ -1,0 +1,111 @@
+{% macro right_sidebar(messages=[], current_user=None) %}
+<style>
+    /* 오른쪽 사이드바 스타일 */
+    .right-sidebar {
+        position: fixed;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 420px;
+        background-color: #ffffff;
+        box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+        transition: transform 0.3s ease;
+        z-index: 1000;
+        padding: 20px;
+    }
+
+    .right-sidebar.collapsed {
+        transform: translateX(410px);
+    }
+
+    /* 토글 버튼 스타일 */
+    .right-sidebar-toggle {
+        position: absolute;
+        left: -30px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 30px;
+        height: 60px;
+        background-color: #ffffff;
+        box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+        border: none;
+        border-radius: 5px 0 0 5px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #333333;
+    }
+
+    .right-sidebar-toggle:hover {
+        background-color: #f5f5f5;
+    }
+
+    .right-sidebar-toggle i {
+        transition: transform 0.3s ease;
+    }
+
+    .right-sidebar.collapsed .right-sidebar-toggle i {
+        transform: rotate(180deg);
+    }
+
+    /* 사이드바 내용 스타일 */
+    .right-sidebar-content {
+        height: 100%;
+        overflow-y: auto;
+    }
+</style>
+
+<div class="right-sidebar collapsed" id="rightSidebar">
+    <button class="right-sidebar-toggle" onclick="toggleRightSidebar()">
+        <i class="fas fa-chevron-left"></i>
+    </button>
+    <div class="right-sidebar-content">
+        <div class="message-board">
+            <h3>메시지 보드</h3>
+            <form action="{{ url_for('add_message') }}" method="POST" class="message-form">
+                <textarea name="content" maxlength="60" placeholder="60자 이내로 메시지를 작성하세요" required></textarea>
+                <button type="submit">작성</button>
+            </form>
+            <div class="messages">
+                {% for message in messages %}
+                <div class="message">
+                    <div class="message-header">
+                        <span class="author">{{ message.author.username }}</span>
+                        <span class="timestamp">{{ message.timestamp.strftime('%Y-%m-%d %H:%M') }}</span>
+                    </div>
+                    <div class="message-content">{{ message.content }}</div>
+                    {% if current_user and (current_user.id == message.user_id or current_user.role == 'admin') %}
+                    <form action="{{ url_for('delete_message', message_id=message.id) }}" method="POST" class="delete-form">
+                        <button type="submit" class="delete-btn">삭제</button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleRightSidebar() {
+    const sidebar = document.getElementById('rightSidebar');
+    sidebar.classList.toggle('collapsed');
+    
+    // 사이드바 상태를 localStorage에 저장
+    localStorage.setItem('rightSidebarCollapsed', sidebar.classList.contains('collapsed'));
+}
+
+// 페이지 로드 시 사이드바 상태 복원
+document.addEventListener('DOMContentLoaded', function() {
+    const sidebar = document.getElementById('rightSidebar');
+    const isCollapsed = localStorage.getItem('rightSidebarCollapsed') === 'true';
+    
+    if (isCollapsed) {
+        sidebar.classList.add('collapsed');
+    } else {
+        sidebar.classList.remove('collapsed');
+    }
+});
+</script>
+{% endmacro %} 

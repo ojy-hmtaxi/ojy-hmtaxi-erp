@@ -1,0 +1,726 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar %}
+{% from "right_sidebar.html" import right_sidebar %}
+
+{% block sidebar %}
+{{ sidebar() }}
+{% endblock %}
+
+{% block content %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>한미ERP - 배차 관리</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            background-color: #f5f5f5;
+        }
+        .main-content {
+            margin-left: 100px;
+            margin-right: auto;
+            padding: 20px;
+            flex: 1;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .error {
+            color: red;
+            margin-bottom: 15px;
+        }
+        .excel-upload {
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .upload-result {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #e8f5e9;
+            border-radius: 4px;
+            display: none;
+        }
+        .upload-result.show {
+            display: block;
+        }
+        .dispatch-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: #fff;
+        }
+        
+        .dispatch-table th,
+        .dispatch-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+            width: 48px;
+            min-width: 48px;
+            font-size: 12px;
+            background-color: inherit;
+        }
+        
+        .dispatch-table th {
+            background-color: #f0f0f0;
+            font-weight: normal;
+        }
+        
+        .dispatch-table thead th {
+            background-color: #f0f0f0;
+            border-bottom: 2px solid #ddd;
+        }
+        
+        .dispatch-table .highlighted {
+            background-color: #ffe6e6;
+        }
+        
+        .table-container {
+            margin: 20px auto;
+            overflow-x: auto;
+            max-height: 600px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            position: relative;
+        }
+        
+        .dispatch-table {
+            width: 100%;
+            border-collapse: separate;
+            background-color: #fff;
+            border-spacing: 0;
+        }
+        
+        .dispatch-table th,
+        .dispatch-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+            width: 48px;
+            min-width: 48px;
+            font-size: 12px;
+            background-color: inherit;
+        }
+
+        .dispatch-table tbody tr:hover {
+            background-color: #f5f5f5;
+        }
+
+        .dispatch-table tbody tr:hover td {
+            background-color: #f5f5f5;
+        }
+
+        /* sticky columns should maintain their background when row is hovered */
+        .dispatch-table tbody tr:hover td:nth-child(-n+4) {
+            background-color: #fff;
+        }
+
+        .dispatch-table th:nth-child(-n+4),
+        .dispatch-table td:nth-child(-n+4) {
+            position: sticky;
+            left: 0;
+            z-index: 1;
+            background-color: #fff;
+        }
+
+        /* 첫 4개 컬럼에 대한 특별한 width 설정 */
+        .dispatch-table th:nth-child(1),
+        .dispatch-table td:nth-child(1) {
+            width: 70px;
+            min-width: 70px;
+        }
+        
+        .dispatch-table th:nth-child(2),
+        .dispatch-table td:nth-child(2) {
+            width: 80px;
+            min-width: 80px;
+        }
+        
+        .dispatch-table th:nth-child(3),
+        .dispatch-table td:nth-child(3) {
+            width: 80px;
+            min-width: 80px;
+        }
+        
+        .dispatch-table th:nth-child(4),
+        .dispatch-table td:nth-child(4) {
+            width: 90px;
+            min-width: 90px;
+        }
+
+        .dispatch-table th:nth-child(1),
+        .dispatch-table td:nth-child(1) { left: 0; }
+        .dispatch-table th:nth-child(2),
+        .dispatch-table td:nth-child(2) { left: 70px; }
+        .dispatch-table th:nth-child(3),
+        .dispatch-table td:nth-child(3) { left: 150px; }
+        .dispatch-table th:nth-child(4),
+        .dispatch-table td:nth-child(4) { left: 230px; }
+
+        .dispatch-table thead tr th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background-color: #f0f0f0;
+        }
+
+        .dispatch-table thead tr th:nth-child(-n+4) {
+            z-index: 3;
+        }
+
+        .dispatch-table thead th {
+            background-color: #f0f0f0;
+            border-bottom: 2px solid #ddd;
+        }
+
+        /* 셀 내용에 따른 색상 스타일 */
+        .dispatch-table td[data-value="휴"] {
+            color: #ff0000;  /* 빨강 */
+            font-weight: bold;
+        }
+        
+        .dispatch-table td[data-value="o"] {
+            color: #008000;  /* 초록 */
+            font-weight: bold;
+        }
+        
+        .dispatch-table td[data-value="x"] {
+            color: #ffa500;  /* 주황 */
+            font-weight: bold;
+        }
+
+        /* 스크롤바 스타일링 */
+        .table-container::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .table-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .table-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        .table-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* 공통 탭 버튼 컨테이너 스타일 */
+        .sheet-tab-buttons {
+            display: flex;
+            margin: 0 auto;  /* 중앙 정렬 */
+            margin-bottom: 10px;
+            flex-wrap: nowrap;
+            overflow-x: hidden;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+            width: 95%;  /* 테이블과 동일한 너비 */
+            justify-content: space-between;
+        }
+
+        /* 공통 탭 버튼 스타일 */
+        .sheet-tab-button {
+            padding: 6px 0;
+            background-color: #b0b0b0;
+            border: none;
+            cursor: pointer;
+            margin-right: 2px;
+            border-radius: 4px;
+            font-size: 12px;
+            flex: 1;
+            min-width: 0;
+            text-align: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sheet-tab-button.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        /* 기존 시트 탭 관련 스타일 제거 */
+        .sheet-tabs {
+            margin-top: 20px;
+        }
+
+        .sheet-content {
+            padding: 20px;
+            background-color: white;
+            border-radius: 0 4px 4px 4px;
+            display: none;
+        }
+
+        .sheet-content.active {
+            display: block;
+        }
+
+        /* 월간 배차일정 테이블 컨테이너 스타일 */
+        .sheet-content .table-container {
+            width: 1200px;
+            height: 600px;
+            max-height: 600px;
+            margin: 0 auto;  /* 중앙 정렬 */
+        }
+
+        /* 배차 현황 통계 테이블 스타일 */
+        .stats-table {
+            width: 100%;
+            border-collapse: separate;
+            margin-top: 20px;
+            background-color: #fff;
+            border-spacing: 0;
+        }
+        
+        .stats-table th,
+        .stats-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+            font-size: 12px;
+            background-color: inherit;
+        }
+        
+        .stats-table th {
+            background-color: #f0f0f0;
+            font-weight: normal;
+        }
+        
+        .stats-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background-color: #f0f0f0;
+            border-bottom: 2px solid #ddd;
+        }
+
+        /* 배차 현황 통계 테이블 컨테이너 스타일 */
+        .stats-container {
+            margin: 20px auto;
+            overflow-x: auto;
+            width: 1124px;
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            position: relative;
+        }
+
+        /* 기본 테이블 컨테이너 스타일 */
+        .table-container {
+            margin: 20px auto;
+            overflow-x: auto;
+            max-height: 600px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            position: relative;
+        }
+
+        /* 월간 배차일정 테이블 전용 컨테이너 스타일 */
+        .schedule-container {
+            margin: 20px auto;
+            overflow-x: auto;
+            max-height: 600px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            position: relative;
+            width: 95%;
+            padding-right: 20px; /* 오른쪽 여백 추가 */
+        }
+
+        /* 시트 컨텐츠 스타일 */
+        .sheet-content {
+            padding: 20px;
+            background-color: white;
+            border-radius: 0 4px 4px 4px;
+            display: none;
+        }
+
+        .sheet-content.active {
+            display: block;
+        }
+
+        /* 시트 탭 버튼 컨테이너 스타일 */
+        .sheet-tab-buttons {
+            display: flex;
+            margin: 0 auto;
+            margin-bottom: 10px;
+            flex-wrap: nowrap;
+            overflow-x: hidden;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+            width: 95%;
+            justify-content: space-between;
+        }
+    </style>
+</head>
+<body>
+    {{ right_sidebar(messages, current_user) }}
+    <div class="main-content">
+        <div class="container">
+            <h1>배차 관리</h1>
+            
+            <div class="excel-upload">
+                <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                    <div class="form-group">
+                        <label for="excel_file">엑셀 파일 선택:</label>
+                        <input type="file" id="excel_file" name="excel_file" accept=".xlsx,.xls" required>
+                    </div>
+                    <button type="submit">배차 데이터 불러오기</button>
+                </form>
+                <div id="uploadResult" class="upload-result"></div>
+            </div>
+
+            {% if error %}
+            <div class="error">{{ error }}</div>
+            {% endif %}
+
+            <div style="margin-top: 40px;">
+                <h2>배차 현황 통계 <span id="selectedMonth" style="color: #4CAF50; font-weight: normal;"></span></h2>
+                {% if dispatch_data %}
+                    <div class="stats-container">
+                        <table class="stats-table">
+                            <thead>
+                                <tr>
+                                    <th>날짜</th>
+                                    <th>주간</th>
+                                    <th>야간</th>
+                                    <th>일차</th>
+                                    <th>리스</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for day in range(1, 32) %}
+                                    <tr>
+                                        <td>{{ day }}일</td>
+                                        {% set total_day = namespace(value=0) %}
+                                        {% set total_night = namespace(value=0) %}
+                                        {% set total_daily = namespace(value=0) %}
+                                        {% set total_lease = namespace(value=0) %}
+                                        
+                                        {% for sheet_name, sheet_data in dispatch_data.items() %}
+                                            {% for row in sheet_data.data %}
+                                                {% if row[day|string] == 'o' %}
+                                                    {% if row['근무유형'] == '주간' %}
+                                                        {% set total_day.value = total_day.value + 1 %}
+                                                    {% elif row['근무유형'] == '야간' %}
+                                                        {% set total_night.value = total_night.value + 1 %}
+                                                    {% elif row['근무유형'] == '일차' %}
+                                                        {% set total_daily.value = total_daily.value + 1 %}
+                                                    {% elif row['근무유형'] == '리스' %}
+                                                        {% set total_lease.value = total_lease.value + 1 %}
+                                                    {% endif %}
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endfor %}
+                                        
+                                        <td {% if total_day.value > 0 %}style="color: #008000; font-weight: bold;"{% endif %}>{{ total_day.value }}</td>
+                                        <td {% if total_night.value > 0 %}style="color: #008000; font-weight: bold;"{% endif %}>{{ total_night.value }}</td>
+                                        <td {% if total_daily.value > 0 %}style="color: #008000; font-weight: bold;"{% endif %}>{{ total_daily.value }}</td>
+                                        <td {% if total_lease.value > 0 %}style="color: #008000; font-weight: bold;"{% endif %}>{{ total_lease.value }}</td>
+                                    </tr>
+                                {% endfor %}
+                                <tr>
+                                    <td>합계</td>
+                                    {% set total_day = namespace(value=0) %}
+                                    {% set total_night = namespace(value=0) %}
+                                    {% set total_daily = namespace(value=0) %}
+                                    {% set total_lease = namespace(value=0) %}
+                                    
+                                    {% for sheet_name, sheet_data in dispatch_data.items() %}
+                                        {% for row in sheet_data.data %}
+                                            {% for header in sheet_data.headers %}
+                                                {% if header not in ['차량번호', '차종', '근무유형', '운전기사'] and row[header] == 'o' %}
+                                                    {% if row['근무유형'] == '주간' %}
+                                                        {% set total_day.value = total_day.value + 1 %}
+                                                    {% elif row['근무유형'] == '야간' %}
+                                                        {% set total_night.value = total_night.value + 1 %}
+                                                    {% elif row['근무유형'] == '일차' %}
+                                                        {% set total_daily.value = total_daily.value + 1 %}
+                                                    {% elif row['근무유형'] == '리스' %}
+                                                        {% set total_lease.value = total_lease.value + 1 %}
+                                                    {% endif %}
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endfor %}
+                                    {% endfor %}
+                                    
+                                    <td {% if total_day.value > 0 %}style="color: #008000; font-weight: bold;"{% endif %}>{{ total_day.value }}</td>
+                                    <td {% if total_night.value > 0 %}style="color: #008000; font-weight: bold;"{% endif %}>{{ total_night.value }}</td>
+                                    <td {% if total_daily.value > 0 %}style="color: #008000; font-weight: bold;"{% endif %}>{{ total_daily.value }}</td>
+                                    <td {% if total_lease.value > 0 %}style="color: #008000; font-weight: bold;"{% endif %}>{{ total_lease.value }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                {% endif %}
+                <br>    
+                <h2>월간 배차일정</h2>
+                {% if dispatch_data %}
+                <div class="sheet-tabs">
+                    <div class="sheet-tab-buttons">
+                        {% for sheet_name in dispatch_data.keys() %}
+                        <button class="sheet-tab-button {% if loop.first %}active{% endif %}" onclick="openSheetTab(event, 'sheet-{{ sheet_name }}')">{{ sheet_name }}</button>
+                        {% endfor %}
+                    </div>
+                    {% for sheet_name, data in dispatch_data.items() %}
+                    <div id="sheet-{{ sheet_name }}" class="sheet-content" style="display: {% if loop.first %}block{% else %}none{% endif %}">
+                        <div class="schedule-container">
+                            <table class="dispatch-table">
+                                <thead>
+                                    <tr>
+                                        {% for header in data.headers %}
+                                        <th>{{ header }}</th>
+                                        {% endfor %}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in data.data %}
+                                    <tr>
+                                        {% for header in data.headers %}
+                                        <td data-value="{{ row[header] }}">{{ row[header] }}</td>
+                                        {% endfor %}
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openSheetTab(evt, sheetName) {
+            // 모든 시트 컨텐츠 숨기기
+            var sheetContents = document.getElementsByClassName("sheet-content");
+            for (var i = 0; i < sheetContents.length; i++) {
+                sheetContents[i].style.display = "none";
+            }
+
+            // 모든 시트 탭 버튼 비활성화
+            var sheetButtons = document.getElementsByClassName("sheet-tab-button");
+            for (var i = 0; i < sheetButtons.length; i++) {
+                sheetButtons[i].classList.remove("active");
+            }
+
+            // 선택한 시트 보이기
+            document.getElementById(sheetName).style.display = "block";
+            evt.currentTarget.classList.add("active");
+
+            // 선택된 월 표시 업데이트
+            document.getElementById('selectedMonth').textContent = '- ' + evt.currentTarget.textContent;
+
+            // 배차 현황 통계 업데이트
+            updateDispatchStats(sheetName);
+        }
+
+        function updateDispatchStats(sheetName) {
+            // 현재 선택된 월의 테이블 가져오기
+            const currentTable = document.querySelector(`#${sheetName} .dispatch-table`);
+            if (!currentTable) return;
+
+            // 통계 테이블의 모든 날짜 행 초기화
+            const statsTable = document.querySelector('.stats-table tbody');
+            if (!statsTable) return;
+
+            // 각 날짜별로 통계 계산
+            for (let day = 1; day <= 31; day++) {
+                let dayStats = {
+                    '주간': 0,
+                    '야간': 0,
+                    '일차': 0,
+                    '리스': 0
+                };
+
+                // 현재 월의 모든 행을 순회하며 통계 계산
+                const rows = currentTable.querySelectorAll('tbody tr');
+                rows.forEach(row => {
+                    const workType = row.querySelector('td:nth-child(3)').textContent; // 근무유형
+                    const dayCell = row.querySelector(`td:nth-child(${day + 4})`); // 날짜 셀 (4는 기본 컬럼 수)
+                    
+                    if (dayCell && dayCell.textContent.trim() === 'o') {
+                        dayStats[workType]++;
+                    }
+                });
+
+                // 통계 테이블 업데이트
+                const statsRow = statsTable.querySelector(`tr:nth-child(${day})`);
+                if (statsRow) {
+                    statsRow.querySelector('td:nth-child(2)').textContent = dayStats['주간'];
+                    statsRow.querySelector('td:nth-child(2)').style.color = dayStats['주간'] > 0 ? '#008000' : 'inherit';
+                    statsRow.querySelector('td:nth-child(2)').style.fontWeight = dayStats['주간'] > 0 ? 'bold' : 'normal';
+
+                    statsRow.querySelector('td:nth-child(3)').textContent = dayStats['야간'];
+                    statsRow.querySelector('td:nth-child(3)').style.color = dayStats['야간'] > 0 ? '#008000' : 'inherit';
+                    statsRow.querySelector('td:nth-child(3)').style.fontWeight = dayStats['야간'] > 0 ? 'bold' : 'normal';
+
+                    statsRow.querySelector('td:nth-child(4)').textContent = dayStats['일차'];
+                    statsRow.querySelector('td:nth-child(4)').style.color = dayStats['일차'] > 0 ? '#008000' : 'inherit';
+                    statsRow.querySelector('td:nth-child(4)').style.fontWeight = dayStats['일차'] > 0 ? 'bold' : 'normal';
+
+                    statsRow.querySelector('td:nth-child(5)').textContent = dayStats['리스'];
+                    statsRow.querySelector('td:nth-child(5)').style.color = dayStats['리스'] > 0 ? '#008000' : 'inherit';
+                    statsRow.querySelector('td:nth-child(5)').style.fontWeight = dayStats['리스'] > 0 ? 'bold' : 'normal';
+                }
+            }
+
+            // 합계 행 업데이트
+            updateTotalRow(statsTable);
+        }
+
+        function updateTotalRow(statsTable) {
+            const totalRow = statsTable.querySelector('tr:last-child');
+            if (!totalRow) return;
+
+            let totals = {
+                '주간': 0,
+                '야간': 0,
+                '일차': 0,
+                '리스': 0
+            };
+
+            // 모든 날짜 행의 값을 합산
+            const rows = statsTable.querySelectorAll('tr:not(:last-child)');
+            rows.forEach(row => {
+                totals['주간'] += parseInt(row.querySelector('td:nth-child(2)').textContent) || 0;
+                totals['야간'] += parseInt(row.querySelector('td:nth-child(3)').textContent) || 0;
+                totals['일차'] += parseInt(row.querySelector('td:nth-child(4)').textContent) || 0;
+                totals['리스'] += parseInt(row.querySelector('td:nth-child(5)').textContent) || 0;
+            });
+
+            // 합계 행 업데이트
+            totalRow.querySelector('td:nth-child(2)').textContent = totals['주간'];
+            totalRow.querySelector('td:nth-child(2)').style.color = totals['주간'] > 0 ? '#008000' : 'inherit';
+            totalRow.querySelector('td:nth-child(2)').style.fontWeight = totals['주간'] > 0 ? 'bold' : 'normal';
+
+            totalRow.querySelector('td:nth-child(3)').textContent = totals['야간'];
+            totalRow.querySelector('td:nth-child(3)').style.color = totals['야간'] > 0 ? '#008000' : 'inherit';
+            totalRow.querySelector('td:nth-child(3)').style.fontWeight = totals['야간'] > 0 ? 'bold' : 'normal';
+
+            totalRow.querySelector('td:nth-child(4)').textContent = totals['일차'];
+            totalRow.querySelector('td:nth-child(4)').style.color = totals['일차'] > 0 ? '#008000' : 'inherit';
+            totalRow.querySelector('td:nth-child(4)').style.fontWeight = totals['일차'] > 0 ? 'bold' : 'normal';
+
+            totalRow.querySelector('td:nth-child(5)').textContent = totals['리스'];
+            totalRow.querySelector('td:nth-child(5)').style.color = totals['리스'] > 0 ? '#008000' : 'inherit';
+            totalRow.querySelector('td:nth-child(5)').style.fontWeight = totals['리스'] > 0 ? 'bold' : 'normal';
+        }
+
+        // 페이지 로드 시 첫 번째 시트의 통계 계산 및 월 표시
+        document.addEventListener('DOMContentLoaded', function() {
+            const firstSheet = document.querySelector('.sheet-content');
+            if (firstSheet) {
+                updateDispatchStats(firstSheet.id);
+                // 첫 번째 탭 버튼의 텍스트를 가져와서 표시
+                const firstTabButton = document.querySelector('.sheet-tab-button');
+                if (firstTabButton) {
+                    document.getElementById('selectedMonth').textContent = '- ' + firstTabButton.textContent;
+                }
+            }
+        });
+
+        document.getElementById('uploadForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            fetch('', {
+                method: 'POST',
+                body: formData
+            }).then(response => {
+                if (response.ok) {
+                    const file = document.getElementById('excel_file').files[0];
+                    const now = new Date();
+                    const dateStr = now.getFullYear() + '-' + 
+                                  String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                                  String(now.getDate()).padStart(2, '0');
+                    const timeStr = String(now.getHours()).padStart(2, '0') + ':' + 
+                                  String(now.getMinutes()).padStart(2, '0');
+                    
+                    const uploadMessage = `<${file.name}> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${dateStr} | ${timeStr} | 업로더: {{ current_user.name }})`;
+                    const resultDiv = document.getElementById('uploadResult');
+                    resultDiv.textContent = uploadMessage;
+                    resultDiv.classList.add('show');
+                    
+                    // 메시지를 localStorage에 저장
+                    localStorage.setItem('scheduleUploadMessage', uploadMessage);
+                }
+            }).catch(error => {
+                console.error('Error:', error);
+            });
+        });
+
+        // 페이지 로드 시 저장된 메시지 복원
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedMessage = localStorage.getItem('scheduleUploadMessage');
+            if (savedMessage) {
+                const resultDiv = document.getElementById('uploadResult');
+                resultDiv.textContent = savedMessage;
+                resultDiv.classList.add('show');
+            }
+        });
+
+        // 새 파일이 선택되면 이전 메시지 삭제
+        document.getElementById('excel_file').addEventListener('change', function() {
+            localStorage.removeItem('scheduleUploadMessage');
+            const resultDiv = document.getElementById('uploadResult');
+            resultDiv.textContent = '';
+            resultDiv.classList.remove('show');
+        });
+    </script>
+</body>
+</html>
+{% endblock %} 
