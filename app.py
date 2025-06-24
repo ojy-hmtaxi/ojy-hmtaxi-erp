@@ -62,6 +62,8 @@ def register():
         name = request.form.get('name')
         password = request.form.get('password')
         confirm_password = request.form.get('confirm_password')
+        phone = request.form.get('phone')
+        position = request.form.get('position')
         
         if password != confirm_password:
             return render_template('register.html', error='비밀번호가 일치하지 않습니다.')
@@ -72,7 +74,7 @@ def register():
         if User.query.filter_by(email=email).first():
             return render_template('register.html', error='이미 존재하는 이메일입니다.')
             
-        user = User(username=username, email=email, name=name)
+        user = User(username=username, email=email, name=name, phone=phone, position=position)
         user.set_password(password)
         
         db.session.add(user)
@@ -853,6 +855,85 @@ def load_map_json():
     with open(load_path, 'r', encoding='utf-8') as f:
         json_data = f.read()
     return jsonify({'success': True, 'json': json_data})
+
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    from sqlalchemy.orm import joinedload
+    if request.method == 'POST':
+        user = User.query.get(current_user.id)
+        # 폼 데이터 받기
+        email = request.form.get('email')
+        name = request.form.get('name')
+        current_password = request.form.get('current_password')
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        phone = request.form.get('phone')
+        position = request.form.get('position')
+        # 이메일 중복 체크 (자신 제외)
+        if email != user.email:
+            existing_user = User.query.filter_by(email=email).first()
+            if existing_user:
+                flash('이미 사용 중인 이메일입니다.', 'error')
+                messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(30).all()
+                return render_template('profile.html', user=user, messages=messages, current_user=current_user)
+        # 이메일과 이름 업데이트
+        user.email = email
+        user.name = name
+        user.phone = phone
+        user.position = position
+        # 비밀번호 변경 요청이 있는 경우
+        if current_password and new_password:
+            if not user.check_password(current_password):
+                flash('현재 비밀번호가 올바르지 않습니다.', 'error')
+                messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(30).all()
+                return render_template('profile.html', user=user, messages=messages, current_user=current_user)
+            if new_password != confirm_password:
+                flash('새 비밀번호가 일치하지 않습니다.', 'error')
+                messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(30).all()
+                return render_template('profile.html', user=user, messages=messages, current_user=current_user)
+            user.set_password(new_password)
+            flash('비밀번호가 변경되었습니다.', 'success')
+        # 데이터베이스에 저장
+        db.session.commit()
+        flash('프로필이 업데이트되었습니다.', 'success')
+        return redirect(url_for('profile'))
+    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(30).all()
+    return render_template('profile.html', user=current_user, messages=messages, current_user=current_user)
+
+@app.route('/admin/users')
+@login_required
+def admin_users():
+    if current_user.role != 'admin':
+        flash('관리자만 접근할 수 있습니다.', 'error')
+        return redirect(url_for('calculate_salary'))
+    
+    users = User.query.all()
+    return render_template('admin_users.html', users=users)
+
+@app.route('/admin/users/<int:user_id>/edit', methods=['GET', 'POST'])
+@login_required
+def admin_edit_user(user_id):
+    if current_user.role != 'admin':
+        flash('관리자만 접근할 수 있습니다.', 'error')
+        return redirect(url_for('calculate_salary'))
+    
+    user = User.query.get_or_404(user_id)
+    
+    if request.method == 'POST':
+        user.email = request.form.get('email')
+        user.name = request.form.get('name')
+        user.role = request.form.get('role')
+        
+        new_password = request.form.get('new_password')
+        if new_password:
+            user.set_password(new_password)
+        
+        db.session.commit()
+        flash('사용자 정보가 업데이트되었습니다.', 'success')
+        return redirect(url_for('admin_users'))
+    
+    return render_template('admin_edit_user.html', user=user)
 
 if __name__ == '__main__':
     create_database()  # 데이터베이스 생성

@@ -57,6 +57,7 @@
 
     /* 메시지 스타일 */
     .message {
+        border: 1px solid #d3d3d3;
         background-color: #f7f7f7;
         padding: 10px;
         margin-bottom: 10px;
@@ -98,6 +99,11 @@
         text-decoration: underline;
         color: #ffffff;
     }
+
+    .message.mentioned {
+        border: 1px solid #4CAF50;
+        background-color: #f6fff6;
+    }
 </style>
 
 <div class="right-sidebar collapsed" id="rightSidebar">
@@ -113,12 +119,21 @@
             </form>
             <div class="messages">
                 {% for message in messages %}
-                <div class="message {% if current_user and current_user.name == message.author.name %}current-user{% endif %}">
+                <div class="message
+                    {% if current_user and current_user.name == message.author.name %}current-user{% endif %}
+                    {% if current_user and ('@' ~ current_user.name) in message.content %} mentioned{% endif %}
+                ">
                     <div class="message-header">
                         <span class="author">{{ message.author.name }}</span>
                         <span class="timestamp">{{ message.timestamp.strftime('%Y-%m-%d %H:%M') }}</span>
                     </div>
-                    <div class="message-content">{{ message.content }}</div>
+                    <div class="message-content">
+                        {% if current_user and ('@' ~ current_user.name) in message.content %}
+                            {{ message.content | replace('@' ~ current_user.name, '<b><i>@' ~ current_user.name ~ '</i></b>') | safe }}
+                        {% else %}
+                            {{ message.content }}
+                        {% endif %}
+                    </div>
                     {% if current_user and (current_user.id == message.user_id or current_user.role == 'admin') %}
                     <form action="{{ url_for('delete_message', message_id=message.id) }}" method="POST" class="delete-form">
                         <button type="submit" class="delete-btn">삭제</button>

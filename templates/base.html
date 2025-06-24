@@ -150,6 +150,15 @@
                 margin-left: 60px;
             }
         }
+
+        .user-status.login-status {
+            background-color: #4CAF50 !important;
+            color: #fff !important;
+        }
+        .user-status.login-status:hover, .user-status.login-status:focus {
+            background-color: #388E3C !important;
+            color: #fff !important;
+        }
     </style>
 </head>
 <body>
@@ -162,9 +171,14 @@
             <h4 class="mb-0">{{ self.title() }}</h4>
             <div class="d-flex align-items-center">
                 {% if current_user.is_authenticated %}
-                    <div class="user-status login-status">
-                        <i class="fas fa-user-circle me-2"></i>
-                        {{ current_user.name }}님
+                    <div class="dropdown">
+                        <button class="btn user-status login-status dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="background:none;border:none;box-shadow:none;">
+                            <i class="fas fa-user-circle me-2"></i>
+                            {{ current_user.name }}님
+                        </button>
+                        <ul class="dropdown-menu" aria-labelledby="userDropdown">
+                            <li><a class="dropdown-item" href="{{ url_for('profile') }}">회원정보 수정</a></li>
+                        </ul>
                     </div>
                     <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">
                         <i class="fas fa-sign-out-alt me-2"></i>로그아웃

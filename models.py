@@ -16,6 +16,8 @@ class User(UserMixin, db.Model):
     role = db.Column(db.String(20), default='user')  # 'admin' 또는 'user'
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     messages = db.relationship('Message', backref='author', lazy=True)
+    phone = db.Column(db.String(30))   # 연락처(전화번호)
+    position = db.Column(db.String(30)) # 직급
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

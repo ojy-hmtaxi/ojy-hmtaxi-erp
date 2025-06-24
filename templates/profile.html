@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar %}
+{% from "right_sidebar.html" import right_sidebar %}
+
+{% block sidebar %}
+{{ sidebar() }}
+{% endblock %}
+
+{% block title %}프로필 수정{% endblock %}
+
+{% block content %}
+<div class="container-fluid" style="width: 95%;">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <!-- 프로필 수정 카드 -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-user-edit me-2"></i>
+                        프로필 수정
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" class="needs-validation" novalidate>
+                        <!-- 기본 정보 섹션 -->
+                        <div class="mb-4">
+                            <h6 class="text-muted mb-3">
+                                <i class="fas fa-info-circle me-2"></i>
+                                기본 정보
+                            </h6>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="username" class="form-label">아이디</label>
+                                    <input type="text" class="form-control" id="username" value="{{ user.username }}" readonly>
+                                    <div class="form-text text-muted">
+                                        <i class="fas fa-lock me-1"></i>
+                                        아이디는 변경할 수 없습니다.
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label for="name" class="form-label">이름 <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="name" name="name" value="{{ user.name }}" required>
+                                    <div class="invalid-feedback">
+                                        이름을 입력해주세요.
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="email" class="form-label">이메일 <span class="text-danger">*</span></label>
+                                <input type="email" class="form-control" id="email" name="email" value="{{ user.email }}" required>
+                                <div class="invalid-feedback">
+                                    올바른 이메일 주소를 입력해주세요.
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="phone" class="form-label">연락처</label>
+                                <input type="text" class="form-control" id="phone" name="phone" value="{{ user.phone or '' }}">
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="position" class="form-label">직급</label>
+                                <input type="text" class="form-control" id="position" name="position" value="{{ user.position or '' }}">
+                            </div>
+                        </div>
+
+                        <!-- 비밀번호 변경 섹션 -->
+                        <div class="mb-4">
+                            <h6 class="text-muted mb-3">
+                                <i class="fas fa-key me-2"></i>
+                                비밀번호 변경 (선택사항)
+                            </h6>
+                            
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="current_password" class="form-label">현재 비밀번호</label>
+                                    <input type="password" class="form-control" id="current_password" name="current_password">
+                                    <div class="form-text text-muted">
+                                        비밀번호를 변경하려면 입력하세요.
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-4 mb-3">
+                                    <label for="new_password" class="form-label">새 비밀번호</label>
+                                    <input type="password" class="form-control" id="new_password" name="new_password">
+                                    <div class="form-text text-muted">
+                                        최소 8자 이상 입력하세요.
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-4 mb-3">
+                                    <label for="confirm_password" class="form-label">새 비밀번호 확인</label>
+                                    <input type="password" class="form-control" id="confirm_password" name="confirm_password">
+                                    <div class="invalid-feedback">
+                                        비밀번호가 일치하지 않습니다.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 계정 정보 섹션 -->
+                        <div class="mb-4">
+                            <h6 class="text-muted mb-3">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                계정 정보
+                            </h6>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">가입일</label>
+                                    <input type="text" class="form-control" value="{{ user.created_at.strftime('%Y년 %m월 %d일') if user.created_at else '정보 없음' }}" readonly>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">사용자 권한</label>
+                                    <input type="text" class="form-control" value="{{ '관리자' if user.role == 'admin' else '일반 사용자' }}" readonly>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 버튼 영역 -->
+                        <div class="d-flex justify-content-between align-items-center pt-3 border-top">
+                            <a href="{{ url_for('calculate_salary') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left me-2"></i>
+                                돌아가기
+                            </a>
+                            
+                            <div>
+                                <button type="reset" class="btn btn-outline-warning me-2">
+                                    <i class="fas fa-undo me-2"></i>
+                                    초기화
+                                </button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save me-2"></i>
+                                    저장하기
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 보안 안내 카드 -->
+            <div class="card mt-4">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="fas fa-shield-alt me-2 text-primary"></i>
+                        보안 안내
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <ul class="list-unstyled mb-0">
+                                <li class="mb-2">
+                                    <i class="fas fa-check-circle text-success me-2"></i>
+                                    비밀번호는 안전하게 암호화되어 저장됩니다.
+                                </li>
+                                <li class="mb-2">
+                                    <i class="fas fa-check-circle text-success me-2"></i>
+                                    개인정보는 외부에 노출되지 않습니다.
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <ul class="list-unstyled mb-0">
+                                <li class="mb-2">
+                                    <i class="fas fa-info-circle text-info me-2"></i>
+                                    비밀번호 변경 시 현재 비밀번호 확인이 필요합니다.
+                                </li>
+                                <li class="mb-2">
+                                    <i class="fas fa-info-circle text-info me-2"></i>
+                                    이메일 주소는 로그인 및 비밀번호 재설정에 사용됩니다.
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{ right_sidebar(messages, current_user) }}
+{% endblock %} 
