@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>사고현장 지도 그림판</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+    <style>
+        body { font-family: '맑은 고딕', sans-serif; margin: 0; }
+        #container { display: flex; height: 100vh; }
+        #symbol-panel {
+            width: 180px; background: #f7f7f7; border-right: 1px solid #ddd; padding: 10px;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        #canvas-wrap { flex: 1; display: flex; justify-content: center; align-items: center; background: #eee; }
+        #draw-canvas { background: #fff; border: 1px solid #bbb; }
+        .symbol-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            padding: 4px 0;
+        }
+        #tool-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        .tool-btn { margin: 0; width: 100%; background: #fff; border: 1px solid #bbb; transition: background 0.2s, color 0.2s; }
+        .tool-btn.active { background: #1976d2; color: #fff; border-color: #1976d2; }
+        #symbol-list01 {
+            flex: 1 1 auto;
+            max-height: 700px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        #symbol-list02 {
+            flex: 1 1 auto;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            
+            
+            gap: 8px;
+        }
+
+        .color-swatch {
+            width: 22px; height: 22px; border-radius: 4px; border: 2px solid #eee; cursor: pointer;
+            box-sizing: border-box;
+        }
+        .color-swatch.selected {
+            border: 2px solid #1976d2;
+        }
+        .color-mode-btn {
+            flex: 1 1 0;
+            padding: 4px 0;
+            border: 1px solid #bbb;
+            background: #fff;
+            color: #333;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        .color-mode-btn.active {
+            background: #1976d2;
+            color: #fff;
+            border-color: #1976d2;
+        }
+
+        .road-button {
+            width: 100%;
+            height: 30px;
+            border: 1px solid #bbb;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+<div id="container">
+    <div id="symbol-panel" height="700">
+        <h4>심볼</h4>
+        <div id="symbol-list01">
+            <div class="symbol-category vehicles"> 차량
+                
+                <div class="symbol-item" onclick="addImageSymbol('/static/vehicles/car_blk_1.png', 'vehicles')"><img src="/static/vehicles/car_blk_1.png" alt="car_blk_1" width="40"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/vehicles/car_blk_2.png', 'vehicles')"><img src="/static/vehicles/car_blk_2.png" alt="car_blk_2" width="40"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/vehicles/car_blk_dots_1.png', 'vehicles')"><img src="/static/vehicles/car_blk_dots_1.png" alt="car_blk_dots_1" width="40"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/vehicles/car_blk_dots_2.png', 'vehicles')"><img src="/static/vehicles/car_blk_dots_2.png" alt="car_blk_dots_2" width="40"> </div>
+                
+                <div class="symbol-item" onclick="addImageSymbol('/static/vehicles/bus.png', 'vehicles')"><img src="/static/vehicles/bus.png" alt="bus" width="40" height="18"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/vehicles/dump_truck.png', 'vehicles')"><img src="/static/vehicles/dump_truck.png" alt="dump_truck" width="40" height="20"> </div>
+                
+                <div class="symbol-item" onclick="addImageSymbol('/static/vehicles/bicycle01.svg', 'vehicles')"><img src="/static/vehicles/bicycle01.svg" alt="bicycle01" width="35"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/vehicles/motorcycle01.svg', 'vehicles')"><img src="/static/vehicles/motorcycle01.svg" alt="motorcycle01" width="35"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/vehicles/motorcycle02.svg', 'vehicles')"><img src="/static/vehicles/motorcycle02.svg" alt="motorcycle02" width="35"> </div>
+            </div>
+            <div class="symbol-category buildings"> 건물
+                <div class="symbol-item" onclick="addImageSymbol('/static/buildings/building01.svg', 'buildings')"><img src="/static/buildings/building01.svg" alt="building01" width="35"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/buildings/school01.svg', 'buildings')"><img src="/static/buildings/school01.svg" alt="school01" width="35"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/buildings/hospital01.svg', 'buildings')"><img src="/static/buildings/hospital01.svg" alt="hospital01" width="35"> </div>
+            </div>
+            <div class="symbol-category signs"> 표시
+                <div class="symbol-item" onclick="addImageSymbol('/static/signs/forward.svg', 'signs')"><img src="/static/signs/forward.svg" alt="forward" height="30" width="30"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/signs/forward_no.svg', 'signs')"><img src="/static/signs/forward_no.svg" alt="forward_no" height="30" width="30"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/signs/forward_left.svg', 'signs')"><img src="/static/signs/forward_left.svg" alt="forward_left" height="30" width="30"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/signs/turn_left.svg', 'signs')"><img src="/static/signs/turn_left.svg" alt="turn_left" height="30" width="30"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/signs/turn_left_u.svg', 'signs')"><img src="/static/signs/turn_left_u.svg" alt="turn_left_u" height="30" width="30"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/signs/turn_right.svg', 'signs')"><img src="/static/signs/turn_right.svg" alt="turn_right" height="30" width="30"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/signs/turn_right_no.svg', 'signs')"><img src="/static/signs/turn_right_no.svg" alt="turn_right_no" height="30" width="30"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/signs/turn_no.svg', 'signs')"><img src="/static/signs/turn_no.svg" alt="turn_no" height="30" width="30"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/signs/uturn.svg', 'signs')"><img src="/static/signs/uturn.svg" alt="uturn" height="30" width="30"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/signs/uturn_no.svg', 'signs')"><img src="/static/signs/uturn_no.svg" alt="uturn_no" height="30" width="30"> </div>
+
+                <div class="symbol-item" onclick="addImageSymbol('/static/signs/construction01.svg', 'signs')"><img src="/static/signs/construction01.svg" alt="construction01" width="35"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/signs/construction02.svg', 'signs')"><img src="/static/signs/construction02.svg" alt="construction02" width="35"> </div>                
+                
+                <div class="symbol-item" onclick="addImageSymbol('/static/signs/turn_left_biboho.svg', 'signs')"><img src="/static/signs/turn_left_biboho.svg" alt="turn_left_biboho" height="30" width="30"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/signs/noenter.svg', 'signs')"><img src="/static/signs/noenter.svg" alt="noenter" height="30" width="30"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/signs/crosswalk_head.svg', 'signs')"><img src="/static/signs/crosswalk_head.svg" alt="crosswalk_head" height="30" width="30"> </div>
+            </div>
+            <div class="symbol-category signals"> 신호등
+                <div class="symbol-item" onclick="addImageSymbol('/static/lights/light_green.svg', 'signals')"><img src="/static/lights/light_green.svg" alt="light_green" width="75"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/lights/light_yellow.svg', 'signals')"><img src="/static/lights/light_yellow.svg" alt="light_yellow" width="75"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/lights/light_red.svg', 'signals')"><img src="/static/lights/light_red.svg" alt="light_red" width="75"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/lights/light_green_left.svg', 'signals')"><img src="/static/lights/light_green_left.svg" alt="light_green_left" width="75"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/lights/light_green_uturn.svg', 'signals')"><img src="/static/lights/light_green_uturn.svg" alt="light_green_uturn" width="75"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/lights/light_left.svg', 'signals')"><img src="/static/lights/light_left.svg" alt="light_left" width="75"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/lights/light_uturn.svg', 'signals')"><img src="/static/lights/light_uturn.svg" alt="light_uturn" width="75"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/lights/light_green_mini.svg', 'signals')"><img src="/static/lights/light_green_mini.svg" alt="light_green_mini" width="75"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/lights/light_yellow_mini.svg', 'signals')"><img src="/static/lights/light_yellow_mini.svg" alt="light_yellow_mini" width="75"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/lights/light_red_mini.svg', 'signals')"><img src="/static/lights/light_red_mini.svg" alt="light_red_mini" width="75"> </div>  
+                <div class="symbol-item" onclick="addImageSymbol('/static/lights/light_green_mini_left.svg', 'signals')"><img src="/static/lights/light_green_mini_left.svg" alt="light_green_mini_left" width="75"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/lights/light_yellow_mini_left.svg', 'signals')"><img src="/static/lights/light_yellow_mini_left.svg" alt="light_yellow_mini_left" width="75"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/lights/light_red_mini_left.svg', 'signals')"><img src="/static/lights/light_red_mini_left.svg" alt="light_red_mini_left" width="75"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/lights/crosswalk_red.svg', 'signals')"><img src="/static/lights/crosswalk_red.svg" alt="crosswalk_red" width="30"> </div>
+            </div>
+            <div class="symbol-category crosswalks"> 횡단보도
+                <div class="symbol-item" onclick="addImageSymbol('/static/crosswalks/crosswalk01.svg', 'crosswalks')"><img src="/static/crosswalks/crosswalk01.svg" alt="crosswalk01" width="35"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/crosswalks/crosswalk02.svg', 'crosswalks')"><img src="/static/crosswalks/crosswalk02.svg" alt="crosswalk02" width="35"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/crosswalks/crosswalk03.svg', 'crosswalks')"><img src="/static/crosswalks/crosswalk03.svg" alt="crosswalk03" width="35"> </div>
+            </div>
+            <div class="symbol-category etc"> 기타
+                <div class="symbol-item" onclick="addImageSymbol('/static/etc/crash.svg', 'etc')"><img src="/static/etc/crash.svg" alt="crash" width="35"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/etc/deer.svg', 'etc')"><img src="/static/etc/deer.svg" alt="deer" width="35"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/etc/dog.svg', 'etc')"><img src="/static/etc/dog.svg" alt="dog" width="35"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/etc/fire.svg', 'etc')"><img src="/static/etc/fire.svg" alt="fire" width="35"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/etc/pole.svg', 'etc')"><img src="/static/etc/pole.svg" alt="pole" width="35"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/etc/tree.svg', 'etc')"><img src="/static/etc/tree.svg" alt="tree" width="35"> </div>
+                <div class="symbol-item" onclick="addImageSymbol('/static/etc/people.svg', 'etc')"><img src="/static/etc/people.svg" alt="people" width="35"> </div>
+            </div>
+        </div>
+        <div id="symbol-list02">
+            <div class="symbol-category roads"> 도로
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/road1lane.svg', 'roads')">직진 1차로</button>
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/road2lane.svg', 'roads')">직진 2차로</button>
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/road3lane.svg', 'roads')">직진 3차로</button>
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/road4lane.svg', 'roads')">직진 4차로</button>
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/road5lane.svg', 'roads')">직진 5차로</button>
+                
+                
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/3way1lane.svg', 'roads')">3거리 1차로</button>
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/3way2lane.svg', 'roads')">3거리 2차로</button>
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/3way3lane.svg', 'roads')">3거리 3차로</button>
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/3way3laneUturn.svg', 'roads')">3거리 3차로(U턴)</button>
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/3way4lane.svg', 'roads')">3거리 4차로</button>
+                
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/4way0lane.svg', 'roads')">4거리 0차로</button>
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/4way1lane.svg', 'roads')">4거리 1차로</button>
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/4way2lane.svg', 'roads')">4거리 2차로</button>
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/4way3lane.svg', 'roads')">4거리 3차로</button>
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/4way4lane.svg', 'roads')">4거리 4차로</button>
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/4way4laneBus.svg', 'roads')">4거리 4차로(버스전용)</button>
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/4way4laneUturn.svg', 'roads')">4거리 4차로(U턴)</button>
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/4way4laneRUturn.svg', 'roads')">4거리 4차로(U턴)</button>
+               
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/5way.svg', 'roads')">5거리</button>
+
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/Rout1lane.svg', 'roads')">우측 갈림길 1차로</button>
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/Rout2lane.svg', 'roads')">우측 갈림길 2차로</button>
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/Rout3lane.svg', 'roads')">우측 갈림길 3차로</button>
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/Rout4lane.svg', 'roads')">우측 갈림길 4차로</button>
+                
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/Yway0lane.svg', 'roads')">Y거리</button>
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/Yway1lane.svg', 'roads')">Y거리 1차로</button>
+
+                <button class="symbol-item" style="width:100%; margin-bottom: 5px;" onclick="addImageSymbol('/static/roads/2laneBusStop.svg', 'roads')">2차로 버스정류장</button>
+                
+            </div>
+            
+        </div>
+    </div>
+    
+    <div id="canvas-wrap">
+        <canvas id="draw-canvas" width="1000" height="700" style="margin-top: 0px;"></canvas>
+    </div>
+    
+    <div id="tool-panel" style="width:180px; background:#f7f7f7; border-left:1px solid #ddd; padding:10px; display:flex; flex-direction:column; gap:10px;">
+        <hr>
+        <button class="tool-btn" onclick="canvas.clear()">전체 지우기</button>
+        <hr>
+        <!-- 12색 컬러 피커 -->
+        <div id="color-picker" style="display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap;">
+            <div class="color-swatch" data-color="#000000" style="background:#000000;"></div>
+            <div class="color-swatch" data-color="#e53935" style="background:#e53935;"></div>
+            <div class="color-swatch" data-color="#fb8c00" style="background:#fb8c00;"></div>
+            <div class="color-swatch" data-color="#fdd835" style="background:#fdd835;"></div>
+            <div class="color-swatch" data-color="#43a047" style="background:#43a047;"></div>
+            <div class="color-swatch" data-color="#1e88e5" style="background:#1e88e5;"></div>
+            <div class="color-swatch" data-color="#3949ab" style="background:#3949ab;"></div>
+            <div class="color-swatch" data-color="#8e24aa" style="background:#8e24aa;"></div>
+            <div class="color-swatch" data-color="#6d4c41" style="background:#6d4c41;"></div>
+            <div class="color-swatch" data-color="#757575" style="background:#757575;"></div>
+            <div class="color-swatch" data-color="#ffffff" style="background:#ffffff; border:1px solid #bbb;"></div>
+            <div class="color-swatch" data-color="#ffb300" style="background:#ffb300;"></div>
+        </div>
+        <div id="color-mode-buttons" style="display: flex; gap: 6px; margin-bottom: 10px;">
+            <button id="fill-mode-btn" class="color-mode-btn active" type="button">채우기</button>
+            <button id="outline-mode-btn" class="color-mode-btn" type="button">외곽선</button>
+        </div>
+        <!-- Stroke(선 두께) 설정 메뉴 -->
+        <div id="stroke-panel" style="display:flex; align-items:center; gap:6px; margin-bottom:10px;">
+            <button id="stroke-preview" style="width: 20px; height: 20px; border:3px solid #222; background:#fff; display:flex; align-items:center; justify-content:center;">
+            /</button>
+            <span style="margin-right:4px; font-size:14px;">선 두께</span>
+            <input id="stroke-width" type="number" min="1" max="20" value="2" style="width:40px; text-align:right;"> <span>pt</span>
+        </div>
+        <!-- 글씨 크기 설정 메뉴 -->
+        <div id="font-panel" style="display:flex; align-items:center; gap:6px; margin-bottom:10px;">
+            <button id="text-icon" style="width: 20px; height: 20px; border:3px solid #222; background:#fff; display:flex; align-items:center; justify-content:center;">
+            T</button>
+            <span style="margin-right:4px; font-size:14px;">글씨 크기</span>
+            <input id="font-size" type="number" min="8" max="120" value="24" style="width:40px; text-align:right;"> <span>pt</span>
+        </div>
+        <!-- Arrowhead 설정 메뉴 -->
+        <div id="arrowhead-panel" style="display:flex; align-items:center; gap:6px; margin-bottom:10px;">
+            <span style="margin-right:4px;">Arrowheads:</span>
+            <select id="arrowhead-select" style="height:28px;">
+                <option value="none">없음</option>
+                <option value="end">→</option>
+            </select>
+        </div>
+        <h4>도구</h4>
+        <div id="tool-buttons" style="margin-top: -10px;">
+            <button class="tool-btn" onclick="setMode('select')">선택</button>
+            <button class="tool-btn" onclick="setMode('text')">텍스트</button>
+            <button class="tool-btn" onclick="setMode('line')">직선</button>
+            <button class="tool-btn" onclick="setMode('curve')">곡선</button>
+            <button class="tool-btn" onclick="setMode('rect')">사각형</button>
+            <button class="tool-btn" onclick="setMode('circle')">원</button>
+        </div>
+        
+        <hr>
+
+        <div>
+            <hr style="margin-top:40px;">
+            <h4>지도 저장/불러오기</h4>
+            <input type="text" id="save-filename" placeholder="파일명(사고번호)" style="width:105px;">
+            <!--button onclick="saveCanvasToLocal(document.getElementById('save-filename').value)" style="margin-left:2px;">로컬 저장</button>
+            <button onclick="loadCanvasFromLocal(document.getElementById('save-filename').value)" style="margin-left:0px; margin-top: 10px;">로컬 불러오기</button-->
+            <button id="save-json-btn" style="margin-left:2px;">저장</button>
+            <button id="load-json-btn" style="margin-left:0px; margin-top: 10px;">불러오기</button>
+            <button id="save-image-btn" style="margin-left:2px;">이미지 저장</button>
+        </div>
+    </div>
+</div>
+
+<div id="container">
+    <div id="info-wrap">
+        <div id="info-panel" style="padding:10px; display:flex; flex-direction:row; gap:10px;">
+            <h4>단축키</h4>
+        <hr>
+        <ul style="padding-left:18px; line-height: 2; font-size:14px; color:#333;">
+            <li>Space Bar: 선택 툴</li>
+            <li>Ctrl+Z / Ctrl+Y: 실행취소/재실행</li>
+            <li>Shift: 정사각형 / 수평·수직선 / 90도 회전 /<br>수평·수직이동 / 심볼크기 자유조정</li>
+            <li>Ctrl+C / Ctrl+V: 복사/붙여넣기</li>
+            <li>Alt+G: 그룹 지정</li>
+            <li>Alt+H: 그룹 해제</li>
+            <li>Alt+L: 잠금</li>
+            <li>Alt+O: 잠금 해제</li>
+            <li>Delete: 삭제</li>
+        </ul>
+        <!--div style="margin-top:10px; color:#888; font-size:12px;">패널은 자유롭게 커스터마이즈할 수 있습니다.</div-->
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = new fabric.Canvas('draw-canvas', { selection: true });
+    let mode = 'select';
+    let line, isDown, origX, origY;
+    let currentColor = '#000000';
+    let colorMode = 'fill'; // 'fill' 또는 'outline'
+    let currentStrokeWidth = 2;
+    let curveStep = 0;
+    let curveStart = null, curveEnd = null, curveControl = null;
+    let curvePreviewLine = null, curvePreviewCurve = null;
+    let isCurveControlDragging = false;
+    let isShiftDown = false;
+    let moveStart = null;
+    let undoStack = [];
+    let redoStack = [];
+    let isRestoring = false;
+
+    function setMode(m) {
+        mode = m;
+        canvas.isDrawingMode = false;
+        if (m === 'select') {
+            canvas.selection = true;
+            canvas.skipTargetFind = false;
+        } else {
+            canvas.selection = false;
+            canvas.skipTargetFind = false;
+            canvas.discardActiveObject();
+        }
+        document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+        const btn = document.querySelector('.tool-btn[onclick*="setMode(\'' + m + '\')"]');
+        if (btn) btn.classList.add('active');
+        if (m !== 'curve') {
+            if (curvePreviewLine) { canvas.remove(curvePreviewLine); curvePreviewLine = null; }
+            if (curvePreviewCurve) { canvas.remove(curvePreviewCurve); curvePreviewCurve = null; }
+            curveStep = 0;
+        }
+    }
+
+    // 도형 그리기(곡선만 3단계 클릭, 나머지는 드래그)
+    canvas.on('mouse:down', function(o) {
+        const pointer = canvas.getPointer(o);
+        if (mode === 'text') {
+            const textbox = new fabric.Textbox('텍스트', {
+                left: pointer.x,
+                top: pointer.y,
+                fontSize: 16,
+                fill: currentColor,
+                editable: true,
+                width: 100,
+                textAlign: 'center'
+            });
+            canvas.add(textbox);
+            canvas.setActiveObject(textbox);
+            if (textbox.enterEditing) textbox.enterEditing();
+            setMode('select');
+            return;
+        }
+        if (mode === 'curve') {
+            if (curveStep === 0) {
+                curveStart = { x: pointer.x, y: pointer.y };
+                curveStep = 1;
+            } else if (curveStep === 1) {
+                curveEnd = { x: pointer.x, y: pointer.y };
+                if (curvePreviewLine) canvas.remove(curvePreviewLine);
+                curvePreviewLine = new fabric.Line([curveStart.x, curveStart.y, curveEnd.x, curveEnd.y], {
+                    stroke: '#888', strokeDashArray: [5, 5], selectable: false, evented: false
+                });
+                canvas.add(curvePreviewLine);
+                curveStep = 2;
+            } else if (curveStep === 2) {
+                isCurveControlDragging = true;
+            }
+        } else if (mode !== 'select') {
+        isDown = true;
+        origX = pointer.x;
+        origY = pointer.y;
+            if (mode === 'line') {
+            line = new fabric.Line([origX, origY, origX, origY], {
+                    stroke: colorMode === 'outline' ? currentColor : '#000', strokeWidth: currentStrokeWidth
+            });
+            canvas.add(line);
+                line.arrowType = document.getElementById('arrowhead-select').value;
+        } else if (mode === 'rect') {
+            line = new fabric.Rect({ left: origX, top: origY, width: 0, height: 0,
+                fill: colorMode === 'fill' ? currentColor : 'rgba(0,0,0,0)',
+                    stroke: colorMode === 'outline' ? currentColor : '#000', strokeWidth: currentStrokeWidth });
+            canvas.add(line);
+        } else if (mode === 'circle') {
+            line = new fabric.Circle({ left: origX, top: origY, radius: 1,
+                fill: colorMode === 'fill' ? currentColor : 'rgba(0,0,0,0)',
+                    stroke: colorMode === 'outline' ? currentColor : '#000', strokeWidth: currentStrokeWidth });
+            canvas.add(line);
+            }
+        }
+    });
+
+    canvas.on('mouse:move', function(o) {
+        const pointer = canvas.getPointer(o);
+        if (mode === 'curve' && curveStep === 2 && isCurveControlDragging && curveStart && curveEnd) {
+            if (curvePreviewCurve) canvas.remove(curvePreviewCurve);
+            const pathStr = `M ${curveStart.x} ${curveStart.y} Q ${pointer.x} ${pointer.y} ${curveEnd.x} ${curveEnd.y}`;
+            curvePreviewCurve = new fabric.Path(pathStr, {
+                stroke: '#0c8',
+                strokeWidth: currentStrokeWidth,
+                fill: '',
+                selectable: false,
+                evented: false
+            });
+            canvas.add(curvePreviewCurve);
+            canvas.bringToFront(curvePreviewCurve);
+        } else if (isDown && mode !== 'select' && mode !== 'curve') {
+            if (mode === 'line') {
+                if (o.e.shiftKey) {
+                    const dx = Math.abs(pointer.x - origX);
+                    const dy = Math.abs(pointer.y - origY);
+                    if (dx > dy) {
+                        line.set({ x2: pointer.x, y2: origY });
+                    } else {
+                        line.set({ x2: origX, y2: pointer.y });
+                    }
+                } else {
+            line.set({ x2: pointer.x, y2: pointer.y });
+                }
+        } else if (mode === 'rect') {
+                if (o.e.shiftKey) {
+                    const size = Math.max(Math.abs(pointer.x - origX), Math.abs(pointer.y - origY));
+                    const signX = pointer.x > origX ? 1 : -1;
+                    const signY = pointer.y > origY ? 1 : -1;
+                    line.set({
+                        width: size,
+                        height: size,
+                        left: origX + (signX < 0 ? -size : 0),
+                        top: origY + (signY < 0 ? -size : 0)
+                    });
+                } else {
+                    line.set({
+                        width: Math.abs(pointer.x - origX),
+                        height: Math.abs(pointer.y - origY),
+                        left: Math.min(pointer.x, origX),
+                        top: Math.min(pointer.y, origY)
+                    });
+                }
+        } else if (mode === 'circle') {
+            const radius = Math.sqrt(Math.pow(pointer.x - origX, 2) + Math.pow(pointer.y - origY, 2)) / 2;
+            line.set({ radius: radius, left: (origX + pointer.x) / 2 - radius, top: (origY + pointer.y) / 2 - radius });
+            }
+        }
+        canvas.renderAll();
+    });
+
+    canvas.on('mouse:up', function(o) {
+        if (mode === 'curve' && curveStep === 2 && isCurveControlDragging) {
+            const pointer = canvas.getPointer(o);
+            if (curvePreviewCurve) canvas.remove(curvePreviewCurve);
+            const pathStr = `M ${curveStart.x} ${curveStart.y} Q ${pointer.x} ${pointer.y} ${curveEnd.x} ${curveEnd.y}`;
+            const curveObj = new fabric.Path(pathStr, {
+                stroke: currentColor,
+                strokeWidth: currentStrokeWidth,
+                fill: '',
+                selectable: true,
+                evented: true
+            });
+            canvas.add(curveObj);
+            if (curvePreviewLine) { canvas.remove(curvePreviewLine); curvePreviewLine = null; }
+            curvePreviewCurve = null;
+            curveStep = 0;
+            isCurveControlDragging = false;
+        } else if (isDown && mode !== 'select' && mode !== 'curve') {
+        isDown = false;
+            if (line) {
+                if (mode === 'line' && line.arrowType === 'end') {
+                    canvas.remove(line);
+                    const x1 = line.x1, y1 = line.y1, x2 = line.x2, y2 = line.y2;
+                    const angle = Math.atan2(y2 - y1, x2 - x1);
+                    const size = (line.strokeWidth || 2) * 6;
+                    const arrow = new fabric.Triangle({
+                        left: x2,
+                        top: y2,
+                        angle: angle * 180 / Math.PI + 90,
+                        width: size,
+                        height: size,
+                        fill: line.stroke || '#000',
+                        selectable: false,
+                        evented: false,
+                        originX: 'center',
+                        originY: 'center'
+                    });
+                    const group = new fabric.Group([line, arrow], { selectable: true, evented: true });
+                    canvas.add(group);
+                    canvas.setActiveObject(group);
+                    line = null;
+                } else {
+                    canvas.setActiveObject(line);
+        line = null;
+                }
+            }
+        }
+        moveStart = null;
+    });
+
+    // 심볼 추가 (SVG 교체 가능)
+    function addSymbol(type) {
+        if (type === 'car') {
+            fabric.loadSVGFromString('<svg width="60" height="30" viewBox="0 0 60 30"><rect x="5" y="5" width="50" height="20" rx="8" fill="#fff" stroke="#222" stroke-width="2"/></svg>', function(objects, options) {
+                const obj = fabric.util.groupSVGElements(objects, options);
+                obj.set({ left: 100, top: 100, scaleX: 1, scaleY: 1 });
+                canvas.add(obj);
+                setMode('select');
+            });
+        } else if (type === 'signal') {
+            fabric.loadSVGFromString('<svg width="20" height="50" viewBox="0 0 20 50"><rect x="5" y="5" width="10" height="40" rx="5" fill="#222"/><circle cx="10" cy="15" r="4" fill="red"/><circle cx="10" cy="25" r="4" fill="yellow"/><circle cx="10" cy="35" r="4" fill="green"/></svg>', function(objects, options) {
+                const obj = fabric.util.groupSVGElements(objects, options);
+                obj.set({ left: 150, top: 150, scaleX: 1, scaleY: 1 });
+                canvas.add(obj);
+                setMode('select');
+            });
+        }
+    }
+    // PNG/SVG 이미지 심볼 추가
+    function addImageSymbol(url, category) {
+        // 카테고리별 기본 크기 설정
+        const categoryWidth = {
+            vehicles: 50,
+            buildings: 50,
+            signs: 30,
+            signals: 130,
+            roads: 500,
+            crosswalks: 30,
+            etc: 30
+        };
+        
+        const defaultWidth = categoryWidth[category] || 120;
+
+        if (url.endsWith('.svg')) {
+            fabric.loadSVGFromURL(url, function(objects, options) {
+                const obj = fabric.util.groupSVGElements(objects, options);
+                obj.scaleToWidth(defaultWidth);
+                obj.set({ left: 200, top: 200 });
+                canvas.add(obj);
+                setMode('select');
+            });
+        } else {
+        fabric.Image.fromURL(url, function(img) {
+                img.scaleToWidth(defaultWidth);
+                img.set({ left: 200, top: 200 });
+            canvas.add(img);
+            setMode('select');
+        });
+        }
+    }
+
+    // Delete 키로 선택된 객체 삭제
+    window.addEventListener('keydown', function(e) {
+        if ((e.key === 'Delete' || e.key === 'Backspace') && document.activeElement === document.body) {
+            const activeObjs = canvas.getActiveObjects();
+            if (activeObjs && activeObjs.length > 0) {
+                activeObjs.forEach(obj => canvas.remove(obj));
+                canvas.discardActiveObject();
+                canvas.requestRenderAll();
+            }
+        }
+        
+        // 복사 기능 (Ctrl+C)
+        if (e.ctrlKey && e.key === 'c') {
+            const activeObj = canvas.getActiveObject();
+            if (activeObj) {
+                // 객체를 JSON으로 직렬화하여 클립보드에 저장
+                const objData = JSON.stringify(activeObj.toObject());
+                localStorage.setItem('clipboard', objData);
+            }
+        }
+        
+        // 붙여넣기 기능 (Ctrl+V)
+        if (e.ctrlKey && e.key === 'v') {
+            const clipboardData = localStorage.getItem('clipboard');
+            if (clipboardData) {
+                fabric.util.enlivenObjects([JSON.parse(clipboardData)], function(objects) {
+                    objects.forEach(function(obj) {
+                        // 원본 객체에서 약간 오프셋된 위치에 붙여넣기
+                        obj.set({
+                            left: obj.left + 20,
+                            top: obj.top + 20,
+                            evented: true
+                        });
+                        canvas.add(obj);
+                    });
+                    canvas.requestRenderAll();
+                });
+            }
+        }
+
+        // 그룹화 기능 (Alt+G)
+        if (e.altKey && e.key === 'g') {
+            const activeObjs = canvas.getActiveObjects();
+            if (activeObjs && activeObjs.length > 1) {
+                // bounding box 계산
+                let minLeft = Infinity, minTop = Infinity;
+                activeObjs.forEach(obj => {
+                    minLeft = Math.min(minLeft, obj.left);
+                    minTop = Math.min(minTop, obj.top);
+                });
+
+                // 객체 복제 및 좌표/기준점 보정
+                fabric.util.enlivenObjects(
+                    activeObjs.map(obj => obj.toObject()),
+                    function(clones) {
+                        clones.forEach(obj => {
+                            obj.originX = 'left';
+                            obj.originY = 'top';
+                            obj.left = obj.left - minLeft;
+                            obj.top = obj.top - minTop;
+                        });
+                        const group = new fabric.Group(clones, {
+                            originX: 'center',
+                            originY: 'center'
+                        });
+                        // 캔버스 중앙 좌표 계산
+                        const canvasCenter = canvas.getCenter();
+                        group.left = canvasCenter.left;
+                        group.top = canvasCenter.top;
+
+                        canvas.discardActiveObject();
+                        activeObjs.forEach(obj => canvas.remove(obj));
+                        canvas.add(group);
+                        canvas.setActiveObject(group);
+                        canvas.requestRenderAll();
+                    }
+                );
+            }
+        }
+
+        // 그룹 해제 기능 (Alt+H)
+        if (e.altKey && e.key === 'h') {
+            const activeObj = canvas.getActiveObject();
+            if (activeObj && activeObj.type === 'group') {
+                activeObj.toActiveSelection();
+                canvas.requestRenderAll();
+            }
+        }
+
+        // Alt+L: 선택 객체 잠금
+        if (e.altKey && (e.key === 'l' || e.key === 'L')) {
+            const activeObjs = canvas.getActiveObjects();
+            if (activeObjs && activeObjs.length > 0) {
+                activeObjs.forEach(obj => {
+                    obj.lockMovementX = true;
+                    obj.lockMovementY = true;
+                    obj.lockScalingX = true;
+                    obj.lockScalingY = true;
+                    obj.lockRotation = true;
+                    obj.selectable = true;
+                    obj.evented = true;
+                });
+                canvas.discardActiveObject();
+                canvas.requestRenderAll();
+            }
+        }
+        // Alt+O: 선택 객체 잠금 해제
+        if (e.altKey && (e.key === 'o' || e.key === 'O')) {
+            // 모든 객체 중 잠금된 것만 selectable로 변경
+            canvas.getObjects().forEach(obj => {
+                if (!obj.selectable) {
+                    obj.lockMovementX = false;
+                    obj.lockMovementY = false;
+                    obj.lockScalingX = false;
+                    obj.lockScalingY = false;
+                    obj.lockRotation = false;
+                    obj.selectable = true;
+                    obj.evented = true;
+                }
+            });
+            canvas.requestRenderAll();
+        }
+
+        // 스페이스바로 선택 도구 전환
+        if (e.code === 'Space' && document.activeElement === document.body) {
+            setMode('select');
+            e.preventDefault();
+        }
+
+        if (e.key === 'Shift') {
+            isShiftDown = true;
+            const obj = canvas.getActiveObject();
+            if (obj) obj.snapAngle = 90;
+        }
+
+        if (e.ctrlKey && e.key === 'z') {
+            undo();
+            e.preventDefault();
+        }
+        if (e.ctrlKey && e.key === 'y') {
+            redo();
+            e.preventDefault();
+        }
+    });
+
+    window.addEventListener('keyup', function(e) {
+        if (e.key === 'Shift') {
+            isShiftDown = false;
+            const obj = canvas.getActiveObject();
+            if (obj) obj.snapAngle = 0;
+        }
+    });
+
+    // 1. 원본 비율로 크기 조절 (핸들 드래그 시작 시)
+    canvas.on('before:transform', function(opt) {
+        if (!opt.target) return;
+        if (mode === 'select' && isShiftDown && opt.transform.action === 'scale') {
+            opt.target.lockUniScaling = true;
+        } else {
+            opt.target.lockUniScaling = false;
+        }
+    });
+
+    // 2. 90도 회전 (드래그 끝난 후에만 스냅)
+    canvas.on('object:rotated', function(opt) {
+        if (mode === 'select' && isShiftDown) {
+            let angle = opt.target.angle;
+            angle = Math.round(angle / 90) * 90;
+            opt.target.set('angle', angle);
+            canvas.requestRenderAll();
+        }
+    });
+
+    // 3. 수평/수직 이동
+    canvas.on('object:moving', function(opt) {
+        const obj = opt.target;
+        if (obj && obj.type === 'group') {
+            const items = obj.getObjects();
+            const line = items.find(o => o.type === 'line');
+            const arrow = items.find(o => o.type === 'triangle');
+            if (line && arrow) {
+                // arrowhead 위치 동기화
+                const x1 = line.x1, y1 = line.y1, x2 = line.x2, y2 = line.y2;
+                const angle = Math.atan2(y2 - y1, x2 - x1);
+                const size = (line.strokeWidth || 2) * 6;
+                arrow.set({
+                    left: x2,
+                    top: y2,
+                    angle: angle * 180 / Math.PI + 90,
+                    width: size,
+                    height: size
+                });
+            }
+        }
+        if (mode === 'select' && isShiftDown) {
+            if (!moveStart) {
+                moveStart = { x: obj.left, y: obj.top };
+            }
+            const dx = Math.abs(obj.left - moveStart.x);
+            const dy = Math.abs(obj.top - moveStart.y);
+            if (dx > dy) {
+                // 수평 이동만 허용
+                obj.top = moveStart.y;
+            } else {
+                // 수직 이동만 허용
+                obj.left = moveStart.x;
+            }
+        } else {
+            moveStart = null;
+        }
+    });
+
+    canvas.on('object:scaling', function(opt) {
+        const obj = opt.target;
+        if (obj && obj.type === 'line' && obj.arrowType === 'end') {
+            drawArrowhead(obj);
+        }
+    });
+
+    canvas.on('object:rotating', function(opt) {
+        const obj = opt.target;
+        if (obj && obj.type === 'line' && obj.arrowType === 'end') {
+            drawArrowhead(obj);
+        }
+    });
+
+    // 페이지 로드시 기본 선택 도구 하이라이트
+    window.addEventListener('DOMContentLoaded', function() {
+        setMode('select');
+        // 컬러피커 등 기타 초기화...
+        document.querySelectorAll('.color-swatch').forEach(function(swatch) {
+            swatch.addEventListener('click', function() {
+                document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+                swatch.classList.add('selected');
+                currentColor = swatch.getAttribute('data-color');
+                // ...색상 적용 코드...
+            });
+        });
+        document.querySelector('.color-swatch').classList.add('selected');
+        document.getElementById('fill-mode-btn').addEventListener('click', function() {
+            colorMode = 'fill';
+            this.classList.add('active');
+            document.getElementById('outline-mode-btn').classList.remove('active');
+        });
+        document.getElementById('outline-mode-btn').addEventListener('click', function() {
+            colorMode = 'outline';
+            this.classList.add('active');
+            document.getElementById('fill-mode-btn').classList.remove('active');
+        });
+        // version 파라미터가 있으면 서버에서만 불러오기, 없으면 intro 버전 서버에서 불러오기
+        function getQueryParam(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
+        const version = getQueryParam('version');
+        const loadVersion = version ? version : 'intro';
+        fetch('/load_map_json?version=' + encodeURIComponent(loadVersion))
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                canvas.loadFromJSON(data.json, function() {
+                    canvas.renderAll();
+                    setMode('select');
+                });
+            }
+        });
+        saveState();
+    });
+
+    // canvas 저장/불러오기 함수 (버전 관리)
+    function saveCanvasToLocal(filename) {
+        if (!filename) { alert('파일명을 입력하세요!'); return; }
+        const json = canvas.toJSON();
+        localStorage.setItem('canvas_' + filename, JSON.stringify(json));
+        alert('저장되었습니다: ' + filename);
+    }
+    function loadCanvasFromLocal(filename) {
+        if (!filename) { alert('파일명을 입력하세요!'); return; }
+        const json = localStorage.getItem('canvas_' + filename);
+        if (json) {
+            canvas.loadFromJSON(json, function() {
+                canvas.renderAll();
+                setMode('select');
+            });
+        } else {
+            alert('저장된 데이터가 없습니다: ' + filename);
+        }
+    }
+    // 작업 자동 저장 (autosave)
+    function saveAuto() {
+        localStorage.setItem('canvas_autosave', JSON.stringify(canvas.toJSON()));
+    }
+    canvas.on('object:added', saveState);
+    canvas.on('object:removed', saveState);
+    canvas.on('object:modified', saveState);
+
+    // Stroke(선 두께) 변경 시 선택된 오브젝트에 적용
+    document.getElementById('stroke-width').addEventListener('change', function() {
+        const val = parseInt(this.value, 10);
+        const obj = canvas.getActiveObject();
+        if (obj && obj.strokeWidth !== undefined) {
+            obj.set('strokeWidth', val);
+            canvas.requestRenderAll();
+        }
+    });
+    // 오브젝트 선택 시 strokeWidth UI에 반영
+    function updateStrokeUI() {
+        const obj = canvas.getActiveObject();
+        if (obj && obj.strokeWidth !== undefined) {
+            document.getElementById('stroke-width').value = obj.strokeWidth;
+        }
+    }
+    canvas.on('selection:created', updateStrokeUI);
+    canvas.on('selection:updated', updateStrokeUI);
+    // 새 도형 그릴 때 strokeWidth 적용
+    document.getElementById('stroke-width').addEventListener('change', function() {
+        currentStrokeWidth = parseInt(this.value, 10);
+    });
+
+    // 객체 선택 시 snapAngle 초기화
+    canvas.on('selection:created', function(opt) {
+        if (opt.selected && opt.selected.length > 0) {
+            opt.selected.forEach(obj => obj.snapAngle = isShiftDown ? 90 : 0);
+        }
+    });
+    canvas.on('selection:updated', function(opt) {
+        if (opt.selected && opt.selected.length > 0) {
+            opt.selected.forEach(obj => obj.snapAngle = isShiftDown ? 90 : 0);
+        }
+    });
+
+    // 텍스트 박스 더블클릭 시 편집 모드 진입
+    canvas.on('mouse:dblclick', function(opt) {
+        const target = opt.target;
+        if (target && target.type === 'textbox') {
+            canvas.setActiveObject(target);
+            if (target.enterEditing) target.enterEditing();
+        }
+    });
+
+    // 글씨 크기 변경 이벤트
+    document.getElementById('font-size').addEventListener('change', function() {
+        const val = parseInt(this.value, 10);
+        const obj = canvas.getActiveObject();
+        if (obj && obj.type === 'textbox') {
+            obj.set('fontSize', val);
+            canvas.requestRenderAll();
+        }
+    });
+
+    // 오브젝트 선택 시 글씨 크기 UI에 반영
+    function updateFontUI() {
+        const obj = canvas.getActiveObject();
+        if (obj && obj.type === 'textbox') {
+            document.getElementById('font-size').value = obj.fontSize;
+        }
+    }
+    canvas.on('selection:created', updateFontUI);
+    canvas.on('selection:updated', updateFontUI);
+
+    // 화살표 그리기 함수
+    function drawArrowhead(line) {
+        // 기존 arrowhead가 있으면 삭제
+        if (line.arrowhead) {
+            canvas.remove(line.arrowhead);
+            line.arrowhead = null;
+        }
+        if (line.arrowType !== 'end') return;
+
+        // 직선의 끝점 좌표 계산
+        const x1 = line.x1, y1 = line.y1, x2 = line.x2, y2 = line.y2;
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        const size = (line.strokeWidth || 2) * 6;
+
+        // 삼각형 arrowhead path
+        const arrow = new fabric.Triangle({
+            left: x2,
+            top: y2,
+            angle: angle * 180 / Math.PI + 90,
+            width: size,
+            height: size,
+            fill: line.stroke || '#000',
+            selectable: false,
+            evented: false,
+            originX: 'center',
+            originY: 'center'
+        });
+        line.arrowhead = arrow;
+        canvas.add(arrow);
+        canvas.bringToFront(arrow);
+    }
+
+    // arrowhead 드롭다운 변경 이벤트
+    document.getElementById('arrowhead-select').addEventListener('change', function() {
+        const val = this.value;
+        const obj = canvas.getActiveObject();
+        if (obj && obj.type === 'line') {
+            obj.arrowType = val;
+            drawArrowhead(obj);
+            canvas.requestRenderAll();
+        }
+    });
+
+    // 직선 그릴 때 arrowType 적용
+    canvas.on('mouse:down', function(o) {
+        // ... 기존 코드 ...
+        if (mode === 'line') {
+            // ... 기존 코드 ...
+            line.arrowType = document.getElementById('arrowhead-select').value;
+        }
+        // ... 기존 코드 ...
+    });
+
+    // 직선 그리기 끝나면 arrowhead 생성
+    canvas.on('mouse:up', function(o) {
+        if (mode === 'line' && line && line.arrowType === 'end') {
+            drawArrowhead(line);
+        }
+        // ... 기존 코드 ...
+    });
+
+    // 직선 이동/변형 시 arrowhead 위치 갱신
+    canvas.on('object:modified', function(opt) {
+        const obj = opt.target;
+        if (obj && obj.type === 'line' && obj.arrowType === 'end') {
+            drawArrowhead(obj);
+        }
+    });
+
+    canvas.on('object:removed', function(opt) {
+        const obj = opt.target;
+        if (obj && obj.type === 'line' && obj.arrowhead) {
+            canvas.remove(obj.arrowhead);
+            obj.arrowhead = null;
+        }
+    });
+
+    function saveState() {
+        if (isRestoring) return; // undo/redo 중에는 상태 저장하지 않음
+        const json = JSON.stringify(canvas.toJSON());
+        undoStack.push(json);
+        redoStack = [];
+    }
+
+    function undo() {
+        if (undoStack.length > 1) {
+            const current = undoStack.pop();
+            redoStack.push(current);
+            const prev = undoStack[undoStack.length - 1];
+            isRestoring = true;
+            canvas.loadFromJSON(prev, function() {
+                canvas.renderAll();
+                isRestoring = false;
+            });
+        }
+    }
+    function redo() {
+        if (redoStack.length > 0) {
+            const next = redoStack.pop();
+            undoStack.push(next);
+            isRestoring = true;
+            canvas.loadFromJSON(next, function() {
+                canvas.renderAll();
+                isRestoring = false;
+            });
+        }
+    }
+
+    document.getElementById('save-image-btn').onclick = function() {
+        const version = document.getElementById('save-filename').value.trim();
+        if (!version) {
+            alert('버전명을 입력하세요!');
+            return;
+        }
+        const dataURL = canvas.toDataURL({ format: 'png' });
+        fetch('/save_map_image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                version: version,
+                image: dataURL
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert('이미지 저장 성공!');
+            } else {
+                alert('저장 실패: ' + data.error);
+            }
+        });
+    };
+
+    document.getElementById('save-json-btn').onclick = function() {
+        const version = document.getElementById('save-filename').value.trim();
+        if (!version) {
+            alert('파일명을 입력하세요!');
+            return;
+        }
+        const json = JSON.stringify(canvas.toJSON());
+        fetch('/save_map_json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                version: version,
+                json: json
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert('서버에 JSON 저장 성공!');
+            } else {
+                alert('저장 실패: ' + data.error);
+            }
+        });
+    };
+
+    document.getElementById('load-json-btn').onclick = function() {
+        const version = document.getElementById('save-filename').value.trim();
+        if (!version) {
+            alert('파일명을 입력하세요!');
+            return;
+        }
+        fetch('/load_map_json?version=' + encodeURIComponent(version))
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                canvas.loadFromJSON(data.json, function() {
+                    canvas.renderAll();
+                    setMode('select');
+                });
+            } else {
+                alert('불러오기 실패: ' + data.error);
+            }
+        });
+    };
+</script>
+</body>
+</html> 

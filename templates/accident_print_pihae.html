@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>교통사고보고서 (피해)</title>
+    <style>
+        body { font-family: 'Malgun Gothic', Arial, sans-serif; margin: 0; padding: 0; background-color: #f0f0f0; }
+        .report-container {
+            width: 794px; /* A4 portrait width at 96 DPI */
+            height: 1123px; /* A4 portrait height at 96 DPI */
+            margin: 20px auto;
+            padding: 40px;
+            background: #fff;
+            border: 1px solid #ccc;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+        }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+        th, td { border: 1px solid #000; padding: 4px 6px; font-size: 14px; }
+        th { background: #f0f0f0; }
+        .section-title { text-align: center; font-size: 22px; font-weight: bold; padding: 10px 0; }
+        .map, .desc { display: inline-block; vertical-align: top; }
+        .map { width: 55%; border: 1px solid #000; height: 220px; }
+        .desc { width: 44%; border: 1px solid #000; height: 220px; }
+        .footer-table th, .footer-table td { font-size: 13px; }
+        @media print {
+            body > :not(.report-container) {
+                display: none;
+            }
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            .report-container {
+                box-shadow: none;
+                margin: 0;
+                width: 100%;
+                border: none;
+                height: auto;
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="report-container">
+    <table>
+        <tr>
+            <th rowspan="2" style="width:12%;">접수번호</th>
+            <th colspan="5" class="section-title">교 통 사 고 보 고 서 (피해)</th>
+            <th rowspan="2" style="width:8%;">결<br>재</th>
+        </tr>
+        <tr>
+            <td style="width:8%;">담당</td>
+            <td style="width:8%;">상무</td>
+            <td style="width:8%;">부사장</td>
+            <td style="width:8%;">대표</td>
+        </tr>
+    </table>
+    <table>
+        <tr>
+            <th>사고일자</th>
+            <td>{{ accident.사고일시 }}</td>
+            <th>차량번호</th>
+            <td>{{ accident.차번 }}</td>
+            <th>차명</th>
+            <td>{{ accident.차종 }}</td>
+        </tr>
+        <tr>
+            <th>기사명</th>
+            <td>{{ accident.기사명 }}</td>
+            <th>사고원인</th>
+            <td colspan="3">{{ accident.사고원인 }}</td>
+        </tr>
+        <tr>
+            <th>피해견적</th>
+            <td>{{ "{:,}".format(accident.피해견적|int) if accident.피해견적 and accident.피해견적.replace(',', '').isdigit() else accident.피해견적 }}</td>
+            <th>입금일</th>
+            <td>{{ accident.입금일.split(' ')[0] if accident.입금일 and ' ' in accident.입금일 else accident.입금일 }}</td>
+            <th>금액</th>
+            <td>{{ "{:,}".format(accident.금액|int) if accident.금액 and accident.금액.replace(',', '').isdigit() else accident.금액 }}</td>
+        </tr>
+        <tr>
+            <th>처리여부</th>
+            <td>{{ accident.처리여부 }}</td>
+            <th></th>
+            <td></td>
+            <th></th>
+            <td></td>
+        </tr>
+    </table>
+    <div style="display: flex; margin-top: 10px;">
+        <div class="map" style="margin-right:1%; padding: 10px;">사고 현장 약도<br><br>
+            <!-- 사고 현장 그림 또는 이미지 삽입 -->
+        </div>
+        <div class="desc" style="padding: 10px;">사고 경위<br><br>
+            <!-- 필요시 accident.description 등 추가 -->
+        </div>
+    </div>
+    <table class="footer-table" style="margin-top:10px;">
+        <tr>
+            <th>취급처</th>
+            <th>경찰서</th>
+            <th>조사관</th>
+            <th>보험</th>
+            <th>담당</th>
+            <th>처리번호</th>
+        </tr>
+        <tr>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+        </tr>
+    </table>
+    <div style="text-align:right; margin-bottom:10px;">
+        <button onclick="window.print()" style="padding:8px 24px; font-size:15px; background:#4CAF50; color:#fff; border:none; border-radius:5px; cursor:pointer;">프린트하기</button>
+    </div>
+</div>
+<script>
+    // window.onload = function() { window.print(); }
+</script>
+</body>
+</html> 

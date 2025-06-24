@@ -78,6 +78,11 @@
             </a>
         </li>
         <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'driver' %}active{% endif %}" href="/driver">
+                기사 관리
+            </a>
+        </li>
+        <li class="nav-item">
             <a class="nav-link {% if request.endpoint == 'accident' %}active{% endif %}" href="/accident">
                 사고 관리
             </a>

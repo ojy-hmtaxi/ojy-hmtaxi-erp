@@ -133,15 +133,33 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
+            font-size: 12px;
         }
         .table th, .table td {
-            padding: 8px;
+            padding: 12px 16px;
             border: 1px solid #ddd;
-            text-align: left;
-            font-size: 12px;
+            white-space: nowrap;
+            vertical-align: middle;
         }
         .table th {
             background-color: #f2f2f2;
+            font-weight: 600;
+            position: relative;
+        }
+        .sort-icons {
+            display: inline-block;
+            margin-left: 5px;
+        }
+        .sort-btn {
+            background: none;
+            border: none;
+            padding: 0 3px;
+            cursor: pointer;
+            color: #666;
+            font-size: 12px;
+        }
+        .sort-btn.active {
+            color: #4CAF50;
         }
         .table tr:nth-child(even) {
             background-color: #f9f9f9;
@@ -244,6 +262,7 @@
             background: white;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            font-size: 12px;
         }
         
         .summary-table th,
@@ -276,6 +295,8 @@
         .top-nav {
             margin-left: 100px;
         }
+        .tabs.show { display: block; }
+        .tabs.hide { display: none; }
     </style>
 </head>
 <body>
@@ -307,29 +328,31 @@
                     {% endfor %}
                 </div>
                 {% for sheet_name, data in salary_data.items() %}
-                <div id="{{ sheet_name }}" class="tabs" style="display: {% if loop.first %}block{% else %}none{% endif %}">
+                <div id="{{ sheet_name }}" class="tabs {% if loop.first %}show{% else %}hide{% endif %}">
                     <div class="tab-buttons">
                         <button class="tab-button active" onclick="openTab(event, 'result-{{ sheet_name }}')">계산 결과</button>
                         <button class="tab-button" onclick="openTab(event, 'summary-{{ sheet_name }}')">요약</button>
                     </div>
                     <div id="result-{{ sheet_name }}" class="tab-content active">
-                        <table class="table">
+                        <table class="table" id="payLeaseTable_{{ sheet_name }}">
                             <thead>
                                 <tr>
-                                    <th>사번</th>
-                                    <th>드라이버</th>
-                                    <th>차종</th>
-                                    <th>실입금</th>
-                                    <th>리스료</th>
-                                    <th>연료비</th>
-                                    <th style="color: #00008B;">급여</th>
+                                    {% for col in ['사번', '이름', '차종', '실입금', '리스료', '연료비', '급여'] %}
+                                    <th>
+                                        {{ col }}
+                                        <span class="sort-icons">
+                                            <button type="button" class="sort-btn" onclick="sortTable('payLeaseTable_{{ sheet_name }}', '{{ loop.index0 }}', 'asc')" title="오름차순">▲</button>
+                                            <button type="button" class="sort-btn" onclick="sortTable('payLeaseTable_{{ sheet_name }}', '{{ loop.index0 }}', 'desc')" title="내림차순">▼</button>
+                                        </span>
+                                    </th>
+                                    {% endfor %}
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for row in data.data %}
                                 <tr>
                                     <td>{{ row.사번 }}</td>
-                                    <td>{{ row.드라이버 }}</td>
+                                    <td>{{ row.이름 }}</td>
                                     <td>{{ row.차종 }}</td>
                                     <td>{{ "{:,}".format(row.실입금|int) }}</td>
                                     <td>{{ "{:,}".format(row.리스료|int) }}</td>
@@ -365,7 +388,7 @@
                                 <tr>
                                     <th>순위</th>
                                     <th>사번</th>
-                                    <th>드라이버</th>
+                                    <th>이름</th>
                                     <th>실입금</th>
                                     <th>리스료</th>
                                     <th>연료비</th>
@@ -384,6 +407,11 @@
     </div>
 
     <script>
+        let salaryChartInstance = null;
+        let incomeChartInstance = null;
+        let leaseFeeChartInstance = null;
+        let fuelCostChartInstance = null;
+
         function openTab(evt, tabName) {
             var currentSheet = evt.currentTarget.closest('.tabs');
             var tabcontent = currentSheet.getElementsByClassName("tab-content");
@@ -408,7 +436,7 @@
         function openSheetTab(evt, sheetName) {
             var sheets = document.getElementsByClassName("tabs");
             for (var i = 0; i < sheets.length; i++) {
-                sheets[i].style.display = "none";
+                sheets[i].classList.add('hide');
             }
 
             var sheetButtons = document.getElementsByClassName("sheet-tab-button");
@@ -416,7 +444,7 @@
                 sheetButtons[i].classList.remove("active");
             }
 
-            document.getElementById(sheetName).style.display = "block";
+            document.getElementById(sheetName).classList.remove('hide');
             evt.currentTarget.classList.add("active");
 
             localStorage.setItem('lastSelectedSheet', sheetName);
@@ -429,7 +457,7 @@
                 if (sheetElement) {
                     var sheets = document.getElementsByClassName("tabs");
                     for (var i = 0; i < sheets.length; i++) {
-                        sheets[i].style.display = "none";
+                        sheets[i].classList.add('hide');
                     }
 
                     var sheetButtons = document.getElementsByClassName("sheet-tab-button");
@@ -437,7 +465,7 @@
                         sheetButtons[i].classList.remove("active");
                     }
 
-                    sheetElement.style.display = "block";
+                    sheetElement.classList.remove('hide');
                     var activeButton = document.querySelector(`.sheet-tab-button[onclick*="${lastSelectedSheet}"]`);
                     if (activeButton) {
                         activeButton.classList.add("active");
@@ -456,7 +484,7 @@
                 const cells = row.querySelectorAll('td');
                 return {
                     사번: cells[0].textContent,
-                    드라이버: cells[1].textContent,
+                    이름: cells[1].textContent,
                     실입금: parseInt(cells[3].textContent.replace(/,/g, '')),
                     리스료: parseInt(cells[4].textContent.replace(/,/g, '')),
                     연료비: parseInt(cells[5].textContent.replace(/,/g, '')),
@@ -470,10 +498,11 @@
 
             // 급여 순위 그래프
             const salaryCtx = currentSheet.querySelector('#salaryChart').getContext('2d');
-            new Chart(salaryCtx, {
+            if (salaryChartInstance) salaryChartInstance.destroy();
+            salaryChartInstance = new Chart(salaryCtx, {
                 type: 'bar',
                 data: {
-                    labels: sortedBySalary.slice(0, 5).map(d => d.드라이버),
+                    labels: sortedBySalary.slice(0, 5).map(d => d.이름),
                     datasets: [{
                         label: '급여 순위 (Top 5)',
                         data: sortedBySalary.slice(0, 5).map(d => d.급여),
@@ -495,10 +524,11 @@
 
             // 실입금 순위 그래프
             const incomeCtx = currentSheet.querySelector('#incomeChart').getContext('2d');
-            new Chart(incomeCtx, {
+            if (incomeChartInstance) incomeChartInstance.destroy();
+            incomeChartInstance = new Chart(incomeCtx, {
                 type: 'bar',
                 data: {
-                    labels: sortedByIncome.slice(0, 5).map(d => d.드라이버),
+                    labels: sortedByIncome.slice(0, 5).map(d => d.이름),
                     datasets: [{
                         label: '실입금 순위 (Top 5)',
                         data: sortedByIncome.slice(0, 5).map(d => d.실입금),
@@ -520,7 +550,8 @@
 
             // 리스료 분포 그래프
             const leaseCtx = currentSheet.querySelector('#leaseFeeChart').getContext('2d');
-            new Chart(leaseCtx, {
+            if (leaseFeeChartInstance) leaseFeeChartInstance.destroy();
+            leaseFeeChartInstance = new Chart(leaseCtx, {
                 type: 'pie',
                 data: {
                     labels: ['평균 리스료', '최고 리스료', '최저 리스료'],
@@ -550,7 +581,8 @@
 
             // 연료비 분포 그래프
             const fuelCtx = currentSheet.querySelector('#fuelCostChart').getContext('2d');
-            new Chart(fuelCtx, {
+            if (fuelCostChartInstance) fuelCostChartInstance.destroy();
+            fuelCostChartInstance = new Chart(fuelCtx, {
                 type: 'pie',
                 data: {
                     labels: ['평균 연료비', '최고 연료비', '최저 연료비'],
@@ -590,7 +622,7 @@
                 row.innerHTML = `
                     <td>${rankBadge}</td>
                     <td>${driver.사번}</td>
-                    <td>${driver.드라이버}</td>
+                    <td>${driver.이름}</td>
                     <td>${driver.실입금.toLocaleString()}원</td>
                     <td>${driver.리스료.toLocaleString()}원</td>
                     <td>${driver.연료비.toLocaleString()}원</td>
@@ -655,6 +687,40 @@
             resultDiv.textContent = '';
             resultDiv.classList.remove('show');
         });
+
+        function sortTable(tableId, columnIndex, direction) {
+            var table = document.getElementById(tableId);
+            var tbody = table.getElementsByTagName('tbody')[0];
+            var rows = Array.from(tbody.getElementsByTagName('tr'));
+            var headers = table.getElementsByTagName('th');
+            // 정렬 버튼 활성화 표시
+            for (var i = 0; i < headers.length; i++) {
+                headers[i].querySelectorAll('.sort-btn').forEach(function(btn) {
+                    btn.classList.remove('active');
+                });
+            }
+            var currentHeader = headers[columnIndex];
+            var sortBtn = currentHeader.querySelector(direction === 'asc' ? '.sort-btn:first-child' : '.sort-btn:last-child');
+            if (sortBtn) sortBtn.classList.add('active');
+            // 정렬
+            rows.sort(function(a, b) {
+                var aValue = a.cells[columnIndex].textContent.replace(/,/g, '').trim();
+                var bValue = b.cells[columnIndex].textContent.replace(/,/g, '').trim();
+                // 숫자 정렬
+                if (!isNaN(aValue) && !isNaN(bValue) && aValue !== '' && bValue !== '') {
+                    aValue = parseFloat(aValue);
+                    bValue = parseFloat(bValue);
+                }
+                if (direction === 'asc') {
+                    return aValue > bValue ? 1 : -1;
+                } else {
+                    return aValue < bValue ? 1 : -1;
+                }
+            });
+            rows.forEach(function(row) {
+                tbody.appendChild(row);
+            });
+        }
     </script>
 </body>
 </html>

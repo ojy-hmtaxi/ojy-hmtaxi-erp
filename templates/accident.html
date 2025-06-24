@@ -98,6 +98,7 @@
             border: 1px solid #ddd;
             text-align: left;
             font-size: 12px;
+            white-space: nowrap;
         }
         .table th {
             background-color: #f2f2f2;
@@ -130,6 +131,7 @@
             padding: 20px;
             background-color: white;
             border-radius: 0 4px 4px 4px;
+            overflow-x: auto;
         }
         .tab-content.active {
             display: block;
@@ -190,7 +192,7 @@
         }
         /* 미결 상태 스타일 */
         .status-pending {
-            color: red;
+            color: red !important;
         }
         tr.pending-row {
             background-color: #ffe6e6 !important;
@@ -201,7 +203,7 @@
         }
         /* 치료지급, 수리지급 컬럼 스타일 */
         .payment-column {
-            color: #00008B;
+            color: #00008B !important;
         }
         .top-nav {
             margin-left: 100px;
@@ -238,12 +240,17 @@
                 </div>
                 
                 <div id="at-fault" class="tab-content active">
-                    <table class="table">
+                    <!-- 가해사고 통합 검색 필터 -->
+                    <div style="margin-bottom:12px;">
+                        <input type="text" id="atFaultUnifiedFilter" placeholder="사고번호, 차번, 차종, 기사명, 처리여부(미결/종결) 검색" style="width:100%;">
+                    </div>
+                    <table class="table" id="atFaultTable">
                         <thead>
                             <tr>
                                 <th>사고번호</th>
                                 <th>사고일시</th>
-                                <th>차량번호</th>
+                                <th>차번</th>
+                                <th>차종</th>
                                 <th>기사명</th>
                                 <th>사고원인</th>
                                 <th>접보사항</th>
@@ -251,7 +258,7 @@
                                 <th>피해자</th>
                                 <th class="payment-column">치료지급</th>
                                 <th>운전자</th>
-                                <th>차종</th>
+                                <th>피해차종</th>
                                 <th class="payment-column">수리지급</th>
                                 <th>처리여부</th>
                             </tr>
@@ -259,9 +266,10 @@
                         <tbody>
                             {% for accident in accident_data.at_fault %}
                             <tr {% if accident.처리여부 == '미결' %}class="pending-row"{% endif %}>
-                                <td>{{ accident.사고번호 }}</td>
-                                <td>{{ accident.사고일시 }}</td>
-                                <td>{{ accident.차량번호 }}</td>
+                                <td><a href="#" onclick="openAccidentPrintWindow('at_fault', '{{ accident.사고번호 }}'); return false;">{{ accident.사고번호 }}</a></td>
+                                <td>{{ accident.사고일시.split(' ')[0] + ' ' + accident.사고일시.split(' ')[1][:5] if accident.사고일시 and ' ' in accident.사고일시 else accident.사고일시 }}</td>
+                                <td>{{ accident.차번 }}</td>
+                                <td>{{ accident.차종 }}</td>
                                 <td>{{ accident.기사명 }}</td>
                                 <td>{{ accident.사고원인 }}</td>
                                 <td>{{ accident.접보사항 }}</td>
@@ -269,7 +277,7 @@
                                 <td class="slash-to-br">{{ accident.피해자 }}</td>
                                 <td class="slash-to-br payment-column">{{ accident.치료지급 }}</td>
                                 <td class="slash-to-br">{{ accident.운전자 }}</td>
-                                <td class="slash-to-br">{{ accident.차종 }}</td>
+                                <td class="slash-to-br">{{ accident.피해차종 }}</td>
                                 <td class="slash-to-br payment-column">{{ accident.수리지급 }}</td>
                                 <td {% if accident.처리여부 == '미결' %}class="status-pending"{% endif %}>{{ accident.처리여부 }}</td>
                             </tr>
@@ -279,15 +287,25 @@
                 </div>
                 
                 <div id="not-at-fault" class="tab-content">
-                    <table class="table">
+                    <!-- 피해사고 통합 검색 필터 -->
+                    <div style="margin-bottom:12px;">
+                        <input type="text" id="notAtFaultUnifiedFilter" placeholder="사고번호, 차번, 차종, 기사명, 처리여부(미결/종결) 검색" style="width:100%;">
+                    </div>
+                    <table class="table" id="notAtFaultTable">
                         <thead>
                             <tr>
                                 <th>사고번호</th>
                                 <th>사고일시</th>
-                                <th>차량번호</th>
+                                <th>차번</th>
+                                <th>차종</th>
                                 <th>기사명</th>
                                 <th>사고원인</th>
                                 <th class="payment-column">피해견적</th>
+                                <th>가해차번</th>
+                                <th>가해차종</th>
+                                <th>운전자</th>
+                                <th>보험사</th>
+                                <th>담당자</th>
                                 <th>입금일</th>
                                 <th class="payment-column">금액</th>
                                 <th>처리여부</th>
@@ -296,14 +314,20 @@
                         <tbody>
                             {% for accident in accident_data.not_at_fault %}
                             <tr {% if accident.처리여부 == '미결' %}class="pending-row"{% endif %}>
-                                <td>{{ accident.사고번호 }}</td>
-                                <td>{{ accident.사고일시 }}</td>
-                                <td>{{ accident.차량번호 }}</td>
+                                <td><a href="#" onclick="openAccidentPrintWindow('not_at_fault', '{{ accident.사고번호 }}'); return false;">{{ accident.사고번호 }}</a></td>
+                                <td>{{ accident.사고일시.split(' ')[0] + ' ' + accident.사고일시.split(' ')[1][:5] if accident.사고일시 and ' ' in accident.사고일시 else accident.사고일시 }}</td>
+                                <td>{{ accident.차번 }}</td>
+                                <td>{{ accident.차종 }}</td>
                                 <td>{{ accident.기사명 }}</td>
                                 <td>{{ accident.사고원인 }}</td>
-                                <td class="payment-column">{{ accident.피해견적 }}</td>
-                                <td>{{ accident.입금일 }}</td>
-                                <td class="payment-column">{{ accident.금액 }}</td>
+                                <td class="payment-column">{{ "{:,}".format(accident.피해견적|int) if accident.피해견적 and accident.피해견적.replace(',', '').isdigit() else accident.피해견적 }}</td>
+                                <td>{{ accident.가해차번 }}</td>
+                                <td>{{ accident.가해차종 }}</td>
+                                <td>{{ accident.운전자 }}</td>
+                                <td>{{ accident.보험사 }}</td>
+                                <td>{{ accident.담당자 }}</td>
+                                <td>{{ accident.입금일.split(' ')[0] if accident.입금일 and ' ' in accident.입금일 else accident.입금일 }}</td>
+                                <td class="payment-column">{{ "{:,}".format(accident.금액|int) if accident.금액 and accident.금액.replace(',', '').isdigit() else accident.금액 }}</td>
                                 <td {% if accident.처리여부 == '미결' %}class="status-pending"{% endif %}>{{ accident.처리여부 }}</td>
                             </tr>
                             {% endfor %}
@@ -312,22 +336,40 @@
                 </div>
                 
                 <div id="summary" class="tab-content">
-                    <div class="summary-section">
-                        <h3>전체 현황</h3>
-                        <div class="summary-item">
-                            <strong>총 사고 건수:</strong> {{ accident_data.summary.total_count }}건
+                    <div style="display: flex; gap: 32px; flex-wrap: wrap;">
+                        <div class="summary-section" style="flex:1 1 340px; min-width:320px; max-width:50%;">
+                            <h3>전체 현황</h3>
+                            <div class="summary-item">
+                                <strong>총 사고 건수:</strong> {{ accident_data.summary.total_count }}건
+                            </div>
+                            <div class="summary-item">
+                                <strong>가해사고:</strong> {{ accident_data.summary.at_fault_count }}건
+                            </div>
+                            <div class="summary-item">
+                                <strong>피해사고:</strong> {{ accident_data.summary.not_at_fault_count }}건
+                            </div>
+                            <div class="summary-item">
+                                <strong>가해 미결 처리 사고:</strong> {{ accident_data.summary.at_fault_pending_count }}건
+                            </div>
+                            <div class="summary-item">
+                                <strong>피해 미결 처리 사고:</strong> {{ accident_data.summary.not_at_fault_pending_count }}건
+                            </div>
                         </div>
-                        <div class="summary-item">
-                            <strong>가해사고:</strong> {{ accident_data.summary.at_fault_count }}건
-                        </div>
-                        <div class="summary-item">
-                            <strong>피해사고:</strong> {{ accident_data.summary.not_at_fault_count }}건
-                        </div>
-                        <div class="summary-item">
-                            <strong>가해 미결 처리 사고:</strong> {{ accident_data.summary.at_fault_pending_count }}건
-                        </div>
-                        <div class="summary-item">
-                            <strong>피해 미결 처리 사고:</strong> {{ accident_data.summary.not_at_fault_pending_count }}건
+                        <div class="summary-section" style="flex:1 1 340px; min-width:320px; max-width:50%;">
+                            <h3>총 지급 현황</h3>
+                            <div class="summary-item">
+                                <strong>가해사고 총 수리지급:</strong> {{ accident_data.summary.at_fault_total_repair }}원
+                            </div>
+                            <div class="summary-item">
+                                <strong>가해사고 총 치료지급:</strong> {{ accident_data.summary.at_fault_total_treatment }}원
+                            </div>
+                            <br>
+                            <div class="summary-item">
+                                <strong>피해사고 총 피해견적:</strong> {{ accident_data.summary.not_at_fault_total_damage }}원
+                            </div>
+                            <div class="summary-item">
+                                <strong>피해사고 총 보상금액:</strong> {{ accident_data.summary.not_at_fault_total_payment }}원
+                            </div>
                         </div>
                     </div>
 
@@ -401,7 +443,7 @@
                             <thead>
                                 <tr>
                                     <th>
-                                        차량번호
+                                        차번
                                         <div class="sort-icons">
                                             <button class="sort-btn" onclick="sortTable('vehicle-table', 0, 'asc')" title="오름차순">▲</button>
                                             <button class="sort-btn" onclick="sortTable('vehicle-table', 0, 'desc')" title="내림차순">▼</button>
@@ -577,6 +619,43 @@
             resultDiv.textContent = '';
             resultDiv.classList.remove('show');
         });
+
+        // 사고 테이블 통합 필터링 함수 (가해사고)
+        function filterAtFaultTableUnified() {
+            var keyword = document.getElementById('atFaultUnifiedFilter').value.trim().toLowerCase();
+            var table = document.getElementById('atFaultTable');
+            var rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+            for (var i = 0; i < rows.length; i++) {
+                var cells = rows[i].getElementsByTagName('td');
+                var show = false;
+                for (var j of [0,2,3,4,13]) { // 사고번호, 차번, 차종, 기사명, 처리여부
+                    if (cells[j] && cells[j].textContent.toLowerCase().includes(keyword)) show = true;
+                }
+                rows[i].style.display = (keyword === '' || show) ? '' : 'none';
+            }
+        }
+        document.getElementById('atFaultUnifiedFilter').addEventListener('input', filterAtFaultTableUnified);
+
+        // 사고 테이블 통합 필터링 함수 (피해사고)
+        function filterNotAtFaultTableUnified() {
+            var keyword = document.getElementById('notAtFaultUnifiedFilter').value.trim().toLowerCase();
+            var table = document.getElementById('notAtFaultTable');
+            var rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+            for (var i = 0; i < rows.length; i++) {
+                var cells = rows[i].getElementsByTagName('td');
+                var show = false;
+                for (var j of [0,2,3,4,14]) { // 사고번호, 차번, 차종, 기사명, 처리여부
+                    if (cells[j] && cells[j].textContent.toLowerCase().includes(keyword)) show = true;
+                }
+                rows[i].style.display = (keyword === '' || show) ? '' : 'none';
+            }
+        }
+        document.getElementById('notAtFaultUnifiedFilter').addEventListener('input', filterNotAtFaultTableUnified);
+
+        function openAccidentPrintWindow(type, accidentNo) {
+            let url = `/accident/print/${type}/${accidentNo}`;
+            window.open(url, '_blank', 'width=900,height=1100');
+        }
     </script>
 </body>
 </html>

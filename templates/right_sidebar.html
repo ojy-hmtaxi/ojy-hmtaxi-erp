@@ -46,7 +46,7 @@
     }
 
     .right-sidebar.collapsed .right-sidebar-toggle i {
-        transform: rotate(180deg);
+        transform: scaleX(-1);
     }
 
     /* 사이드바 내용 스타일 */
@@ -65,7 +65,8 @@
     }
 
     .message.current-user {
-        background-color: #fff9c4;
+        background-color: #fffce1;
+        border: 1px solid #eed142;
     }
 
     .message-header {
@@ -95,12 +96,13 @@
 
     .delete-btn:hover {
         text-decoration: underline;
+        color: #ffffff;
     }
 </style>
 
 <div class="right-sidebar collapsed" id="rightSidebar">
     <button class="right-sidebar-toggle" onclick="toggleRightSidebar()">
-        <i class="fas fa-chevron-left"></i>
+        <i class='far fa-comment-dots'></i> 
     </button>
     <div class="right-sidebar-content">
         <div class="message-board">
