@@ -170,7 +170,7 @@
         <div class="top-nav d-flex justify-content-between align-items-center">
             <h4 class="mb-0">{{ self.title() }}</h4>
             <div class="d-flex align-items-center">
-                {% if current_user.is_authenticated %}
+                {% if current_user and current_user.is_authenticated %}
                     <div class="dropdown">
                         <button class="btn user-status login-status dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="background:none;border:none;box-shadow:none;">
                             <i class="fas fa-user-circle me-2"></i>

@@ -31,6 +31,11 @@ login_manager.login_message = '이 페이지에 접근하려면 로그인이 필
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+# 모든 템플릿에서 current_user 사용 가능하도록 context processor 추가
+@app.context_processor
+def inject_user():
+    return dict(current_user=current_user)
+
 # 로그인 라우트
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -1165,6 +1170,8 @@ def admin_edit_user(user_id):
     if request.method == 'POST':
         user.email = request.form.get('email')
         user.name = request.form.get('name')
+        user.phone = request.form.get('phone')
+        user.position = request.form.get('position')
         user.role = request.form.get('role')
         
         new_password = request.form.get('new_password')
@@ -1176,6 +1183,29 @@ def admin_edit_user(user_id):
         return redirect(url_for('admin_users'))
     
     return render_template('admin_edit_user.html', user=user)
+
+@app.route('/admin/users/<int:user_id>/delete', methods=['POST'])
+@login_required
+def admin_delete_user(user_id):
+    if current_user.role != 'admin':
+        flash('관리자만 접근할 수 있습니다.', 'error')
+        return redirect(url_for('calculate_salary'))
+    
+    user = User.query.get_or_404(user_id)
+    
+    # 자신을 삭제하려고 하는 경우 방지
+    if user.id == current_user.id:
+        flash('자신의 계정은 삭제할 수 없습니다.', 'error')
+        return redirect(url_for('admin_users'))
+    
+    # 사용자와 관련된 메시지도 삭제
+    Message.query.filter_by(user_id=user.id).delete()
+    
+    db.session.delete(user)
+    db.session.commit()
+    
+    flash(f'사용자 {user.username}이(가) 삭제되었습니다.', 'success')
+    return redirect(url_for('admin_users'))
 
 @app.route('/uploads/<filename>')
 @login_required

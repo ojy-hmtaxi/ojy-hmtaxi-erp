@@ -276,7 +276,7 @@
             <h4>단축키</h4>
         <hr>
         <ul style="padding-left:18px; line-height: 2; font-size:14px; color:#333;">
-            <li>Space Bar: 선택 툴</li>
+            <li>Space Bar: 선택 툴 / (객체 선택 중) 선택 해제</li>
             <li>Ctrl+Z / Ctrl+Y: 실행취소/재실행</li>
             <li>Shift: 정사각형 / 수평·수직선 / 90도 회전 /<br>수평·수직이동 / 심볼크기 자유조정</li>
             <li>Ctrl+C / Ctrl+V: 복사/붙여넣기</li>
@@ -284,6 +284,8 @@
             <li>Alt+H: 그룹 해제</li>
             <li>Alt+L: 잠금</li>
             <li>Alt+O: 잠금 해제</li>
+            <li>Ctrl+↑/↓: 레이어 한칸 위/아래</li>
+            <li>Ctrl+Shift+↑/↓: 레이어 맨 위/아래</li>
             <li>Delete: 삭제</li>
         </ul>
         <!--div style="margin-top:10px; color:#888; font-size:12px;">패널은 자유롭게 커스터마이즈할 수 있습니다.</div-->
@@ -643,6 +645,7 @@
                     obj.lockRotation = true;
                     obj.selectable = true;
                     obj.evented = true;
+                    obj.isLocked = true; // 잠금 상태 플래그 추가
                 });
                 canvas.discardActiveObject();
                 canvas.requestRenderAll();
@@ -650,9 +653,9 @@
         }
         // Alt+O: 선택 객체 잠금 해제
         if (e.altKey && (e.key === 'o' || e.key === 'O')) {
-            // 모든 객체 중 잠금된 것만 selectable로 변경
+            // 모든 객체 중 잠금된 것만 해제
             canvas.getObjects().forEach(obj => {
-                if (!obj.selectable) {
+                if (obj.isLocked) {
                     obj.lockMovementX = false;
                     obj.lockMovementY = false;
                     obj.lockScalingX = false;
@@ -660,14 +663,23 @@
                     obj.lockRotation = false;
                     obj.selectable = true;
                     obj.evented = true;
+                    obj.isLocked = false; // 잠금 상태 플래그 제거
                 }
             });
             canvas.requestRenderAll();
         }
 
-        // 스페이스바로 선택 도구 전환
+        // 스페이스바로 선택 도구 전환 또는 선택 해제
         if (e.code === 'Space' && document.activeElement === document.body) {
-            setMode('select');
+            const activeObj = canvas.getActiveObject();
+            if (activeObj) {
+                // 객체가 선택된 상태라면 선택 해제
+                canvas.discardActiveObject();
+                canvas.requestRenderAll();
+            } else {
+                // 선택된 객체가 없다면 선택 도구로 전환
+                setMode('select');
+            }
             e.preventDefault();
         }
 
@@ -684,6 +696,35 @@
         if (e.ctrlKey && e.key === 'y') {
             redo();
             e.preventDefault();
+        }
+
+        // 레이어 순서 조정 단축키
+        if (e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+            const activeObj = canvas.getActiveObject();
+            if (activeObj) {
+                if (e.key === 'ArrowUp') {
+                    if (e.shiftKey) {
+                        // Ctrl+Shift+↑: 맨 위로
+                        canvas.bringToFront(activeObj);
+                    } else {
+                        // Ctrl+↑: 한칸 위로
+                        canvas.bringForward(activeObj);
+                    }
+                } else if (e.key === 'ArrowDown') {
+                    if (e.shiftKey) {
+                        // Ctrl+Shift+↓: 맨 아래로
+                        canvas.sendToBack(activeObj);
+                    } else {
+                        // Ctrl+↓: 한칸 아래로
+                        canvas.sendBackwards(activeObj);
+                    }
+                }
+                
+                // 강제로 캔버스 다시 렌더링
+                canvas.renderAll();
+                
+                e.preventDefault();
+            }
         }
     });
 

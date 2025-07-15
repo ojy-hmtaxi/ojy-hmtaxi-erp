@@ -92,6 +92,23 @@
                 설정
             </a>
         </li>
+        <!-- 디버깅용: 현재 사용자 정보 표시 -->
+        {% if current_user %}
+        <li class="nav-item">
+            <small style="color: #ccc; padding: 10px;">Debug: {{ current_user.username }} ({{ current_user.role }})</small>
+        </li>
+        {% endif %}
+        
+        <!-- 관리자 메뉴 -->
+        {% if current_user %}
+            {% if current_user.role == 'admin' %}
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'admin_users' %}active{% endif %}" href="/admin/users">
+                    <i class="fas fa-users-cog me-2"></i>사용자 관리
+                </a>
+            </li>
+            {% endif %}
+        {% endif %}
     </ul>
 </div>
 {% endmacro %} 
