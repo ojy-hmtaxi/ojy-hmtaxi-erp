@@ -166,12 +166,17 @@
     <div style="display: flex; margin-top: 10px;">
         <div class="map" style="width: 50%; height: 300px; padding: 10px;">
             사고 현장 약도<br>
-            <img src="/uploads/maps/{{ accident.사고번호 }}.png" alt="사고 현장 약도" style="width:100%;max-height: 300px; margin-top: 10px;">
+            <img src="https://raw.githubusercontent.com/ojy-hmtaxi/ojy-hmtaxi-erp/main/uploads/maps/{{ accident.사고번호|lower }}.png"
+            alt="사고 현장 약도"
+            style="width:100%;max-height: 300px; margin-top: 10px;">
         </div>
+            <!--<img src="/uploads/maps/{{ accident.사고번호 }}.png" alt="사고 현장 약도" style="width:100%;max-height: 300px; margin-top: 10px;">
+        </div-->
         <div class="desc" style="width: 50%; height: 300px; padding: 10px;">사고 경위<br><br>
             {{ accident.사고경위 or '' }}
             <!-- 필요시 accident.description 등 추가 -->
         </div>
+            
     </div>
     <table class="footer-table" style="margin-top:10px; text-align:center;">
         <tr>
