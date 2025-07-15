@@ -9,35 +9,71 @@
 {% block title %}대시보드{% endblock %}
 
 {% block content %}
+<style>
+.stat-card {
+    min-height: 140px; /* 필요에 따라 140~180px 등으로 조정 */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+</style>
 <div class="container-fluid" style="width: 95%;">
     <!-- 상단 통계 카드 -->
     <div class="row">
         <div class="col-md-3">
             <div class="stat-card">
                 <h5>최종수입금</h5>
-                <h2>{{ total_income|default('0') }}원</h2>
-                <p><i class="fas fa-arrow-up me-1"></i>+{{ income_change|default('0') }}원 ({{ income_percent|default('0') }}%)</p>
+                <h2>{{ "{:,}".format(total_income|default(0)) }}원</h2>
+                <p><i class="fas fa-arrow-up me-1"></i>+{{ "{:,}".format(income_change|default(0)) }}원 ({{ income_percent|default('0') }}%)</p>
             </div>
         </div>
         <div class="col-md-3">
             <div class="stat-card">
-                <h5>미터금액</h5>
-                <h2>{{ meter_amount|default('0') }}원</h2>
-                <p><i class="fas fa-arrow-up me-1"></i>+{{ meter_change|default('0') }}원 ({{ meter_percent|default('0') }}%)</p>
+                <h5>월 평균 수입금</h5>
+                <h2>{{ "{:,}".format(monthly_avg_income|default(0)) }}원</h2>
+                <p><i class="fas fa-chart-line me-1"></i>전체 월 평균</p>
             </div>
         </div>
         <div class="col-md-3">
             <div class="stat-card">
-                <h5>운행건수</h5>
-                <h2>{{ trip_count|default('0') }}건</h2>
-                <p><i class="fas fa-arrow-up me-1"></i>+{{ trip_change|default('0') }}건 ({{ trip_percent|default('0') }}%)</p>
+                <h5>
+                    월별 수입금 
+                    ({{ selected_month|default('12월') }})
+                    <button type="button" onclick="changeMonth('prev')" class="btn btn-sm btn-link p-0 me-1" style="margin-left: 10px;">
+                        <i class="fas fa-arrow-down"></i>
+                    </button>
+                    <button type="button" onclick="changeMonth('next')" class="btn btn-sm btn-link p-0 ms-1" style="margin-right: 10px;">
+                        <i class="fas fa-arrow-up"></i>
+                    </button>
+                   
+                </h5>
+                <h2>{{ "{:,}".format(current_month_income|default(0)) }}원</h2>
+                <p>
+                    <i class="fas fa-{% if income_diff >= 0 %}arrow-up{% else %}arrow-down{% endif %} me-1"></i>
+                    {% if income_diff >= 0 %}+{% endif %}{{ "{:,}".format(income_diff|default(0)) }}원 
+                    ({% if income_diff_percent >= 0 %}+{% endif %}{{ income_diff_percent|default('0') }}%)
+                </p>
             </div>
         </div>
         <div class="col-md-3">
             <div class="stat-card">
-                <h5>운행거리</h5>
-                <h2>{{ distance|default('0') }}km</h2>
-                <p><i class="fas fa-arrow-up me-1"></i>+{{ distance_change|default('0') }}km ({{ distance_percent|default('0') }}%)</p>
+                <h5>
+                    월별 연료비 
+                    ({{ selected_month|default('12월') }})
+                    <button type="button" onclick="changeMonth('prev')" class="btn btn-sm btn-link p-0 me-1" style="margin-left: 10px;">
+                        <i class="fas fa-arrow-down"></i>
+                    </button>
+                    <button type="button" onclick="changeMonth('next')" class="btn btn-sm btn-link p-0 ms-1" style="margin-right: 10px;">
+                        <i class="fas fa-arrow-up"></i>
+                    </button>
+                   
+                </h5>
+                <h2>{{ "{:,}".format(current_month_fuel_cost|default(0)) }}원</h2>
+                <p>
+                    <i class="fas fa-{% if fuel_diff >= 0 %}arrow-up{% else %}arrow-down{% endif %} me-1"></i>
+                    {% if fuel_diff >= 0 %}+{% endif %}{{ "{:,}".format(fuel_diff|default(0)) }}원 
+                    ({% if fuel_diff_percent >= 0 %}+{% endif %}{{ fuel_diff_percent|default('0') }}%)
+                </p>
             </div>
         </div>
     </div>
@@ -52,63 +88,183 @@
                 <div class="col-md-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <span>총 운행수</span>
-                        <strong>{{ total_trips|default('228') }}건</strong>
+                        <strong>{{ "{:,}".format(total_trips|default(228)) }}건</strong>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <span>주간</span>
-                        <strong>{{ day_trips|default('57') }}건</strong>
+                        <strong>{{ "{:,}".format(day_trips|default(57)) }}건</strong>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <span>야간</span>
-                        <strong>{{ night_trips|default('57') }}건</strong>
+                        <strong>{{ "{:,}".format(night_trips|default(57)) }}건</strong>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <span>일차</span>
-                        <strong>{{ daily_trips|default('114') }}건</strong>
+                        <strong>{{ "{:,}".format(daily_trips|default(114)) }}건</strong>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 운행일보 제출현황 -->
+    <!-- 사고 현황 -->
     <div class="card">
         <div class="card-header">
-            <h5 class="mb-0">운행일보 제출현황</h5>
+            <h5 class="mb-0">사고 현황</h5>
         </div>
         <div class="card-body">
-            <div class="row mb-4">
-                <div class="col-md-4">
+            <div class="row">
+                <div class="col-md-3">
                     <div class="d-flex justify-content-between align-items-center">
-                        <span>제출건수</span>
-                        <strong>{{ submitted_reports|default('50') }}건</strong>
+                        <span>총 가해사고</span>
+                        <strong>{{ "{:,}".format(total_at_fault|default(0)) }}건</strong>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="d-flex justify-content-between align-items-center">
-                        <span>미제출건수</span>
-                        <strong>{{ unsubmitted_reports|default('178') }}건</strong>
+                        <span>총 피해사고</span>
+                        <strong>{{ "{:,}".format(total_not_at_fault|default(0)) }}건</strong>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="d-flex justify-content-between align-items-center">
-                        <span>제출률</span>
-                        <strong>{{ submission_rate|default('21.93') }}%</strong>
+                        <span>가해보상금(수리)</span>
+                        <strong>{{ "{:,}".format(total_at_fault_repair|default(0)) }}원</strong>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>피해보상금</span>
+                        <strong>{{ "{:,}".format(total_not_at_fault_payment|default(0)) }}원</strong>
                     </div>
                 </div>
             </div>
-            <div class="progress">
-                <div class="progress-bar" role="progressbar" style="width: {{ submission_rate|default('21.93') }}%"></div>
-            </div>
+            <br>
+            <div>
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>미결 가해사고</span>
+                            <strong>{{ "{:,}".format(unresolved_at_fault|default(0)) }}건</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>미결 피해사고</span>
+                            <strong>{{ "{:,}".format(unresolved_not_at_fault|default(0)) }}건</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>미지급 가해보상금</span>
+                            <strong>{{ "{:,}".format(unpaid_at_fault_estimate|default(0)) }}원</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>미입금 피해보상금</span>
+                            <strong>{{ "{:,}".format(unpaid_not_at_fault_estimate|default(0)) }}원</strong>
+                        </div>
+                    </div>
+                </div>
+             </div>
+        </div>
+    </div>
+    
+    <!-- 월별 배차 현황 통계 라인차트 -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">월별 배차 현황 통계</h5>
+        </div>
+        <div class="card-body">
+            <canvas id="dispatchLineChart" height="100px"></canvas>
         </div>
     </div>
 </div>
 
 {{ right_sidebar(messages, current_user) }}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+function changeMonth(direction) {
+    const monthOrder = ['01월', '02월', '03월', '04월', '05월', '06월', '07월', '08월', '09월', '10월', '11월', '12월'];
+    const currentMonth = '{{ selected_month|default("12월") }}';
+    const currentIndex = monthOrder.indexOf(currentMonth);
+    
+    let newIndex;
+    if (direction === 'prev') {
+        newIndex = currentIndex > 0 ? currentIndex - 1 : monthOrder.length - 1;
+    } else {
+        newIndex = currentIndex < monthOrder.length - 1 ? currentIndex + 1 : 0;
+    }
+    
+    const newMonth = monthOrder[newIndex];
+    console.log('Changing month to:', newMonth); // 디버깅용
+    window.location.href = window.location.pathname + '?month=' + newMonth;
+}
+
+// 페이지 로드 시 현재 월 확인
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Current month:', '{{ selected_month|default("12월") }}');
+});
+
+const dispatchStats = {{ dispatch_stats|tojson }};
+const months = {{ month_order|tojson }};
+const categories = ['주간', '야간', '일차', '리스'];
+const driverCounts = {{ driver_counts|tojson }};
+
+const datasets = categories.map(cat => ({
+    label: cat,
+    type: 'line',
+    data: months.map(m => dispatchStats[m] ? dispatchStats[m][cat] : 0),
+    fill: false,
+    borderColor: cat === '주간' ? '#007bff' : cat === '야간' ? '#28a745' : cat === '일차' ? '#ffc107' : '#dc3545',
+    tension: 0.1,
+    yAxisID: 'y'
+}));
+
+datasets.push({
+    label: '운전기사(명)',
+    type: 'bar',
+    data: months.map(m => driverCounts[m] || 0),
+    backgroundColor: 'rgba(100,100,100,0.1)',
+    borderColor: 'rgba(100,100,100,0.5)',
+    borderWidth: 1,
+    yAxisID: 'y2'
+});
+
+const ctx = document.getElementById('dispatchLineChart').getContext('2d');
+new Chart(ctx, {
+    data: {
+        labels: months,
+        datasets: datasets
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { position: 'top' }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: { stepSize: 100 },
+                position: 'left',
+                title: { display: true, text: '운행수' }
+            },
+            y2: {
+                beginAtZero: true,
+                position: 'right',
+                grid: { drawOnChartArea: false },
+                title: { display: true, text: '운전기사(명)' }
+            }
+        }
+    }
+});
+</script>
 {% endblock %} 

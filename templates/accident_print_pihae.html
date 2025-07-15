@@ -44,78 +44,176 @@
 </head>
 <body>
 <div class="report-container">
-    <table>
+    <table style="height:80px;">
         <tr>
-            <th rowspan="2" style="width:12%;">접수번호</th>
+            <!-- <th rowspan="2" style="width:12%;">접수번호</th> -->
             <th colspan="5" class="section-title">교 통 사 고 보 고 서 (피해)</th>
             <th rowspan="2" style="width:8%;">결<br>재</th>
-        </tr>
-        <tr>
-            <td style="width:8%;">담당</td>
-            <td style="width:8%;">상무</td>
-            <td style="width:8%;">부사장</td>
-            <td style="width:8%;">대표</td>
+        
+            <td style="width:8%; text-align:center;" >담당<hr><br><br></td>
+            <td style="width:8%; text-align:center;">상무<hr><br><br></td>
+            <td style="width:8%; text-align:center;">부사장<hr><br><br></td>
+            <td style="width:8%; text-align:center;">대표<hr><br><br></td>
         </tr>
     </table>
     <table>
         <tr>
-            <th>사고일자</th>
-            <td>{{ accident.사고일시 }}</td>
+            <th>사고일시</th>
+            <td style="width:30%;">{{ accident.사고일시 or '' }}</td>
             <th>차량번호</th>
-            <td>{{ accident.차번 }}</td>
-            <th>차명</th>
-            <td>{{ accident.차종 }}</td>
+            <td style="width:20%;">{{ accident.차번 or '' }}</td>
+            <th>차종</th>
+            <td style="width:20%;">{{ accident.차종 or '' }}</td>
+        </tr>
+        <tr>
+            <th>사고장소</th>
+            <td colspan="3" style="width:60%;">{{ accident.사고장소 or '' }}</td>
+            <th>사고원인</th>
+            <td style="width:20%;">{{ accident.사고원인 or '' }}</td>
+        </tr>
+    </table>
+    <table>
+        <tr>
+            <th colspan="6" style="width:100%;">자차운전자</th>
         </tr>
         <tr>
             <th>기사명</th>
-            <td>{{ accident.기사명 }}</td>
-            <th>사고원인</th>
-            <td colspan="3">{{ accident.사고원인 }}</td>
+            <td style="width:20%;">{{ accident.기사명 or '' }}</td>
+            <th>주민번호</th>
+            <td style="width:20%;">{{ accident.주민등록번호 or '' }}</td>
+            <th>연락처</th>
+            <td style="width:20%;">{{ accident.연락처 or '' }}</td>
         </tr>
         <tr>
+            <th>사번</th>
+            <td style="width:20%;">{{ accident.사번 or '' }}</td>
+            <th>면허번호</th>
+            <td style="width:20%;">{{ accident.면허번호 or '' }}</td>
+            <th>유효기간</th>
+            <td style="width:20%;">{{ accident.갱신마감.split(' ')[0] if accident.갱신마감 else '' }}</td>
+        </tr>
+        <tr>
+            <th>거주지</th>
+            <td colspan="3" style="width:60%;">{{ accident.거주지 or '' }}</td>
+            <th>입사일자</th>
+            <td style="width:20%;">{{ accident.입사일자.split(' ')[0] if accident.입사일자 else '' }}</td>
+        </tr>
+    </table>
+    <table>
+        <tr>
+            <th colspan="6" style="width:100%;">가해차량</th>
+        </tr>
+        <tr>
+            <th style="width:20%;">가해차번</th>
+            <td style="width:30%;">{{ accident.가해차번 or '' }}</td>
+            <th style="width:20%;">가해차종</th>
+            <td style="width:30%;">{{ accident.가해차종 or '' }}</td>
+        </tr>
+        <tr>
+            <th>운전자</th>
+            <td>{{ accident.운전자 or '' }}</td>
+            <th>연락처</th>
+            <td>{{ accident.운전자연락처 or '' }}</td>
+        </tr>
+        <!--tr>
+            <th>공업사</th>
+            <td>{{ accident.공업사 or '' }}</td>
+            <th>공업사연락처</th>
+            <td>{{ accident.공업사연락처 or '' }}</td>
+        </tr-->
+    </table>
+    <table>
+        <tr>
+            <th colspan="6" style="width:100%;">보상내역 / 피해현황</th>
+        </tr>
+        <tr>
+            <th style="width:20%;">보험사</th>
+            <td style="width:30%;">{{ accident.보험사 or '' }}</td>
+            <th style="width:20%;">접보번호</th>
+            <td style="width:30%;">{{ accident.접보번호 or '' }}</td>          
+        </tr>
+        <tr>
+            <th>담당자</th>
+            <td>{{ accident.담당자 or '' }}</td>
+            <th>연결번호</th>
+            <td>{{ accident.연결번호 or '' }}</td>
+        </tr>
+        <tr>
+            <th>비고</th>
+            <td colspan="4">{{ accident.비고 or '' }}</td>
+        </tr>
+    </table>
+    <table>
+        <tr>
+            <th colspan="6" style="width:100%;">대인</th>
+        </tr>
+        <tr>
+            <th style="width:20%;">피해자</th>
+            <td style="width:30%;">{{ accident.피해자 or '' }}</td>
+            <th style="width:20%;">연락처</th>
+            <td style="width:30%;">{{ accident.피해자연락처 or '' }}</td>
+        </tr>
+        <tr>
+            <th>병원</th>
+            <td>{{ accident.병원 or '' }}</td>
+            <th>병원연락처</th>
+            <td>{{ accident.병원연락처 or '' }}</td>
+        </tr>
+        <!--tr>
+            <th>치료견적</th>
+            <td>{{ "{:,}".format(accident.치료견적|int) if accident.치료견적 and accident.치료견적.replace(',', '').isdigit() else accident.치료견적 or '' }}</td>
+            <th>상해</th>
+            <td>{{ accident.상해 or '' }}</td>
+        </tr-->
+    </table>
+    
+    <table>
+        <tr>
+            <th colspan="8" style="width:100%;">대물</th>
+        </tr>
+        <tr>
+            <th>차량번호</th>
+            <td>{{ accident.차번 }}</td>
             <th>피해견적</th>
             <td>{{ "{:,}".format(accident.피해견적|int) if accident.피해견적 and accident.피해견적.replace(',', '').isdigit() else accident.피해견적 }}</td>
-            <th>입금일</th>
-            <td>{{ accident.입금일.split(' ')[0] if accident.입금일 and ' ' in accident.입금일 else accident.입금일 }}</td>
-            <th>금액</th>
-            <td>{{ "{:,}".format(accident.금액|int) if accident.금액 and accident.금액.replace(',', '').isdigit() else accident.금액 }}</td>
-        </tr>
-        <tr>
-            <th>처리여부</th>
-            <td>{{ accident.처리여부 }}</td>
-            <th></th>
-            <td></td>
-            <th></th>
-            <td></td>
+            <th>수리처</th>
+            <td>{{ accident.수리처 or '' }}</td>
+            <th>수리내역</th>
+            <td>{{ accident.수리내역 or '' }}</td>
         </tr>
     </table>
     <div style="display: flex; margin-top: 10px;">
-        <div class="map" style="margin-right:1%; padding: 10px;">사고 현장 약도<br><br>
-            <!-- 사고 현장 그림 또는 이미지 삽입 -->
+       <div class="map" style="width: 50%; height: 300px; padding: 10px;">
+            [사고 현장 약도]<br>
+            <img src="/uploads/maps/{{ accident.사고번호 }}.png" alt="사고 현장 약도" style="width:100%;max-height: 300px; margin-top: 10px;">
         </div>
-        <div class="desc" style="padding: 10px;">사고 경위<br><br>
+        <div class="desc" style="width: 50%; height: 300px; padding: 10px;">
+            [사고 경위]<br><br>
+            {{ accident.사고경위 or '' }}
             <!-- 필요시 accident.description 등 추가 -->
         </div>
     </div>
     <table class="footer-table" style="margin-top:10px;">
         <tr>
-            <th>취급처</th>
             <th>경찰서</th>
             <th>조사관</th>
             <th>보험</th>
             <th>담당</th>
-            <th>처리번호</th>
+            <th>연결번호</th>
+            <th>사고번호</th>
         </tr>
         <tr>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
+            <td>{{ accident.경찰서 or '' }}</td>
+            <td>{{ accident.조사관 or '' }}</td>
+            <td>{{ accident.보험사 or '' }}</td>
+            <td>{{ accident.담당자 or '' }}</td>
+            <td>{{ accident.연결번호 or '' }}</td>
+            <td style="font-size: 20px; font-weight: bold; text-align: center;">{{ accident.사고번호 }}</td>
         </tr>
     </table>
-    <div style="text-align:right; margin-bottom:10px;">
+    </div>
+    <div style="text-align:center; margin:20px;">
+        <button onclick="window.open('/map?version={{ accident.사고번호|lower }}', '_blank')" style="padding:8px 24px; font-size:15px; background:#4CAF50; color:#fff; border:none; border-radius:5px; cursor:pointer;">약도 제작/편집</button>
         <button onclick="window.print()" style="padding:8px 24px; font-size:15px; background:#4CAF50; color:#fff; border:none; border-radius:5px; cursor:pointer;">프린트하기</button>
     </div>
 </div>

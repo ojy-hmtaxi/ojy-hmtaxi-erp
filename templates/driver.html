@@ -182,9 +182,9 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
                           String(now.getDate()).padStart(2, '0');
             const timeStr = String(now.getHours()).padStart(2, '0') + ':' + 
                           String(now.getMinutes()).padStart(2, '0');
-            const uploadMessage = `<${file.name}> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${dateStr} | ${timeStr} | 업로더: {{ current_user.name }})`;
+            const uploadMessage = `<a href="/uploads/${encodeURIComponent(file.name)}" download style="color:#007bff;text-decoration:underline;">${file.name}</a> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${dateStr} | ${timeStr} | 업로더: {{ current_user.name }})`;
             const resultDiv = document.getElementById('uploadResult');
-            resultDiv.textContent = uploadMessage;
+            resultDiv.innerHTML = uploadMessage;
             resultDiv.classList.add('show');
             localStorage.setItem('driverUploadMessage', uploadMessage);
         }
@@ -196,15 +196,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const savedMessage = localStorage.getItem('driverUploadMessage');
     if (savedMessage) {
         const resultDiv = document.getElementById('uploadResult');
-        resultDiv.textContent = savedMessage;
+        resultDiv.innerHTML = savedMessage;
         resultDiv.classList.add('show');
     }
 });
 document.getElementById('excel_file').addEventListener('change', function() {
     localStorage.removeItem('driverUploadMessage');
     const resultDiv = document.getElementById('uploadResult');
-    resultDiv.textContent = '';
+    resultDiv.innerHTML = '';
     resultDiv.classList.remove('show');
 });
 </script>
+{{ right_sidebar(messages, current_user) }}
 {% endblock %} 

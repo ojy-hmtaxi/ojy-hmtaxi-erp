@@ -369,6 +369,8 @@
                             <div class="chart-wrapper">
                                 <canvas id="salaryChart"></canvas>
                             </div>
+                        </div>
+                        <div class="chart-container">
                             <div class="chart-wrapper">
                                 <canvas id="incomeChart"></canvas>
                             </div>
@@ -485,6 +487,7 @@
                 return {
                     사번: cells[0].textContent,
                     이름: cells[1].textContent,
+                    차종: cells[2].textContent,
                     실입금: parseInt(cells[3].textContent.replace(/,/g, '')),
                     리스료: parseInt(cells[4].textContent.replace(/,/g, '')),
                     연료비: parseInt(cells[5].textContent.replace(/,/g, '')),
@@ -496,53 +499,130 @@
             const sortedBySalary = [...salaryData].sort((a, b) => b.급여 - a.급여);
             const sortedByIncome = [...salaryData].sort((a, b) => b.실입금 - a.실입금);
 
-            // 급여 순위 그래프
+            // 모든 드라이버의 정보로 데이터 준비
+            const driverNames = sortedBySalary.map(d => d.이름);
+            const driverIds = sortedBySalary.map(d => d.사번);
+            const driverCars = sortedBySalary.map(d => d.차종);
+            const salaries = sortedBySalary.map(d => d.급여);
+            const incomes = sortedBySalary.map(d => d.실입금);
+
+            // 급여 순위 바 + 실입금액 선 그래프
             const salaryCtx = currentSheet.querySelector('#salaryChart').getContext('2d');
-            if (salaryChartInstance) salaryChartInstance.destroy();
+            if (salaryChartInstance) {
+                salaryChartInstance.resize();
+                salaryChartInstance.update();
+            }
             salaryChartInstance = new Chart(salaryCtx, {
                 type: 'bar',
                 data: {
-                    labels: sortedBySalary.slice(0, 5).map(d => d.이름),
-                    datasets: [{
-                        label: '급여 순위 (Top 5)',
-                        data: sortedBySalary.slice(0, 5).map(d => d.급여),
-                        backgroundColor: 'rgba(75, 192, 192, 0.6)',
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        borderWidth: 1
-                    }]
+                    labels: driverNames,
+                    datasets: [
+                        {
+                            label: '드라이버 급여',
+                            data: salaries,
+                            backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            borderWidth: 1,
+                            yAxisID: 'y',
+                            type: 'bar',
+                        },
+                        {
+                            label: '실입금액',
+                            data: incomes,
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                            borderWidth: 2,
+                            fill: false,
+                            yAxisID: 'y',
+                            type: 'line',
+                            pointRadius: 2,
+                            tension: 0.2
+                        }
+                    ]
                 },
                 options: {
-                    responsive: true,
                     plugins: {
-                        title: {
-                            display: true,
-                            text: '급여 순위 (Top 5)'
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const idx = context.dataIndex;
+                                    if (context.dataset.label === '드라이버 급여') {
+                                        return `${driverNames[idx]} / ${driverIds[idx]} / ${driverCars[idx]} / ${salaries[idx].toLocaleString()}원`;
+                                    } else if (context.dataset.label === '실입금액') {
+                                        return `${driverNames[idx]} / ${driverIds[idx]} / ${driverCars[idx]} / 실입금: ${incomes[idx].toLocaleString()}원`;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: '드라이버' }
+                        },
+                        y: {
+                            title: { display: true, text: '금액(원)' },
+                            beginAtZero: true
                         }
                     }
                 }
             });
 
-            // 실입금 순위 그래프
+            // 실입금:연료비 산점도(Scatter Chart) - 차종별 색상 구분
+            const carTypes = Array.from(new Set(salaryData.map(d => d.차종)));
+            const carTypeColors = [
+                'rgba(54, 162, 235, 0.5)', // 첫번째 차종
+                'rgba(255, 99, 132, 0.5)', // 두번째 차종
+                'rgba(255, 206, 86, 0.5)', // 세번째 차종
+                'rgba(75, 192, 192, 0.5)', // 네번째 차종
+                'rgba(153, 102, 255, 0.5)', // 다섯번째 차종
+                'rgba(255, 159, 64, 0.5)'  // 여섯번째 차종
+            ];
+            // 차종별 데이터 분리
+            const scatterDatasets = carTypes.map((carType, idx) => {
+                const data = salaryData.filter(d => d.차종 === carType).map(d => ({
+                    x: d.실입금,
+                    y: d.연료비,
+                    이름: d.이름,
+                    사번: d.사번,
+                    차종: d.차종,
+                    실입금: d.실입금
+                }));
+                return {
+                    label: carType,
+                    data: data,
+                    backgroundColor: carTypeColors[idx % carTypeColors.length],
+                };
+            });
+
             const incomeCtx = currentSheet.querySelector('#incomeChart').getContext('2d');
-            if (incomeChartInstance) incomeChartInstance.destroy();
+            if (incomeChartInstance) {
+                incomeChartInstance.resize();
+                incomeChartInstance.update();
+            }
             incomeChartInstance = new Chart(incomeCtx, {
-                type: 'bar',
+                type: 'scatter',
                 data: {
-                    labels: sortedByIncome.slice(0, 5).map(d => d.이름),
-                    datasets: [{
-                        label: '실입금 순위 (Top 5)',
-                        data: sortedByIncome.slice(0, 5).map(d => d.실입금),
-                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        borderWidth: 1
-                    }]
+                    datasets: scatterDatasets
                 },
                 options: {
-                    responsive: true,
                     plugins: {
-                        title: {
-                            display: true,
-                            text: '실입금 순위 (Top 5)'
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const d = context.raw;
+                                    return `${d.이름} / ${d.사번} / ${d.차종} / ${d.실입금.toLocaleString()}원`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: '실입금(원)' },
+                            beginAtZero: true
+                        },
+                        y: {
+                            title: { display: true, text: '연료비(원)' },
+                            beginAtZero: true
                         }
                     }
                 }
@@ -657,9 +737,9 @@
                     const timeStr = String(now.getHours()).padStart(2, '0') + ':' + 
                                   String(now.getMinutes()).padStart(2, '0');
                     
-                    const uploadMessage = `<${file.name}> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${dateStr} | ${timeStr} | 업로더: {{ current_user.name }})`;
+                    const uploadMessage = `<a href="/uploads/${encodeURIComponent(file.name)}" download style="color:#007bff;text-decoration:underline;">${file.name}</a> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${dateStr} | ${timeStr} | 업로더: {{ current_user.name }})`;
                     const resultDiv = document.getElementById('uploadResult');
-                    resultDiv.textContent = uploadMessage;
+                    resultDiv.innerHTML = uploadMessage;
                     resultDiv.classList.add('show');
                     
                     // 메시지를 localStorage에 저장
@@ -675,7 +755,7 @@
             const savedMessage = localStorage.getItem('uploadMessage');
             if (savedMessage) {
                 const resultDiv = document.getElementById('uploadResult');
-                resultDiv.textContent = savedMessage;
+                resultDiv.innerHTML = savedMessage;
                 resultDiv.classList.add('show');
             }
         });
@@ -684,7 +764,7 @@
         document.getElementById('excel_file').addEventListener('change', function() {
             localStorage.removeItem('uploadMessage');
             const resultDiv = document.getElementById('uploadResult');
-            resultDiv.textContent = '';
+            resultDiv.innerHTML = '';
             resultDiv.classList.remove('show');
         });
 
@@ -721,6 +801,17 @@
                 tbody.appendChild(row);
             });
         }
+
+        document.querySelector('#summaryTab').addEventListener('click', function() {
+            if (salaryChartInstance) {
+                salaryChartInstance.resize();
+                salaryChartInstance.update();
+            }
+            if (incomeChartInstance) {
+                incomeChartInstance.resize();
+                incomeChartInstance.update();
+            }
+        });
     </script>
 </body>
 </html>

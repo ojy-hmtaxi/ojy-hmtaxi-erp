@@ -113,11 +113,12 @@
     <div class="right-sidebar-content">
         <div class="message-board">
             <h3>메시지 보드</h3>
-            <form action="{{ url_for('add_message') }}" method="POST" class="message-form">
+            <form action="{{ url_for('add_message') }}" method="POST" class="message-form" id="messageForm">
                 <textarea name="content" maxlength="60" placeholder="60자 이내로 메시지를 작성하세요" required></textarea>
                 <button type="submit">작성</button>
             </form>
-            <div class="messages">
+            <div id="message-alert" style="color: #22bb33; font-size: 0.95em; margin: 8px 0 0 0;"></div>
+            <div class="messages" id="messages-list">
                 {% for message in messages %}
                 <div class="message
                     {% if current_user and current_user.name == message.author.name %}current-user{% endif %}
@@ -129,7 +130,7 @@
                     </div>
                     <div class="message-content">
                         {% if current_user and ('@' ~ current_user.name) in message.content %}
-                            {{ message.content | replace('@' ~ current_user.name, '<b><i>@' ~ current_user.name ~ '</i></b>') | safe }}
+                            {{ message.content | replace('@' ~ current_user.name, '<b><i><span style="color: green;">@' ~ current_user.name ~ '</span></i></b>') | safe }}
                         {% else %}
                             {{ message.content }}
                         {% endif %}
@@ -165,6 +166,59 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
         sidebar.classList.remove('collapsed');
     }
+});
+
+// 메시지 작성 AJAX 처리
+const messageForm = document.getElementById('messageForm');
+const messageAlert = document.getElementById('message-alert');
+if (messageForm) {
+    messageForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(messageForm);
+        fetch(messageForm.action, {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            messageAlert.textContent = data.message;
+            if (data.success) {
+                messageAlert.style.color = '#22bb33';
+                setTimeout(() => { messageAlert.textContent = ''; }, 9000);
+                // 새로고침 없이 메시지 목록 갱신 (간단히 새로고침)
+                window.location.reload();
+            } else {
+                messageAlert.style.color = '#dc3545';
+            }
+        })
+        .catch(() => {
+            messageAlert.textContent = '메시지 등록 중 오류가 발생했습니다.';
+            messageAlert.style.color = '#dc3545';
+        });
+    });
+}
+// 메시지 삭제 AJAX 처리
+const deleteForms = document.querySelectorAll('.delete-form');
+deleteForms.forEach(form => {
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        fetch(form.action, { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            messageAlert.textContent = data.message;
+            if (data.success) {
+                messageAlert.style.color = '#22bb33';
+                setTimeout(() => { messageAlert.textContent = ''; }, 2000);
+                window.location.reload();
+            } else {
+                messageAlert.style.color = '#dc3545';
+            }
+        })
+        .catch(() => {
+            messageAlert.textContent = '메시지 삭제 중 오류가 발생했습니다.';
+            messageAlert.style.color = '#dc3545';
+        });
+    });
 });
 </script>
 {% endmacro %} 

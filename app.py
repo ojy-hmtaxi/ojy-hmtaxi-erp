@@ -9,6 +9,7 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from models import db, User, Message
 from sqlalchemy.orm import joinedload
 import base64
+import calendar
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -97,6 +98,116 @@ def logout():
 @app.route('/', methods=['GET', 'POST'])
 @login_required
 def calculate_salary():
+    # lease_data.json에서 월별 실입금 및 연료비 데이터 합산
+    total_income = 0
+    total_fuel_cost = 0
+    monthly_incomes = {}
+    monthly_fuel_costs = {}
+    
+    try:
+        lease_data_path = os.path.join(app.config['DATA_FOLDER'], 'lease_data.json')
+        if os.path.exists(lease_data_path):
+            with open(lease_data_path, 'r', encoding='utf-8') as f:
+                lease_data = json.load(f)
+                
+                for month, month_data in lease_data.items():
+                    if 'data' in month_data:
+                        month_income_total = 0
+                        month_fuel_total = 0
+                        for driver_data in month_data['data']:
+                            try:
+                                income = int(driver_data.get('실입금', '0'))
+                                fuel_cost = int(driver_data.get('연료비', '0'))
+                                month_income_total += income
+                                month_fuel_total += fuel_cost
+                            except (ValueError, TypeError):
+                                continue
+                        monthly_incomes[month] = month_income_total
+                        monthly_fuel_costs[month] = month_fuel_total
+                        total_income += month_income_total
+                        total_fuel_cost += month_fuel_total
+    except Exception as e:
+        print(f"lease_data.json 읽기 오류: {e}")
+        total_income = 0
+        total_fuel_cost = 0
+        monthly_incomes = {}
+        monthly_fuel_costs = {}
+    
+    # 월 평균 수입금 계산
+    monthly_avg_income = 0
+    if monthly_incomes:
+        monthly_avg_income = total_income // len(monthly_incomes)
+    
+    # 현재 선택된 월 (기본값: 가장 최근 월)
+    selected_month = request.args.get('month', list(monthly_incomes.keys())[-1] if monthly_incomes else '01월')
+    current_month_income = monthly_incomes.get(selected_month, 0)
+    current_month_fuel_cost = monthly_fuel_costs.get(selected_month, 0)
+    
+    # 이전 달 수입금 및 연료비 계산
+    month_order = ['01월', '02월', '03월', '04월', '05월', '06월', '07월', '08월', '09월', '10월', '11월', '12월']
+    try:
+        current_index = month_order.index(selected_month)
+        previous_month = month_order[current_index - 1] if current_index > 0 else month_order[-1]
+        previous_month_income = monthly_incomes.get(previous_month, 0)
+        previous_month_fuel_cost = monthly_fuel_costs.get(previous_month, 0)
+        
+        # 수입금 변화량과 변화율 계산
+        income_diff = current_month_income - previous_month_income
+        income_diff_percent = round((income_diff / previous_month_income) * 100, 2) if previous_month_income > 0 else 0
+        
+        # 연료비 변화량과 변화율 계산
+        fuel_diff = current_month_fuel_cost - previous_month_fuel_cost
+        fuel_diff_percent = round((fuel_diff / previous_month_fuel_cost) * 100, 2) if previous_month_fuel_cost > 0 else 0
+    except:
+        previous_month_income = 0
+        previous_month_fuel_cost = 0
+        income_diff = 0
+        income_diff_percent = 0
+        fuel_diff = 0
+        fuel_diff_percent = 0
+    
+    # 이전 달 대비 변화율 계산 (간단한 예시)
+    income_change = 0
+    income_percent = 0
+    if len(monthly_incomes) >= 2:
+        months = list(monthly_incomes.keys())
+        if len(months) >= 2:
+            current_month = months[-1]
+            previous_month = months[-2]
+            current_income = monthly_incomes.get(current_month, 0)
+            previous_income = monthly_incomes.get(previous_month, 0)
+            
+            if previous_income > 0:
+                income_change = current_income - previous_income
+                income_percent = round((income_change / previous_income) * 100, 2)
+    
+    # 월별 배차 현황 통계
+    dispatch_data_path = os.path.join(app.config['DATA_FOLDER'], 'dispatch_data.json')
+    dispatch_stats = {}  # {월: {카테고리: 운행수}}
+    categories = ['주간', '야간', '일차', '리스']
+    month_order = ['01월', '02월', '03월', '04월', '05월', '06월', '07월', '08월', '09월', '10월', '11월', '12월']
+    driver_counts = {}  # {월: 운전기사수}
+    if os.path.exists(dispatch_data_path):
+        with open(dispatch_data_path, 'r', encoding='utf-8') as f:
+            dispatch_data = json.load(f)
+            for month in month_order:
+                month_data = dispatch_data.get(month, {}).get('data', [])
+                cat_counts = {cat: 0 for cat in categories}
+                drivers = set()
+                for row in month_data:
+                    cat = row.get('근무유형', '')
+                    if cat in categories:
+                        for day in range(1, 32):
+                            val = row.get(str(day), '')
+                            if val == 'o':
+                                cat_counts[cat] += 1
+                    # 운전기사 집계
+                    name = row.get('운전기사', '').strip()
+                    if name:
+                        drivers.add(name)
+                dispatch_stats[month] = cat_counts
+                driver_counts[month] = len(drivers)
+
     if request.method == 'POST':
         if 'excel_file' in request.files:
             file = request.files['excel_file']
@@ -144,31 +255,175 @@ def calculate_salary():
                     
                     if not salary_data:
                         return render_template('index.html', 
-                                            error="엑셀 파일에 '실입금', '리스료', '연료비' 컬럼이 있는 시트가 없습니다.")
+                                            error="엑셀 파일에 '실입금', '리스료', '연료비' 컬럼이 있는 시트가 없습니다.",
+                                            total_income=total_income,
+                                            monthly_avg_income=monthly_avg_income,
+                                            selected_month=selected_month,
+                                            current_month_income=current_month_income,
+                                            current_month_fuel_cost=current_month_fuel_cost,
+                                            income_diff=income_diff,
+                                            income_diff_percent=income_diff_percent,
+                                            fuel_diff=fuel_diff,
+                                            fuel_diff_percent=fuel_diff_percent,
+                                            income_change=income_change,
+                                            income_percent=income_percent,
+                                            dispatch_stats=dispatch_stats,
+                                            month_order=month_order,
+                                            driver_counts=driver_counts)
                     
                     session['salary_data'] = salary_data
                     session['salary_calculated'] = True
+                    
+                    # 사고현황 통계 계산
+                    accident_data_path = os.path.join(app.config['DATA_FOLDER'], 'accident_data.json')
+                    total_at_fault = 0
+                    total_not_at_fault = 0
+                    total_at_fault_repair = 0
+                    total_not_at_fault_payment = 0
+                    unresolved_at_fault = 0
+                    unresolved_not_at_fault = 0
+                    unpaid_at_fault_estimate = 0
+                    unpaid_not_at_fault_estimate = 0
+                    if os.path.exists(accident_data_path):
+                        with open(accident_data_path, 'r', encoding='utf-8') as f:
+                            accident_data = json.load(f)
+                            at_fault = accident_data.get('at_fault', [])
+                            not_at_fault = accident_data.get('not_at_fault', [])
+                            total_at_fault = len(at_fault)
+                            total_not_at_fault = len(not_at_fault)
+                            for a in at_fault:
+                                # 미결 가해사고
+                                if a.get('처리여부', '').strip() == '미결':
+                                    unresolved_at_fault += 1
+                                # 미지급 가해보상금(견적)
+                                try:
+                                    unpaid_at_fault_estimate += int(str(a.get('견적', 0)).replace(',', ''))
+                                except:
+                                    pass
+                            for a in not_at_fault:
+                                # 미결 피해사고
+                                if a.get('처리여부', '').strip() == '미결':
+                                    unresolved_not_at_fault += 1
+                                # 미입금 피해보상금(피해견적)
+                                try:
+                                    unpaid_not_at_fault_estimate += int(str(a.get('피해견적', 0)).replace(',', ''))
+                                except:
+                                    pass
                     
                     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
                     return render_template('index.html', 
                                         salary_data=salary_data,
                                         calculated=True,
                                         messages=messages,
-                                        current_user=current_user)
+                                        current_user=current_user,
+                                        total_income=total_income,
+                                        monthly_avg_income=monthly_avg_income,
+                                        selected_month=selected_month,
+                                        current_month_income=current_month_income,
+                                        current_month_fuel_cost=current_month_fuel_cost,
+                                        income_diff=income_diff,
+                                        income_diff_percent=income_diff_percent,
+                                        fuel_diff=fuel_diff,
+                                        fuel_diff_percent=fuel_diff_percent,
+                                        income_change=income_change,
+                                        income_percent=income_percent,
+                                        total_at_fault=total_at_fault,
+                                        total_not_at_fault=total_not_at_fault,
+                                        total_at_fault_repair=total_at_fault_repair,
+                                        total_not_at_fault_payment=total_not_at_fault_payment,
+                                        unresolved_at_fault=unresolved_at_fault,
+                                        unresolved_not_at_fault=unresolved_not_at_fault,
+                                        unpaid_at_fault_estimate=unpaid_at_fault_estimate,
+                                        unpaid_not_at_fault_estimate=unpaid_not_at_fault_estimate,
+                                        dispatch_stats=dispatch_stats,
+                                        month_order=month_order,
+                                        driver_counts=driver_counts)
                 except Exception as e:
                     return render_template('index.html', 
-                                        error=f"엑셀 파일 처리 중 오류가 발생했습니다: {str(e)}")
+                                        error=f"엑셀 파일 처리 중 오류가 발생했습니다: {str(e)}",
+                                        total_income=total_income,
+                                        monthly_avg_income=monthly_avg_income,
+                                        selected_month=selected_month,
+                                        current_month_income=current_month_income,
+                                        current_month_fuel_cost=current_month_fuel_cost,
+                                        income_diff=income_diff,
+                                        income_diff_percent=income_diff_percent,
+                                        fuel_diff=fuel_diff,
+                                        fuel_diff_percent=fuel_diff_percent,
+                                        income_change=income_change,
+                                        income_percent=income_percent,
+                                        dispatch_stats=dispatch_stats,
+                                        month_order=month_order,
+                                        driver_counts=driver_counts)
     
     # GET 요청이거나 세션에 저장된 데이터가 있는 경우
     salary_data = session.get('salary_data', None)
     calculated = session.get('salary_calculated', False)
     
-    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(30).all()
+    # 사고현황 통계 계산
+    accident_data_path = os.path.join(app.config['DATA_FOLDER'], 'accident_data.json')
+    total_at_fault = 0
+    total_not_at_fault = 0
+    total_at_fault_repair = 0
+    total_not_at_fault_payment = 0
+    unresolved_at_fault = 0
+    unresolved_not_at_fault = 0
+    unpaid_at_fault_estimate = 0
+    unpaid_not_at_fault_estimate = 0
+    if os.path.exists(accident_data_path):
+        with open(accident_data_path, 'r', encoding='utf-8') as f:
+            accident_data = json.load(f)
+            at_fault = accident_data.get('at_fault', [])
+            not_at_fault = accident_data.get('not_at_fault', [])
+            total_at_fault = len(at_fault)
+            total_not_at_fault = len(not_at_fault)
+            for a in at_fault:
+                # 미결 가해사고
+                if a.get('처리여부', '').strip() == '미결':
+                    unresolved_at_fault += 1
+                # 미지급 가해보상금(견적)
+                try:
+                    unpaid_at_fault_estimate += int(str(a.get('견적', 0)).replace(',', ''))
+                except:
+                    pass
+            for a in not_at_fault:
+                # 미결 피해사고
+                if a.get('처리여부', '').strip() == '미결':
+                    unresolved_not_at_fault += 1
+                # 미입금 피해보상금(피해견적)
+                try:
+                    unpaid_not_at_fault_estimate += int(str(a.get('피해견적', 0)).replace(',', ''))
+                except:
+                    pass
+    
+    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
     return render_template('index.html',
                         salary_data=salary_data,
                         calculated=calculated,
                         messages=messages,
-                        current_user=current_user)
+                        current_user=current_user,
+                        total_income=total_income,
+                        monthly_avg_income=monthly_avg_income,
+                        selected_month=selected_month,
+                        current_month_income=current_month_income,
+                        current_month_fuel_cost=current_month_fuel_cost,
+                        income_diff=income_diff,
+                        income_diff_percent=income_diff_percent,
+                        fuel_diff=fuel_diff,
+                        fuel_diff_percent=fuel_diff_percent,
+                        income_change=income_change,
+                        income_percent=income_percent,
+                        total_at_fault=total_at_fault,
+                        total_not_at_fault=total_not_at_fault,
+                        total_at_fault_repair=total_at_fault_repair,
+                        total_not_at_fault_payment=total_not_at_fault_payment,
+                        unresolved_at_fault=unresolved_at_fault,
+                        unresolved_not_at_fault=unresolved_not_at_fault,
+                        unpaid_at_fault_estimate=unpaid_at_fault_estimate,
+                        unpaid_not_at_fault_estimate=unpaid_not_at_fault_estimate,
+                        dispatch_stats=dispatch_stats,
+                        month_order=month_order,
+                        driver_counts=driver_counts)
 
 @app.route('/schedule', methods=['GET', 'POST'])
 @login_required
@@ -177,7 +432,8 @@ def schedule():
         if 'excel_file' in request.files:
             file = request.files['excel_file']
             if file.filename != '':
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+                filename = file.filename.replace('/', '').replace('\\', '')
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                 file.save(filepath)
                 
                 try:
@@ -211,7 +467,7 @@ def schedule():
                     
                     # 파일로 저장
                     save_dispatch_data(dispatch_data)
-                    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(30).all()
+                    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
                     return render_template('schedule.html', dispatch_data=dispatch_data, messages=messages, current_user=current_user)
                 except Exception as e:
                     return render_template('schedule.html', 
@@ -219,7 +475,7 @@ def schedule():
     
     # GET 요청이거나 저장된 데이터가 있는 경우
     dispatch_data = load_dispatch_data()
-    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(30).all()
+    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
     return render_template('schedule.html', dispatch_data=dispatch_data, messages=messages, current_user=current_user)
 
 @app.route('/pay_lease', methods=['GET', 'POST'])
@@ -229,7 +485,8 @@ def pay_lease():
         if 'excel_file' in request.files:
             file = request.files['excel_file']
             if file.filename != '':
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+                filename = file.filename.replace('/', '').replace('\\', '')
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                 file.save(filepath)
                 
                 try:
@@ -273,7 +530,7 @@ def pay_lease():
                     
                     # 파일로 저장
                     save_lease_data(salary_data)
-                    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(30).all()
+                    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
                     return render_template('pay_lease.html', salary_data=salary_data, messages=messages, current_user=current_user)
                 except Exception as e:
                     return render_template('pay_lease.html', 
@@ -281,7 +538,7 @@ def pay_lease():
     
     # GET 요청이거나 저장된 데이터가 있는 경우
     salary_data = load_lease_data()
-    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(30).all()
+    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
     return render_template('pay_lease.html', salary_data=salary_data, messages=messages, current_user=current_user)
 
 @app.route('/accident', methods=['GET', 'POST'])
@@ -298,7 +555,7 @@ def accident():
             return redirect(request.url)
         
         if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
+            filename = file.filename.replace('/', '').replace('\\', '')
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
             
@@ -354,7 +611,7 @@ def accident():
             return redirect(url_for('accident'))
 
     accident_data = load_accident_data()
-    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(30).all()
+    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
     upload_info = {
         'filename': session.get('last_accident_file'),
         'upload_time': session.get('upload_time'),
@@ -366,19 +623,15 @@ def accident():
 @app.route('/add_message', methods=['POST'])
 @login_required
 def add_message():
-    content = request.form.get('content', '').strip()
-    if len(content) > 60:
-        flash('메시지는 60자 이내로 작성해주세요.', 'error')
-        return redirect(url_for('calculate_salary'))
-    
+    content = request.form.get('content')
     if content:
         message = Message(content=content, user_id=current_user.id)
         db.session.add(message)
         db.session.commit()
         print('메시지 저장됨:', message.content)
         print('DB 메시지 수:', Message.query.count())
-        flash('메시지가 등록되었습니다.', 'success')
-    return redirect(url_for('calculate_salary'))
+        return {"success": True, "message": "메시지가 등록되었습니다."}
+    return {"success": False, "message": "메시지 내용을 입력하세요."}
 
 @app.route('/delete_message/<int:message_id>', methods=['POST'])
 @login_required
@@ -387,16 +640,16 @@ def delete_message(message_id):
     if message.user_id == current_user.id or current_user.role == 'admin':
         db.session.delete(message)
         db.session.commit()
-        flash('메시지가 삭제되었습니다.', 'success')
-    return redirect(url_for('calculate_salary'))
+        return {"success": True, "message": "메시지가 삭제되었습니다."}
+    return {"success": False, "message": "삭제 권한이 없습니다."}
 
 # 데이터베이스 생성
 def create_database():
     with app.app_context():
         db.create_all()
 
-# 세션 유지 시간을 매우 길게 설정 (365일)
-app.permanent_session_lifetime = timedelta(days=365)
+# 세션 유지 시간을 매우 길게 설정 (900일)
+app.permanent_session_lifetime = timedelta(days=900)
 
 # 허용할 파일 확장자 설정
 ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
@@ -589,43 +842,41 @@ def load_driver_data():
 @app.route('/driver', methods=['GET', 'POST'])
 @login_required
 def driver():
+    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
     required_columns = ['사번', '이름', '나이', '주민등록번호', '면허번호', '갱신시작', '갱신마감', '입사일자', '퇴사일자', '연락처', '거주지']
     if request.method == 'POST':
         if 'excel_file' not in request.files:
-            return render_template('driver.html', error='파일이 선택되지 않았습니다.', driver_data=load_driver_data())
+            return render_template('driver.html', error='파일이 선택되지 않았습니다.', driver_data=load_driver_data(), messages=messages, current_user=current_user)
         file = request.files['excel_file']
         if file.filename == '':
-            return render_template('driver.html', error='파일이 선택되지 않았습니다.', driver_data=load_driver_data())
+            return render_template('driver.html', error='파일이 선택되지 않았습니다.', driver_data=load_driver_data(), messages=messages, current_user=current_user)
         if file and allowed_file(file.filename):
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+            filename = file.filename.replace('/', '').replace('\\', '')
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
             try:
                 df = pd.read_excel(file_path, sheet_name=0)
-                # 컬럼명 전처리 - 공백 제거
                 df.columns = [str(col).strip() for col in df.columns]
-                # 필수 컬럼 누락 체크
                 missing = [col for col in required_columns if col not in df.columns]
                 if missing:
                     error_msg = '다음 필수 컬럼이 누락되었습니다: ' + ', '.join(missing)
-                    return render_template('driver.html', error=error_msg, driver_data=load_driver_data())
-                # 누락 컬럼은 빈 값으로 추가
+                    return render_template('driver.html', error=error_msg, driver_data=load_driver_data(), messages=messages, current_user=current_user)
                 for col in required_columns:
                     if col not in df.columns:
                         df[col] = ''
-                # 표출 컬럼 순서 고정
                 driver_list = df[required_columns].fillna('').astype(str).to_dict('records')
                 driver_data = {
                     'list': driver_list,
                     'columns': required_columns
                 }
                 save_driver_data(driver_data)
-                return render_template('driver.html', driver_data=driver_data, current_user=current_user)
+                return render_template('driver.html', driver_data=driver_data, messages=messages, current_user=current_user)
             except Exception as e:
-                return render_template('driver.html', error=f'파일 처리 중 오류: {str(e)}', driver_data=load_driver_data())
+                return render_template('driver.html', error=f'파일 처리 중 오류: {str(e)}', driver_data=load_driver_data(), messages=messages, current_user=current_user)
         else:
-            return render_template('driver.html', error='허용되지 않은 파일 형식입니다.', driver_data=load_driver_data())
+            return render_template('driver.html', error='허용되지 않은 파일 형식입니다.', driver_data=load_driver_data(), messages=messages, current_user=current_user)
     # GET 요청
-    return render_template('driver.html', driver_data=load_driver_data(), current_user=current_user)
+    return render_template('driver.html', driver_data=load_driver_data(), messages=messages, current_user=current_user)
 
 @app.route('/driver/profile/<driver_id>')
 @login_required
@@ -793,17 +1044,8 @@ def accident_print(type, accident_no):
     
     context.update(driver_info)
     
-    driver_id = context.get('사번')
-    our_car_model = '' # 운전자 차종
-    if driver_id and lease_data:
-        for month, month_data in lease_data.items():
-            if not isinstance(month_data, dict): continue
-            lease_info = next((l for l in month_data.get('data', []) if str(l.get('사번')) == str(driver_id)), None)
-            if lease_info and '차종' in lease_info:
-                our_car_model = lease_info.get('차종')
-                break
-    
-    context['차종'] = our_car_model
+    # context['차종']는 accident_info(원본 데이터)의 '차종' 값만 사용
+    context['차종'] = accident_info.get('차종', '')
 
     return render_template(template, accident=context)
 
@@ -934,6 +1176,11 @@ def admin_edit_user(user_id):
         return redirect(url_for('admin_users'))
     
     return render_template('admin_edit_user.html', user=user)
+
+@app.route('/uploads/<filename>')
+@login_required
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
 if __name__ == '__main__':
     create_database()  # 데이터베이스 생성
