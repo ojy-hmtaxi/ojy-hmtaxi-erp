@@ -143,8 +143,10 @@ def calculate_salary():
     if monthly_incomes:
         monthly_avg_income = total_income // len(monthly_incomes)
     
-    # 현재 선택된 월 (기본값: 가장 최근 월)
-    selected_month = request.args.get('month', list(monthly_incomes.keys())[-1] if monthly_incomes else '01월')
+    # 현재 선택된 월 (기본값: 현재 월)
+    import datetime
+    current_month = f"{datetime.datetime.now().month:02d}월"
+    selected_month = request.args.get('month', current_month)
     current_month_income = monthly_incomes.get(selected_month, 0)
     current_month_fuel_cost = monthly_fuel_costs.get(selected_month, 0)
     
@@ -274,7 +276,9 @@ def calculate_salary():
                                             income_percent=income_percent,
                                             dispatch_stats=dispatch_stats,
                                             month_order=month_order,
-                                            driver_counts=driver_counts)
+                                            driver_counts=driver_counts,
+                                            monthly_incomes=monthly_incomes,
+                                            monthly_fuel_costs=monthly_fuel_costs)
                     
                     session['salary_data'] = salary_data
                     session['salary_calculated'] = True
@@ -342,7 +346,9 @@ def calculate_salary():
                                         unpaid_not_at_fault_estimate=unpaid_not_at_fault_estimate,
                                         dispatch_stats=dispatch_stats,
                                         month_order=month_order,
-                                        driver_counts=driver_counts)
+                                        driver_counts=driver_counts,
+                                        monthly_incomes=monthly_incomes,
+                                        monthly_fuel_costs=monthly_fuel_costs)
                 except Exception as e:
                     return render_template('index.html', 
                                         error=f"엑셀 파일 처리 중 오류가 발생했습니다: {str(e)}",
@@ -359,7 +365,9 @@ def calculate_salary():
                                         income_percent=income_percent,
                                         dispatch_stats=dispatch_stats,
                                         month_order=month_order,
-                                        driver_counts=driver_counts)
+                                        driver_counts=driver_counts,
+                                        monthly_incomes=monthly_incomes,
+                                        monthly_fuel_costs=monthly_fuel_costs)
     
     # GET 요청이거나 세션에 저장된 데이터가 있는 경우
     salary_data = session.get('salary_data', None)
@@ -428,7 +436,9 @@ def calculate_salary():
                         unpaid_not_at_fault_estimate=unpaid_not_at_fault_estimate,
                         dispatch_stats=dispatch_stats,
                         month_order=month_order,
-                        driver_counts=driver_counts)
+                        driver_counts=driver_counts,
+                        monthly_incomes=monthly_incomes,
+                        monthly_fuel_costs=monthly_fuel_costs)
 
 @app.route('/schedule', methods=['GET', 'POST'])
 @login_required

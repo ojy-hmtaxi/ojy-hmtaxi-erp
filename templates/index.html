@@ -38,20 +38,20 @@
             <div class="stat-card">
                 <h5>
                     월별 수입금 
-                    ({{ selected_month|default('12월') }})
-                    <button type="button" onclick="changeMonth('prev')" class="btn btn-sm btn-link p-0 me-1" style="margin-left: 10px;">
+                    (<span id="incomeMonthLabel">{{ selected_month }}</span>)
+                    <button type="button" onclick="changeIncomeMonth('prev')" class="btn btn-sm btn-link p-0 me-1" style="margin-left: 10px;">
                         <i class="fas fa-arrow-down"></i>
                     </button>
-                    <button type="button" onclick="changeMonth('next')" class="btn btn-sm btn-link p-0 ms-1" style="margin-right: 10px;">
+                    <button type="button" onclick="changeIncomeMonth('next')" class="btn btn-sm btn-link p-0 ms-1" style="margin-right: 10px;">
                         <i class="fas fa-arrow-up"></i>
                     </button>
                    
                 </h5>
-                <h2>{{ "{:,}".format(current_month_income|default(0)) }}원</h2>
+                <h2 id="currentMonthIncome">{{ "{:,}".format(current_month_income|default(0)) }}원</h2>
                 <p>
-                    <i class="fas fa-{% if income_diff >= 0 %}arrow-up{% else %}arrow-down{% endif %} me-1"></i>
-                    {% if income_diff >= 0 %}+{% endif %}{{ "{:,}".format(income_diff|default(0)) }}원 
-                    ({% if income_diff_percent >= 0 %}+{% endif %}{{ income_diff_percent|default('0') }}%)
+                    <i id="incomeDiffIcon" class="fas fa-{% if income_diff >= 0 %}arrow-up{% else %}arrow-down{% endif %} me-1"></i>
+                    <span id="incomeDiffText">{% if income_diff >= 0 %}+{% endif %}{{ "{:,}".format(income_diff|default(0)) }}원 
+                    ({% if income_diff_percent >= 0 %}+{% endif %}{{ income_diff_percent|default('0') }}%)</span>
                 </p>
             </div>
         </div>
@@ -59,20 +59,20 @@
             <div class="stat-card">
                 <h5>
                     월별 연료비 
-                    ({{ selected_month|default('12월') }})
-                    <button type="button" onclick="changeMonth('prev')" class="btn btn-sm btn-link p-0 me-1" style="margin-left: 10px;">
+                    (<span id="fuelMonthLabel">{{ selected_month }}</span>)
+                    <button type="button" onclick="changeFuelMonth('prev')" class="btn btn-sm btn-link p-0 me-1" style="margin-left: 10px;">
                         <i class="fas fa-arrow-down"></i>
                     </button>
-                    <button type="button" onclick="changeMonth('next')" class="btn btn-sm btn-link p-0 ms-1" style="margin-right: 10px;">
+                    <button type="button" onclick="changeFuelMonth('next')" class="btn btn-sm btn-link p-0 ms-1" style="margin-right: 10px;">
                         <i class="fas fa-arrow-up"></i>
                     </button>
                    
                 </h5>
-                <h2>{{ "{:,}".format(current_month_fuel_cost|default(0)) }}원</h2>
+                <h2 id="currentMonthFuelCost">{{ "{:,}".format(current_month_fuel_cost|default(0)) }}원</h2>
                 <p>
-                    <i class="fas fa-{% if fuel_diff >= 0 %}arrow-up{% else %}arrow-down{% endif %} me-1"></i>
-                    {% if fuel_diff >= 0 %}+{% endif %}{{ "{:,}".format(fuel_diff|default(0)) }}원 
-                    ({% if fuel_diff_percent >= 0 %}+{% endif %}{{ fuel_diff_percent|default('0') }}%)
+                    <i id="fuelDiffIcon" class="fas fa-{% if fuel_diff >= 0 %}arrow-up{% else %}arrow-down{% endif %} me-1"></i>
+                    <span id="fuelDiffText">{% if fuel_diff >= 0 %}+{% endif %}{{ "{:,}".format(fuel_diff|default(0)) }}원 
+                    ({% if fuel_diff_percent >= 0 %}+{% endif %}{{ fuel_diff_percent|default('0') }}%)</span>
                 </p>
             </div>
         </div>
@@ -81,32 +81,48 @@
     <!-- 배차 현황 -->
     <div class="card">
         <div class="card-header">
-            <h5 class="mb-0">배차 현황</h5>
+            <h5 class="mb-0">
+                                배차 현황 (<span id="dispatchMonthLabel">{{ selected_month }}</span>)
+                    <button type="button" onclick="changeDispatchMonth('prev')" class="btn btn-sm btn-link p-0 me-1" style="margin-left: 10px;">
+                        <i class="fas fa-arrow-down"></i>
+                    </button>
+                    <button type="button" onclick="changeDispatchMonth('next')" class="btn btn-sm btn-link p-0 ms-1" style="margin-right: 10px;">
+                        <i class="fas fa-arrow-up"></i>
+                    </button>
+            </h5>
         </div>
         <div class="card-body">
-            <div class="row">
+            <div class="row" >
                 <div class="col-md-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <span>총 운행수</span>
-                        <strong>{{ "{:,}".format(total_trips|default(228)) }}건</strong>
+                        <strong id="totalTrips">{{ "{:,}".format(total_trips|default(228)) }}건</strong>
                     </div>
                 </div>
+            </div>
+            <div class="row">
                 <div class="col-md-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <span>주간</span>
-                        <strong>{{ "{:,}".format(day_trips|default(57)) }}건</strong>
+                        <strong id="dayTrips">{{ "{:,}".format(day_trips|default(57)) }}건</strong>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <span>야간</span>
-                        <strong>{{ "{:,}".format(night_trips|default(57)) }}건</strong>
+                        <strong id="nightTrips">{{ "{:,}".format(night_trips|default(57)) }}건</strong>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <span>일차</span>
-                        <strong>{{ "{:,}".format(daily_trips|default(114)) }}건</strong>
+                        <strong id="dailyTrips">{{ "{:,}".format(daily_trips|default(114)) }}건</strong>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>리스</span>
+                        <strong id="leaseTrips">{{ "{:,}".format(lease_trips|default(0)) }}건</strong>
                     </div>
                 </div>
             </div>
@@ -177,8 +193,18 @@
         </div>
     </div>
     
-    <!-- 월별 배차 현황 통계 라인차트 -->
+    <!-- 월별 수입금 현황 통계 라인차트 -->
     <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">월별 수입금 현황 통계</h5>
+        </div>
+        <div class="card-body">
+            <canvas id="incomeLineChart" height="100px"></canvas>
+        </div>
+    </div>
+
+     <!-- 월별 배차 현황 통계 라인차트 -->
+     <div class="card">
         <div class="card-header">
             <h5 class="mb-0">월별 배차 현황 통계</h5>
         </div>
@@ -192,32 +218,102 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-function changeMonth(direction) {
-    const monthOrder = ['01월', '02월', '03월', '04월', '05월', '06월', '07월', '08월', '09월', '10월', '11월', '12월'];
-    const currentMonth = '{{ selected_month|default("12월") }}';
-    const currentIndex = monthOrder.indexOf(currentMonth);
-    
-    let newIndex;
-    if (direction === 'prev') {
-        newIndex = currentIndex > 0 ? currentIndex - 1 : monthOrder.length - 1;
-    } else {
-        newIndex = currentIndex < monthOrder.length - 1 ? currentIndex + 1 : 0;
-    }
-    
-    const newMonth = monthOrder[newIndex];
-    console.log('Changing month to:', newMonth); // 디버깅용
-    window.location.href = window.location.pathname + '?month=' + newMonth;
+// 서버에서 전달받은 데이터
+const months = JSON.parse('{{ month_order|default("[]")|tojson|safe }}');
+const dispatchStats = JSON.parse('{{ dispatch_stats|default("{}")|tojson|safe }}');
+const categories = ['주간', '야간', '일차', '리스'];
+const driverCounts = JSON.parse('{{ driver_counts|default("{}")|tojson|safe }}');
+const monthlyIncomes = JSON.parse('{{ monthly_incomes|default("{}")|tojson|safe }}');
+const monthlyFuelCosts = JSON.parse('{{ monthly_fuel_costs|default("{}")|tojson|safe }}');
+const incomeData = months.map(m => monthlyIncomes[m] || 0);
+
+// 각 카드별 독립적인 월 변수
+let incomeMonth = '{{ selected_month }}';
+let fuelMonth = '{{ selected_month }}';
+let dispatchMonth = '{{ selected_month }}';
+
+function updateDispatchStatus(month) {
+    const stats = dispatchStats[month] || {};
+    document.getElementById('totalTrips').innerText = Object.values(stats).reduce((a, b) => a + (b || 0), 0).toLocaleString() + '건';
+    document.getElementById('dayTrips').innerText = (stats['주간'] || 0).toLocaleString() + '건';
+    document.getElementById('nightTrips').innerText = (stats['야간'] || 0).toLocaleString() + '건';
+    document.getElementById('dailyTrips').innerText = (stats['일차'] || 0).toLocaleString() + '건';
+    document.getElementById('leaseTrips').innerText = (stats['리스'] || 0).toLocaleString() + '건';
 }
 
-// 페이지 로드 시 현재 월 확인
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Current month:', '{{ selected_month|default("12월") }}');
-});
+function updateIncomeStatus(month) {
+    const income = monthlyIncomes[month] || 0;
+    document.getElementById('incomeMonthLabel').innerText = month;
+    document.getElementById('currentMonthIncome').innerText = income.toLocaleString() + '원';
+    // 변화량 계산
+    const idx = months.indexOf(month);
+    const prevMonth = months[(idx > 0 ? idx - 1 : months.length - 1)];
+    const prevIncome = monthlyIncomes[prevMonth] || 0;
+    const diff = income - prevIncome;
+    const diffPercent = prevIncome > 0 ? ((diff / prevIncome) * 100).toFixed(2) : 0;
+    document.getElementById('incomeDiffIcon').className = 'fas fa-' + (diff >= 0 ? 'arrow-up' : 'arrow-down') + ' me-1';
+    document.getElementById('incomeDiffText').innerText = `${diff >= 0 ? '+' : ''}${diff.toLocaleString()}원 (${diffPercent >= 0 ? '+' : ''}${diffPercent}%)`;
+}
 
-const dispatchStats = {{ dispatch_stats|tojson }};
-const months = {{ month_order|tojson }};
-const categories = ['주간', '야간', '일차', '리스'];
-const driverCounts = {{ driver_counts|tojson }};
+function updateFuelStatus(month) {
+    const fuel = monthlyFuelCosts[month] || 0;
+    document.getElementById('fuelMonthLabel').innerText = month;
+    document.getElementById('currentMonthFuelCost').innerText = fuel.toLocaleString() + '원';
+    // 변화량 계산
+    const idx = months.indexOf(month);
+    const prevMonth = months[(idx > 0 ? idx - 1 : months.length - 1)];
+    const prevFuel = monthlyFuelCosts[prevMonth] || 0;
+    const diff = fuel - prevFuel;
+    const diffPercent = prevFuel > 0 ? ((diff / prevFuel) * 100).toFixed(2) : 0;
+    document.getElementById('fuelDiffIcon').className = 'fas fa-' + (diff >= 0 ? 'arrow-up' : 'arrow-down') + ' me-1';
+    document.getElementById('fuelDiffText').innerText = `${diff >= 0 ? '+' : ''}${diff.toLocaleString()}원 (${diffPercent >= 0 ? '+' : ''}${diffPercent}%)`;
+}
+
+// 월별 수입금 카드 컨트롤
+function changeIncomeMonth(direction) {
+    const currentIndex = months.indexOf(incomeMonth);
+    let newIndex;
+    if (direction === 'prev') {
+        newIndex = currentIndex > 0 ? currentIndex - 1 : months.length - 1;
+    } else {
+        newIndex = currentIndex < months.length - 1 ? currentIndex + 1 : 0;
+    }
+    incomeMonth = months[newIndex];
+    updateIncomeStatus(incomeMonth);
+}
+
+// 월별 연료비 카드 컨트롤
+function changeFuelMonth(direction) {
+    const currentIndex = months.indexOf(fuelMonth);
+    let newIndex;
+    if (direction === 'prev') {
+        newIndex = currentIndex > 0 ? currentIndex - 1 : months.length - 1;
+    } else {
+        newIndex = currentIndex < months.length - 1 ? currentIndex + 1 : 0;
+    }
+    fuelMonth = months[newIndex];
+    updateFuelStatus(fuelMonth);
+}
+
+// 배차 현황 카드 컨트롤
+function changeDispatchMonth(direction) {
+    const currentIndex = months.indexOf(dispatchMonth);
+    let newIndex;
+    if (direction === 'prev') {
+        newIndex = currentIndex > 0 ? currentIndex - 1 : months.length - 1;
+    } else {
+        newIndex = currentIndex < months.length - 1 ? currentIndex + 1 : 0;
+    }
+    dispatchMonth = months[newIndex];
+    document.getElementById('dispatchMonthLabel').innerText = dispatchMonth;
+    updateDispatchStatus(dispatchMonth);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    updateDispatchStatus(dispatchMonth);
+    updateIncomeStatus(incomeMonth);
+    updateFuelStatus(fuelMonth);
+});
 
 const datasets = categories.map(cat => ({
     label: cat,
@@ -262,6 +358,35 @@ new Chart(ctx, {
                 position: 'right',
                 grid: { drawOnChartArea: false },
                 title: { display: true, text: '운전기사(명)' }
+            }
+        }
+    }
+});
+
+// 월별 수입금 라인차트 생성
+const incomeCtx = document.getElementById('incomeLineChart').getContext('2d');
+new Chart(incomeCtx, {
+    type: 'line',
+    data: {
+        labels: months,
+        datasets: [{
+            label: '월별 실입금 합계',
+            data: incomeData,
+            borderColor: '#007bff',
+            backgroundColor: 'rgba(0,123,255,0.1)',
+            fill: true,
+            tension: 0.1
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { position: 'top' }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                title: { display: true, text: '실입금(원)' }
             }
         }
     }
