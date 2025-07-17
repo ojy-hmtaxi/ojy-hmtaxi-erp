@@ -1092,12 +1092,29 @@ def save_map_image():
             g = Github(github_token)
             repo = g.get_user().get_repo('ojy-hmtaxi-erp')
             github_path = f'uploads/maps/{version}.png'
-            # 파일이 이미 있으면 update, 없으면 create
+            
+            # 파일이 이미 존재하는지 확인
             try:
-                contents = repo.get_contents(github_path)
-                repo.update_file(contents.path, f"update map image {version}", img_bytes, contents.sha, branch="deploy")
-            except Exception:
-                repo.create_file(github_path, f"add map image {version}", img_bytes, branch="deploy")
+                contents = repo.get_contents(github_path, ref="deploy")
+                # 파일이 존재하면 업데이트
+                repo.update_file(
+                    path=contents.path,
+                    message=f"update map image {version}",
+                    data=img_bytes,
+                    sha=contents.sha,
+                    branch="deploy"
+                )
+            except Exception as e:
+                # 파일이 존재하지 않으면 새로 생성
+                if "404" in str(e) or "Not Found" in str(e):
+                    repo.create_file(
+                        path=github_path,
+                        message=f"add map image {version}",
+                        content=img_bytes,
+                        branch="deploy"
+                    )
+                else:
+                    raise e
         except Exception as e:
             return {'success': False, 'error': f'GitHub 업로드 실패: {str(e)}'}, 500
     else:
