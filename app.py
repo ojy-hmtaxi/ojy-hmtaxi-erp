@@ -10,6 +10,7 @@ from models import db, User, Message
 from sqlalchemy.orm import joinedload
 import base64
 import calendar
+from github import Github
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -1079,6 +1080,26 @@ def save_map_image():
     save_path = os.path.join(save_dir, f'{version}.png')
     with open(save_path, 'wb') as f:
         f.write(img_bytes)
+
+    # === GitHub 업로드 ===
+    github_token = os.environ.get('GITHUB_TOKEN')
+    if github_token:
+        try:
+            g = Github(github_token)
+            repo = g.get_user().get_repo('ojy-hmtaxi-erp')
+            github_path = f'uploads/maps/{version}.png'
+            # 파일이 이미 있으면 update, 없으면 create
+            try:
+                contents = repo.get_contents(github_path)
+                repo.update_file(contents.path, f"update map image {version}", img_bytes, contents.sha, branch="main")
+            except Exception:
+                repo.create_file(github_path, f"add map image {version}", img_bytes, branch="main")
+        except Exception as e:
+            return {'success': False, 'error': f'GitHub 업로드 실패: {str(e)}'}, 500
+    else:
+        return {'success': False, 'error': 'GITHUB_TOKEN 환경변수가 설정되어 있지 않습니다.'}, 500
+    # === //GitHub 업로드 ===
+
     return {'success': True}
 
 @app.route('/uploads/maps/<filename>')

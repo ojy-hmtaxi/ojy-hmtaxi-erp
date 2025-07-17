@@ -166,10 +166,10 @@
     <div style="display: flex; margin-top: 10px;">
         <div class="map" style="width: 50%; height: 300px; padding: 10px;">
             사고 현장 약도<br>
-            <img src="/uploads/maps/{{ accident.사고번호 }}.png" alt="사고 현장 약도" style="width:100%;max-height: 300px; margin-top: 10px;">
-            <!--img src="https://raw.githubusercontent.com/ojy-hmtaxi/ojy-hmtaxi-erp/main/uploads/maps/{{ accident.사고번호|lower }}.png"
+            <!--img src="/uploads/maps/{{ accident.사고번호 }}.png" alt="사고 현장 약도" style="width:100%;max-height: 300px; margin-top: 10px;"-->
+            <img src="https://raw.githubusercontent.com/ojy-hmtaxi/ojy-hmtaxi-erp/main/uploads/maps/{{ accident.사고번호|lower }}.png"
             alt="사고 현장 약도"
-            style="width:100%;max-height: 300px; margin-top: 4px;"-->
+            style="width:100%;max-height: 300px; margin-top: 10px;">
         </div>
             
         <div class="desc" style="width: 50%; height: 300px; padding: 10px;">사고 경위<br><br>
@@ -198,6 +198,7 @@
     </table>
 </div>
 <div style="text-align:center; margin:20px;">
+    <button onclick="window.open('https://drive.google.com/file/d/{{ accident.file_id }}/preview', '_blank')" style="padding:8px 24px; font-size:15px; background:#af4c4c; color:#fff; border:none; border-radius:5px; cursor:pointer;">사고영상(작업중)</button>
     <button onclick="window.open('/map?version={{ accident.사고번호|lower }}', '_blank')" style="padding:8px 24px; font-size:15px; background:#4CAF50; color:#fff; border:none; border-radius:5px; cursor:pointer;">약도 제작/편집</button>
     <button onclick="window.print()" style="padding:8px 24px; font-size:15px; background:#4CAF50; color:#fff; border:none; border-radius:5px; cursor:pointer;">프린트하기</button>
 </div>
