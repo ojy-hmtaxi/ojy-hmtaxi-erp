@@ -11,6 +11,10 @@ from sqlalchemy.orm import joinedload
 import base64
 import calendar
 from github import Github
+from dotenv import load_dotenv
+
+# .env 파일 로드
+load_dotenv()
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
