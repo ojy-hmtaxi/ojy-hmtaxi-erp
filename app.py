@@ -1091,9 +1091,9 @@ def save_map_image():
             # 파일이 이미 있으면 update, 없으면 create
             try:
                 contents = repo.get_contents(github_path)
-                repo.update_file(contents.path, f"update map image {version}", img_bytes, contents.sha, branch="main")
+                repo.update_file(contents.path, f"update map image {version}", img_bytes, contents.sha, branch="deploy")
             except Exception:
-                repo.create_file(github_path, f"add map image {version}", img_bytes, branch="main")
+                repo.create_file(github_path, f"add map image {version}", img_bytes, branch="deploy")
         except Exception as e:
             return {'success': False, 'error': f'GitHub 업로드 실패: {str(e)}'}, 500
     else:
