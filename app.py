@@ -11,6 +11,10 @@ from sqlalchemy.orm import joinedload
 import base64
 import calendar
 from github import Github
+from dotenv import load_dotenv
+
+# .env 파일 로드
+load_dotenv()
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -483,6 +487,7 @@ def schedule():
                     
                     # 파일로 저장
                     save_dispatch_data(dispatch_data)
+                    upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
                     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
                     return render_template('schedule.html', dispatch_data=dispatch_data, messages=messages, current_user=current_user)
                 except Exception as e:
@@ -546,6 +551,7 @@ def pay_lease():
                     
                     # 파일로 저장
                     save_lease_data(salary_data)
+                    upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
                     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
                     return render_template('pay_lease.html', salary_data=salary_data, messages=messages, current_user=current_user)
                 except Exception as e:
@@ -620,6 +626,7 @@ def accident():
                 session['uploader_name'] = current_user.name if hasattr(current_user, 'name') else current_user.username
                 
                 flash(f'<{filename}> 파일이 성공적으로 업로드되었습니다. (업로드 일시: {session.get("upload_time")})', 'success')
+                upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
 
             except Exception as e:
                 flash(f'파일 처리 중 오류 발생: {e}', 'error')
@@ -679,11 +686,44 @@ for folder in [app.config['UPLOAD_FOLDER'], app.config['DATA_FOLDER']]:
     if not os.path.exists(folder):
         os.makedirs(folder)
 
+def upload_file_to_github(local_path, github_path, commit_message):
+    github_token = os.environ.get('GITHUB_TOKEN')
+    if not github_token:
+        return False, 'GITHUB_TOKEN 환경변수가 설정되어 있지 않습니다.'
+    try:
+        g = Github(github_token)
+        repo = g.get_user().get_repo('ojy-hmtaxi-erp')
+        with open(local_path, 'rb') as f:
+            content = f.read()
+        try:
+            contents = repo.get_contents(github_path, ref="deploy")
+            repo.update_file(
+                path=contents.path,
+                message=commit_message,
+                data=content,
+                sha=contents.sha,
+                branch="deploy"
+            )
+        except Exception as e:
+            if "404" in str(e) or "Not Found" in str(e):
+                repo.create_file(
+                    path=github_path,
+                    message=commit_message,
+                    content=content,
+                    branch="deploy"
+                )
+            else:
+                return False, str(e)
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
 def save_dispatch_data(data):
-    """배차 데이터를 JSON 파일로 저장"""
     filepath = os.path.join(app.config['DATA_FOLDER'], 'dispatch_data.json')
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    # GitHub 업로드
+    upload_file_to_github(filepath, 'data/dispatch_data.json', 'update dispatch_data.json')
 
 def load_dispatch_data():
     """저장된 배차 데이터를 불러옴"""
@@ -694,10 +734,11 @@ def load_dispatch_data():
     return None
 
 def save_lease_data(data):
-    """리스 급여 데이터를 JSON 파일로 저장"""
     filepath = os.path.join(app.config['DATA_FOLDER'], 'lease_data.json')
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    # GitHub 업로드
+    upload_file_to_github(filepath, 'data/lease_data.json', 'update lease_data.json')
 
 def load_lease_data():
     """저장된 리스 급여 데이터를 불러옴"""
@@ -708,10 +749,11 @@ def load_lease_data():
     return None
 
 def save_accident_data(data):
-    """사고 데이터를 JSON 파일로 저장"""
     filepath = os.path.join(app.config['DATA_FOLDER'], 'accident_data.json')
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    # GitHub 업로드
+    upload_file_to_github(filepath, 'data/accident_data.json', 'update accident_data.json')
 
 def load_accident_data():
     """저장된 사고 데이터를 불러옴"""
@@ -847,6 +889,8 @@ def save_driver_data(data):
     filepath = os.path.join(app.config['DATA_FOLDER'], 'driver_data.json')
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    # GitHub 업로드
+    upload_file_to_github(filepath, 'data/driver_data.json', 'update driver_data.json')
 
 def load_driver_data():
     filepath = os.path.join(app.config['DATA_FOLDER'], 'driver_data.json')
@@ -886,6 +930,7 @@ def driver():
                     'columns': required_columns
                 }
                 save_driver_data(driver_data)
+                upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
                 return render_template('driver.html', driver_data=driver_data, messages=messages, current_user=current_user)
             except Exception as e:
                 return render_template('driver.html', error=f'파일 처리 중 오류: {str(e)}', driver_data=load_driver_data(), messages=messages, current_user=current_user)
@@ -1088,12 +1133,29 @@ def save_map_image():
             g = Github(github_token)
             repo = g.get_user().get_repo('ojy-hmtaxi-erp')
             github_path = f'uploads/maps/{version}.png'
-            # 파일이 이미 있으면 update, 없으면 create
+            
+            # 파일이 이미 존재하는지 확인
             try:
-                contents = repo.get_contents(github_path)
-                repo.update_file(contents.path, f"update map image {version}", img_bytes, contents.sha, branch="deploy")
-            except Exception:
-                repo.create_file(github_path, f"add map image {version}", img_bytes, branch="deploy")
+                contents = repo.get_contents(github_path, ref="deploy")
+                # 파일이 존재하면 업데이트
+                repo.update_file(
+                    path=contents.path,
+                    message=f"update map image {version}",
+                    data=img_bytes,
+                    sha=contents.sha,
+                    branch="deploy"
+                )
+            except Exception as e:
+                # 파일이 존재하지 않으면 새로 생성
+                if "404" in str(e) or "Not Found" in str(e):
+                    repo.create_file(
+                        path=github_path,
+                        message=f"add map image {version}",
+                        content=img_bytes,
+                        branch="deploy"
+                    )
+                else:
+                    raise e
         except Exception as e:
             return {'success': False, 'error': f'GitHub 업로드 실패: {str(e)}'}, 500
     else:
