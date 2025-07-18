@@ -13,8 +13,11 @@ import calendar
 from github import Github
 from dotenv import load_dotenv
 
-# .env 파일 로드
-load_dotenv()
+# .env 파일 로드 (배포 환경에서는 환경변수 직접 사용)
+try:
+    load_dotenv()
+except:
+    pass  # .env 파일이 없어도 계속 진행
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -448,13 +451,20 @@ def calculate_salary():
 @app.route('/schedule', methods=['GET', 'POST'])
 @login_required
 def schedule():
+    print("=== /schedule 라우트 호출됨 ===")
+    print(f"요청 메서드: {request.method}")
+    print(f"현재 사용자: {current_user.username if current_user else 'None'}")
     if request.method == 'POST':
+        print("POST 요청 받음")
         if 'excel_file' in request.files:
             file = request.files['excel_file']
+            print(f"파일명: {file.filename}")
             if file.filename != '':
                 filename = file.filename.replace('/', '').replace('\\', '')
                 filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                print(f"저장 경로: {filepath}")
                 file.save(filepath)
+                print(f"파일 저장 완료: {filepath}")
                 
                 try:
                     # 시트별 데이터 처리
@@ -486,8 +496,13 @@ def schedule():
                                             error="엑셀 파일에서 읽을 수 있는 시트가 없습니다.")
                     
                     # 파일로 저장
+                    print("=== save_dispatch_data 함수 호출 ===")
                     save_dispatch_data(dispatch_data)
-                    upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
+                    print("=== save_dispatch_data 함수 완료 ===")
+                    print(f"=== 배차 데이터 엑셀 파일 GitHub 업로드 시도 ===")
+                    success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
+                    if not success:
+                        print(f"엑셀 파일 GitHub 업로드 실패: {error}")
                     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
                     return render_template('schedule.html', dispatch_data=dispatch_data, messages=messages, current_user=current_user)
                 except Exception as e:
@@ -551,7 +566,9 @@ def pay_lease():
                     
                     # 파일로 저장
                     save_lease_data(salary_data)
-                    upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
+                    success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
+                    if not success:
+                        print(f"엑셀 파일 GitHub 업로드 실패: {error}")
                     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
                     return render_template('pay_lease.html', salary_data=salary_data, messages=messages, current_user=current_user)
                 except Exception as e:
@@ -626,7 +643,9 @@ def accident():
                 session['uploader_name'] = current_user.name if hasattr(current_user, 'name') else current_user.username
                 
                 flash(f'<{filename}> 파일이 성공적으로 업로드되었습니다. (업로드 일시: {session.get("upload_time")})', 'success')
-                upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
+                success, error = upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
+                if not success:
+                    print(f"엑셀 파일 GitHub 업로드 실패: {error}")
 
             except Exception as e:
                 flash(f'파일 처리 중 오류 발생: {e}', 'error')
@@ -687,50 +706,90 @@ for folder in [app.config['UPLOAD_FOLDER'], app.config['DATA_FOLDER']]:
         os.makedirs(folder)
 
 def upload_file_to_github(local_path, github_path, commit_message):
+    print(f"=== GitHub 업로드 시작 ===")
+    print(f"로컬 파일: {local_path}")
+    print(f"GitHub 경로: {github_path}")
+    print(f"커밋 메시지: {commit_message}")
+    
     github_token = os.environ.get('GITHUB_TOKEN')
-    if not github_token:
+    if not github_token or github_token == 'your_github_token_here':
+        print(f"GitHub 업로드 실패: GITHUB_TOKEN 환경변수가 설정되어 있지 않습니다.")
         return False, 'GITHUB_TOKEN 환경변수가 설정되어 있지 않습니다.'
+    
+    print(f"GitHub 토큰 확인: {'설정됨' if github_token else '설정되지 않음'}")
+    
     try:
         g = Github(github_token)
         repo = g.get_user().get_repo('ojy-hmtaxi-erp')
+        print(f"GitHub 저장소 연결 성공: {repo.name}")
+        
         with open(local_path, 'rb') as f:
             content = f.read()
+        print(f"파일 읽기 성공: {len(content)} bytes")
+        
         try:
             contents = repo.get_contents(github_path, ref="deploy")
+            print(f"기존 파일 발견, 업데이트 시도...")
             repo.update_file(
                 path=contents.path,
                 message=commit_message,
-                data=content,
+                content=content,
                 sha=contents.sha,
                 branch="deploy"
             )
+            print(f"GitHub 업로드 성공: {github_path}")
         except Exception as e:
             if "404" in str(e) or "Not Found" in str(e):
+                print(f"새 파일 생성 시도...")
                 repo.create_file(
                     path=github_path,
                     message=commit_message,
                     content=content,
                     branch="deploy"
                 )
+                print(f"GitHub 새 파일 생성 성공: {github_path}")
             else:
+                print(f"GitHub 업로드 실패: {str(e)}")
                 return False, str(e)
         return True, None
     except Exception as e:
+        print(f"GitHub 업로드 실패: {str(e)}")
         return False, str(e)
 
 def save_dispatch_data(data):
+    print("=== save_dispatch_data 함수 시작 ===")
     filepath = os.path.join(app.config['DATA_FOLDER'], 'dispatch_data.json')
+    print(f"JSON 저장 경로: {filepath}")
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    print("JSON 파일 저장 완료")
     # GitHub 업로드
-    upload_file_to_github(filepath, 'data/dispatch_data.json', 'update dispatch_data.json')
+    print("=== JSON 파일 GitHub 업로드 시도 ===")
+    success, error = upload_file_to_github(filepath, 'data/dispatch_data.json', 'update dispatch_data.json')
+    if not success:
+        print(f"JSON 파일 GitHub 업로드 실패: {error}")
+    else:
+        print("JSON 파일 GitHub 업로드 성공!")
+    print("=== save_dispatch_data 함수 완료 ===")
 
 def load_dispatch_data():
     """저장된 배차 데이터를 불러옴"""
     filepath = os.path.join(app.config['DATA_FOLDER'], 'dispatch_data.json')
     if os.path.exists(filepath):
-        with open(filepath, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if content:  # 파일이 비어있지 않은 경우에만 파싱
+                    return json.loads(content)
+                else:
+                    print(f"dispatch_data.json 파일이 비어있습니다.")
+                    return None
+        except json.JSONDecodeError as e:
+            print(f"dispatch_data.json JSON 파싱 오류: {e}")
+            return None
+        except Exception as e:
+            print(f"dispatch_data.json 읽기 오류: {e}")
+            return None
     return None
 
 def save_lease_data(data):
@@ -744,11 +803,136 @@ def load_lease_data():
     """저장된 리스 급여 데이터를 불러옴"""
     filepath = os.path.join(app.config['DATA_FOLDER'], 'lease_data.json')
     if os.path.exists(filepath):
-        with open(filepath, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if content:  # 파일이 비어있지 않은 경우에만 파싱
+                    return json.loads(content)
+                else:
+                    print(f"lease_data.json 파일이 비어있습니다.")
+                    return None
+        except json.JSONDecodeError as e:
+            print(f"lease_data.json JSON 파싱 오류: {e}")
+            return None
+        except Exception as e:
+            print(f"lease_data.json 읽기 오류: {e}")
+            return None
     return None
 
 def save_accident_data(data):
+    # 요약 데이터 생성
+    if data and ('at_fault' in data or 'not_at_fault' in data):
+        at_fault_data = data.get('at_fault', [])
+        not_at_fault_data = data.get('not_at_fault', [])
+        
+        # 기본 통계
+        total_count = len(at_fault_data) + len(not_at_fault_data)
+        at_fault_count = len(at_fault_data)
+        not_at_fault_count = len(not_at_fault_data)
+        at_fault_pending_count = sum(1 for a in at_fault_data if a.get('처리여부', '') == '미결')
+        not_at_fault_pending_count = sum(1 for a in not_at_fault_data if a.get('처리여부', '') == '미결')
+        
+        # 금액 통계
+        def parse_amount(amount_str):
+            if not amount_str or amount_str == '' or amount_str == '-':
+                return 0
+            try:
+                return int(str(amount_str).replace(',', ''))
+            except:
+                return 0
+        
+        at_fault_total_repair = sum(parse_amount(a.get('수리지급', 0)) for a in at_fault_data)
+        at_fault_total_treatment = sum(parse_amount(a.get('치료지급', 0)) for a in at_fault_data)
+        not_at_fault_total_damage = sum(parse_amount(a.get('피해견적', 0)) for a in not_at_fault_data)
+        not_at_fault_total_payment = sum(parse_amount(a.get('금액', 0)) for a in not_at_fault_data)
+        
+        # 기사별 통계
+        driver_stats = {}
+        for accident in at_fault_data:
+            driver_name = accident.get('기사명', '')
+            if driver_name:
+                if driver_name not in driver_stats:
+                    driver_stats[driver_name] = {
+                        'name': driver_name,
+                        'at_fault_count': 0,
+                        'repair_payment': 0,
+                        'treatment_payment': 0,
+                        'not_at_fault_count': 0,
+                        'damage_estimate': 0
+                    }
+                driver_stats[driver_name]['at_fault_count'] += 1
+                driver_stats[driver_name]['repair_payment'] += parse_amount(accident.get('수리지급', 0))
+                driver_stats[driver_name]['treatment_payment'] += parse_amount(accident.get('치료지급', 0))
+        
+        for accident in not_at_fault_data:
+            driver_name = accident.get('기사명', '')
+            if driver_name:
+                if driver_name not in driver_stats:
+                    driver_stats[driver_name] = {
+                        'name': driver_name,
+                        'at_fault_count': 0,
+                        'repair_payment': 0,
+                        'treatment_payment': 0,
+                        'not_at_fault_count': 0,
+                        'damage_estimate': 0
+                    }
+                driver_stats[driver_name]['not_at_fault_count'] += 1
+                driver_stats[driver_name]['damage_estimate'] += parse_amount(accident.get('피해견적', 0))
+        
+        # 차량별 통계
+        vehicle_stats = {}
+        for accident in at_fault_data:
+            vehicle_number = accident.get('차번', '')
+            if vehicle_number:
+                if vehicle_number not in vehicle_stats:
+                    vehicle_stats[vehicle_number] = {
+                        'number': vehicle_number,
+                        'at_fault_count': 0,
+                        'not_at_fault_count': 0,
+                        'damage_estimate': 0
+                    }
+                vehicle_stats[vehicle_number]['at_fault_count'] += 1
+        
+        for accident in not_at_fault_data:
+            vehicle_number = accident.get('차번', '')
+            if vehicle_number:
+                if vehicle_number not in vehicle_stats:
+                    vehicle_stats[vehicle_number] = {
+                        'number': vehicle_number,
+                        'at_fault_count': 0,
+                        'not_at_fault_count': 0,
+                        'damage_estimate': 0
+                    }
+                vehicle_stats[vehicle_number]['not_at_fault_count'] += 1
+                vehicle_stats[vehicle_number]['damage_estimate'] += parse_amount(accident.get('피해견적', 0))
+        
+        # 금액 포맷팅
+        def format_amount(amount):
+            return f"{amount:,}" if amount > 0 else "0"
+        
+        for driver in driver_stats.values():
+            driver['repair_payment'] = format_amount(driver['repair_payment'])
+            driver['treatment_payment'] = format_amount(driver['treatment_payment'])
+            driver['damage_estimate'] = format_amount(driver['damage_estimate'])
+        
+        for vehicle in vehicle_stats.values():
+            vehicle['damage_estimate'] = format_amount(vehicle['damage_estimate'])
+        
+        # 요약 데이터 추가
+        data['summary'] = {
+            'total_count': total_count,
+            'at_fault_count': at_fault_count,
+            'not_at_fault_count': not_at_fault_count,
+            'at_fault_pending_count': at_fault_pending_count,
+            'not_at_fault_pending_count': not_at_fault_pending_count,
+            'at_fault_total_repair': format_amount(at_fault_total_repair),
+            'at_fault_total_treatment': format_amount(at_fault_total_treatment),
+            'not_at_fault_total_damage': format_amount(not_at_fault_total_damage),
+            'not_at_fault_total_payment': format_amount(not_at_fault_total_payment),
+            'driver_stats': list(driver_stats.values()),
+            'vehicle_stats': list(vehicle_stats.values())
+        }
+    
     filepath = os.path.join(app.config['DATA_FOLDER'], 'accident_data.json')
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -759,123 +943,135 @@ def load_accident_data():
     """저장된 사고 데이터를 불러옴"""
     filepath = os.path.join(app.config['DATA_FOLDER'], 'accident_data.json')
     if os.path.exists(filepath):
-        with open(filepath, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if content:  # 파일이 비어있지 않은 경우에만 파싱
+                    data = json.loads(content)
+                else:
+                    print(f"accident_data.json 파일이 비어있습니다.")
+                    return None
+        except json.JSONDecodeError as e:
+            print(f"accident_data.json JSON 파싱 오류: {e}")
+            return None
+        except Exception as e:
+            print(f"accident_data.json 읽기 오류: {e}")
+            return None
+        
+        # 요약 데이터 생성
+        if data and ('at_fault' in data or 'not_at_fault' in data):
+            at_fault_data = data.get('at_fault', [])
+            not_at_fault_data = data.get('not_at_fault', [])
             
-            # 요약 데이터 생성
-            if data and ('at_fault' in data or 'not_at_fault' in data):
-                at_fault_data = data.get('at_fault', [])
-                not_at_fault_data = data.get('not_at_fault', [])
-                
-                # 기본 통계
-                total_count = len(at_fault_data) + len(not_at_fault_data)
-                at_fault_count = len(at_fault_data)
-                not_at_fault_count = len(not_at_fault_data)
-                at_fault_pending_count = sum(1 for a in at_fault_data if a.get('처리여부', '') == '미결')
-                not_at_fault_pending_count = sum(1 for a in not_at_fault_data if a.get('처리여부', '') == '미결')
-                
-                # 금액 통계
-                def parse_amount(amount_str):
-                    if not amount_str or amount_str == '' or amount_str == '-':
-                        return 0
-                    try:
-                        return int(str(amount_str).replace(',', ''))
-                    except:
-                        return 0
-                
-                at_fault_total_repair = sum(parse_amount(a.get('수리지급', 0)) for a in at_fault_data)
-                at_fault_total_treatment = sum(parse_amount(a.get('치료지급', 0)) for a in at_fault_data)
-                not_at_fault_total_damage = sum(parse_amount(a.get('피해견적', 0)) for a in not_at_fault_data)
-                not_at_fault_total_payment = sum(parse_amount(a.get('금액', 0)) for a in not_at_fault_data)
-                
-                # 기사별 통계
-                driver_stats = {}
-                for accident in at_fault_data:
-                    driver_name = accident.get('기사명', '')
-                    if driver_name:
-                        if driver_name not in driver_stats:
-                            driver_stats[driver_name] = {
-                                'name': driver_name,
-                                'at_fault_count': 0,
-                                'repair_payment': 0,
-                                'treatment_payment': 0,
-                                'not_at_fault_count': 0,
-                                'damage_estimate': 0
-                            }
-                        driver_stats[driver_name]['at_fault_count'] += 1
-                        driver_stats[driver_name]['repair_payment'] += parse_amount(accident.get('수리지급', 0))
-                        driver_stats[driver_name]['treatment_payment'] += parse_amount(accident.get('치료지급', 0))
-                
-                for accident in not_at_fault_data:
-                    driver_name = accident.get('기사명', '')
-                    if driver_name:
-                        if driver_name not in driver_stats:
-                            driver_stats[driver_name] = {
-                                'name': driver_name,
-                                'at_fault_count': 0,
-                                'repair_payment': 0,
-                                'treatment_payment': 0,
-                                'not_at_fault_count': 0,
-                                'damage_estimate': 0
-                            }
-                        driver_stats[driver_name]['not_at_fault_count'] += 1
-                        driver_stats[driver_name]['damage_estimate'] += parse_amount(accident.get('피해견적', 0))
-                
-                # 차량별 통계
-                vehicle_stats = {}
-                for accident in at_fault_data:
-                    vehicle_number = accident.get('차번', '')
-                    if vehicle_number:
-                        if vehicle_number not in vehicle_stats:
-                            vehicle_stats[vehicle_number] = {
-                                'number': vehicle_number,
-                                'at_fault_count': 0,
-                                'not_at_fault_count': 0,
-                                'damage_estimate': 0
-                            }
-                        vehicle_stats[vehicle_number]['at_fault_count'] += 1
-                
-                for accident in not_at_fault_data:
-                    vehicle_number = accident.get('차번', '')
-                    if vehicle_number:
-                        if vehicle_number not in vehicle_stats:
-                            vehicle_stats[vehicle_number] = {
-                                'number': vehicle_number,
-                                'at_fault_count': 0,
-                                'not_at_fault_count': 0,
-                                'damage_estimate': 0
-                            }
-                        vehicle_stats[vehicle_number]['not_at_fault_count'] += 1
-                        vehicle_stats[vehicle_number]['damage_estimate'] += parse_amount(accident.get('피해견적', 0))
-                
-                # 금액 포맷팅
-                def format_amount(amount):
-                    return f"{amount:,}" if amount > 0 else "0"
-                
-                for driver in driver_stats.values():
-                    driver['repair_payment'] = format_amount(driver['repair_payment'])
-                    driver['treatment_payment'] = format_amount(driver['treatment_payment'])
-                    driver['damage_estimate'] = format_amount(driver['damage_estimate'])
-                
-                for vehicle in vehicle_stats.values():
-                    vehicle['damage_estimate'] = format_amount(vehicle['damage_estimate'])
-                
-                # 요약 데이터 추가
-                data['summary'] = {
-                    'total_count': total_count,
-                    'at_fault_count': at_fault_count,
-                    'not_at_fault_count': not_at_fault_count,
-                    'at_fault_pending_count': at_fault_pending_count,
-                    'not_at_fault_pending_count': not_at_fault_pending_count,
-                    'at_fault_total_repair': format_amount(at_fault_total_repair),
-                    'at_fault_total_treatment': format_amount(at_fault_total_treatment),
-                    'not_at_fault_total_damage': format_amount(not_at_fault_total_damage),
-                    'not_at_fault_total_payment': format_amount(not_at_fault_total_payment),
-                    'driver_stats': list(driver_stats.values()),
-                    'vehicle_stats': list(vehicle_stats.values())
-                }
+            # 기본 통계
+            total_count = len(at_fault_data) + len(not_at_fault_data)
+            at_fault_count = len(at_fault_data)
+            not_at_fault_count = len(not_at_fault_data)
+            at_fault_pending_count = sum(1 for a in at_fault_data if a.get('처리여부', '') == '미결')
+            not_at_fault_pending_count = sum(1 for a in not_at_fault_data if a.get('처리여부', '') == '미결')
             
-            return data
+            # 금액 통계
+            def parse_amount(amount_str):
+                if not amount_str or amount_str == '' or amount_str == '-':
+                    return 0
+                try:
+                    return int(str(amount_str).replace(',', ''))
+                except:
+                    return 0
+            
+            at_fault_total_repair = sum(parse_amount(a.get('수리지급', 0)) for a in at_fault_data)
+            at_fault_total_treatment = sum(parse_amount(a.get('치료지급', 0)) for a in at_fault_data)
+            not_at_fault_total_damage = sum(parse_amount(a.get('피해견적', 0)) for a in not_at_fault_data)
+            not_at_fault_total_payment = sum(parse_amount(a.get('금액', 0)) for a in not_at_fault_data)
+            
+            # 기사별 통계
+            driver_stats = {}
+            for accident in at_fault_data:
+                driver_name = accident.get('기사명', '')
+                if driver_name:
+                    if driver_name not in driver_stats:
+                        driver_stats[driver_name] = {
+                            'name': driver_name,
+                            'at_fault_count': 0,
+                            'repair_payment': 0,
+                            'treatment_payment': 0,
+                            'not_at_fault_count': 0,
+                            'damage_estimate': 0
+                        }
+                    driver_stats[driver_name]['at_fault_count'] += 1
+                    driver_stats[driver_name]['repair_payment'] += parse_amount(accident.get('수리지급', 0))
+                    driver_stats[driver_name]['treatment_payment'] += parse_amount(accident.get('치료지급', 0))
+            
+            for accident in not_at_fault_data:
+                driver_name = accident.get('기사명', '')
+                if driver_name:
+                    if driver_name not in driver_stats:
+                        driver_stats[driver_name] = {
+                            'name': driver_name,
+                            'at_fault_count': 0,
+                            'repair_payment': 0,
+                            'treatment_payment': 0,
+                            'not_at_fault_count': 0,
+                            'damage_estimate': 0
+                        }
+                    driver_stats[driver_name]['not_at_fault_count'] += 1
+                    driver_stats[driver_name]['damage_estimate'] += parse_amount(accident.get('피해견적', 0))
+            
+            # 차량별 통계
+            vehicle_stats = {}
+            for accident in at_fault_data:
+                vehicle_number = accident.get('차번', '')
+                if vehicle_number:
+                    if vehicle_number not in vehicle_stats:
+                        vehicle_stats[vehicle_number] = {
+                            'number': vehicle_number,
+                            'at_fault_count': 0,
+                            'not_at_fault_count': 0,
+                            'damage_estimate': 0
+                        }
+                    vehicle_stats[vehicle_number]['at_fault_count'] += 1
+            
+            for accident in not_at_fault_data:
+                vehicle_number = accident.get('차번', '')
+                if vehicle_number:
+                    if vehicle_number not in vehicle_stats:
+                        vehicle_stats[vehicle_number] = {
+                            'number': vehicle_number,
+                            'at_fault_count': 0,
+                            'not_at_fault_count': 0,
+                            'damage_estimate': 0
+                        }
+                    vehicle_stats[vehicle_number]['not_at_fault_count'] += 1
+                    vehicle_stats[vehicle_number]['damage_estimate'] += parse_amount(accident.get('피해견적', 0))
+            
+            # 금액 포맷팅
+            def format_amount(amount):
+                return f"{amount:,}" if amount > 0 else "0"
+            
+            for driver in driver_stats.values():
+                driver['repair_payment'] = format_amount(driver['repair_payment'])
+                driver['treatment_payment'] = format_amount(driver['treatment_payment'])
+                driver['damage_estimate'] = format_amount(driver['damage_estimate'])
+            
+            for vehicle in vehicle_stats.values():
+                vehicle['damage_estimate'] = format_amount(vehicle['damage_estimate'])
+            
+            # 요약 데이터 추가
+            data['summary'] = {
+                'total_count': total_count,
+                'at_fault_count': at_fault_count,
+                'not_at_fault_count': not_at_fault_count,
+                'at_fault_pending_count': at_fault_pending_count,
+                'not_at_fault_pending_count': not_at_fault_pending_count,
+                'at_fault_total_repair': format_amount(at_fault_total_repair),
+                'at_fault_total_treatment': format_amount(at_fault_total_treatment),
+                'not_at_fault_total_damage': format_amount(not_at_fault_total_damage),
+                'not_at_fault_total_payment': format_amount(not_at_fault_total_payment),
+                'driver_stats': list(driver_stats.values()),
+                'vehicle_stats': list(vehicle_stats.values())
+            }
+        
+        return data
     return None
 
 @app.route('/map')
@@ -895,8 +1091,20 @@ def save_driver_data(data):
 def load_driver_data():
     filepath = os.path.join(app.config['DATA_FOLDER'], 'driver_data.json')
     if os.path.exists(filepath):
-        with open(filepath, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if content:  # 파일이 비어있지 않은 경우에만 파싱
+                    return json.loads(content)
+                else:
+                    print(f"driver_data.json 파일이 비어있습니다.")
+                    return None
+        except json.JSONDecodeError as e:
+            print(f"driver_data.json JSON 파싱 오류: {e}")
+            return None
+        except Exception as e:
+            print(f"driver_data.json 읽기 오류: {e}")
+            return None
     return None
 
 @app.route('/driver', methods=['GET', 'POST'])
@@ -930,7 +1138,9 @@ def driver():
                     'columns': required_columns
                 }
                 save_driver_data(driver_data)
-                upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
+                success, error = upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
+                if not success:
+                    print(f"엑셀 파일 GitHub 업로드 실패: {error}")
                 return render_template('driver.html', driver_data=driver_data, messages=messages, current_user=current_user)
             except Exception as e:
                 return render_template('driver.html', error=f'파일 처리 중 오류: {str(e)}', driver_data=load_driver_data(), messages=messages, current_user=current_user)
@@ -1306,5 +1516,17 @@ def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
 if __name__ == '__main__':
+    print("=== Flask 앱 시작 ===")
+    
+    # 환경변수 확인
+    github_token = os.environ.get('GITHUB_TOKEN')
+    print(f"=== 환경변수 확인 ===")
+    print(f"GITHUB_TOKEN 설정 여부: {'설정됨' if github_token else '설정되지 않음'}")
+    if github_token:
+        print(f"GITHUB_TOKEN 길이: {len(github_token)}")
+        print(f"GITHUB_TOKEN 시작: {github_token[:10]}...")
+    
     create_database()  # 데이터베이스 생성
+    print("=== 데이터베이스 생성 완료 ===")
+    print("=== Flask 앱 실행 중... ===")
     app.run(host='127.0.0.1', port=5000, debug=True)
