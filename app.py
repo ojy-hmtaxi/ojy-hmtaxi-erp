@@ -487,7 +487,9 @@ def schedule():
                     
                     # 파일로 저장
                     save_dispatch_data(dispatch_data)
-                    upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
+                    success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
+                    if not success:
+                        print(f"엑셀 파일 GitHub 업로드 실패: {error}")
                     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
                     return render_template('schedule.html', dispatch_data=dispatch_data, messages=messages, current_user=current_user)
                 except Exception as e:
@@ -551,7 +553,9 @@ def pay_lease():
                     
                     # 파일로 저장
                     save_lease_data(salary_data)
-                    upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
+                    success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
+                    if not success:
+                        print(f"엑셀 파일 GitHub 업로드 실패: {error}")
                     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
                     return render_template('pay_lease.html', salary_data=salary_data, messages=messages, current_user=current_user)
                 except Exception as e:
@@ -626,7 +630,9 @@ def accident():
                 session['uploader_name'] = current_user.name if hasattr(current_user, 'name') else current_user.username
                 
                 flash(f'<{filename}> 파일이 성공적으로 업로드되었습니다. (업로드 일시: {session.get("upload_time")})', 'success')
-                upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
+                success, error = upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
+                if not success:
+                    print(f"엑셀 파일 GitHub 업로드 실패: {error}")
 
             except Exception as e:
                 flash(f'파일 처리 중 오류 발생: {e}', 'error')
@@ -689,6 +695,7 @@ for folder in [app.config['UPLOAD_FOLDER'], app.config['DATA_FOLDER']]:
 def upload_file_to_github(local_path, github_path, commit_message):
     github_token = os.environ.get('GITHUB_TOKEN')
     if not github_token:
+        print(f"GitHub 업로드 실패: GITHUB_TOKEN 환경변수가 설정되어 있지 않습니다.")
         return False, 'GITHUB_TOKEN 환경변수가 설정되어 있지 않습니다.'
     try:
         g = Github(github_token)
@@ -704,6 +711,7 @@ def upload_file_to_github(local_path, github_path, commit_message):
                 sha=contents.sha,
                 branch="deploy"
             )
+            print(f"GitHub 업로드 성공: {github_path}")
         except Exception as e:
             if "404" in str(e) or "Not Found" in str(e):
                 repo.create_file(
@@ -712,10 +720,13 @@ def upload_file_to_github(local_path, github_path, commit_message):
                     content=content,
                     branch="deploy"
                 )
+                print(f"GitHub 새 파일 생성 성공: {github_path}")
             else:
+                print(f"GitHub 업로드 실패: {str(e)}")
                 return False, str(e)
         return True, None
     except Exception as e:
+        print(f"GitHub 업로드 실패: {str(e)}")
         return False, str(e)
 
 def save_dispatch_data(data):
@@ -930,7 +941,9 @@ def driver():
                     'columns': required_columns
                 }
                 save_driver_data(driver_data)
-                upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
+                success, error = upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
+                if not success:
+                    print(f"엑셀 파일 GitHub 업로드 실패: {error}")
                 return render_template('driver.html', driver_data=driver_data, messages=messages, current_user=current_user)
             except Exception as e:
                 return render_template('driver.html', error=f'파일 처리 중 오류: {str(e)}', driver_data=load_driver_data(), messages=messages, current_user=current_user)
