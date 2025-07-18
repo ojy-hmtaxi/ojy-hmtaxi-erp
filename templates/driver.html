@@ -218,6 +218,17 @@ document.getElementById('excel_file').addEventListener('change', function() {
     resultDiv.innerHTML = '';
     resultDiv.classList.remove('show');
 });
+window.onload = function() {
+    fetch('/api/latest-upload?type=driver')
+        .then(response => response.json())
+        .then(data => {
+            if (data.filename) {
+                const msg = `<span style=\"color:#007bff;font-weight:bold;\">${data.filename}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${data.upload_time} | 업로더: ${data.uploader})&nbsp;<a href=\"${data.github_url}\" target=\"_blank\" style=\"color:#28a745;text-decoration:underline;\">[다운로드]</a>`;
+                document.getElementById('uploadResult').innerHTML = msg;
+                document.getElementById('uploadResult').classList.add('show');
+            }
+        });
+};
 </script>
 {{ right_sidebar(messages, current_user) }}
 {% endblock %} 
