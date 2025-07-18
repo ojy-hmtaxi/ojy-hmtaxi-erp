@@ -487,9 +487,12 @@ def schedule():
                     
                     # 파일로 저장
                     save_dispatch_data(dispatch_data)
+                    print(f"=== 배차 데이터 엑셀 파일 GitHub 업로드 시도 ===")
                     success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
                     if not success:
                         print(f"엑셀 파일 GitHub 업로드 실패: {error}")
+                    else:
+                        print(f"엑셀 파일 GitHub 업로드 성공!")
                     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
                     return render_template('schedule.html', dispatch_data=dispatch_data, messages=messages, current_user=current_user)
                 except Exception as e:
@@ -693,17 +696,30 @@ for folder in [app.config['UPLOAD_FOLDER'], app.config['DATA_FOLDER']]:
         os.makedirs(folder)
 
 def upload_file_to_github(local_path, github_path, commit_message):
+    print(f"=== GitHub 업로드 시작 ===")
+    print(f"로컬 파일: {local_path}")
+    print(f"GitHub 경로: {github_path}")
+    print(f"커밋 메시지: {commit_message}")
+    
     github_token = os.environ.get('GITHUB_TOKEN')
     if not github_token:
         print(f"GitHub 업로드 실패: GITHUB_TOKEN 환경변수가 설정되어 있지 않습니다.")
         return False, 'GITHUB_TOKEN 환경변수가 설정되어 있지 않습니다.'
+    
+    print(f"GitHub 토큰 확인: {'설정됨' if github_token else '설정되지 않음'}")
+    
     try:
         g = Github(github_token)
         repo = g.get_user().get_repo('ojy-hmtaxi-erp')
+        print(f"GitHub 저장소 연결 성공: {repo.name}")
+        
         with open(local_path, 'rb') as f:
             content = f.read()
+        print(f"파일 읽기 성공: {len(content)} bytes")
+        
         try:
             contents = repo.get_contents(github_path, ref="deploy")
+            print(f"기존 파일 발견, 업데이트 시도...")
             repo.update_file(
                 path=contents.path,
                 message=commit_message,
@@ -714,6 +730,7 @@ def upload_file_to_github(local_path, github_path, commit_message):
             print(f"GitHub 업로드 성공: {github_path}")
         except Exception as e:
             if "404" in str(e) or "Not Found" in str(e):
+                print(f"새 파일 생성 시도...")
                 repo.create_file(
                     path=github_path,
                     message=commit_message,
