@@ -1092,7 +1092,7 @@ def load_driver_data():
     filepath = os.path.join(app.config['DATA_FOLDER'], 'driver_data.json')
     if os.path.exists(filepath):
         try:
-        with open(filepath, 'r', encoding='utf-8') as f:
+            with open(filepath, 'r', encoding='utf-8') as f:
                 content = f.read().strip()
                 if content:  # 파일이 비어있지 않은 경우에만 파싱
                     return json.loads(content)
