@@ -6,7 +6,7 @@ from datetime import timedelta
 from collections import OrderedDict
 from werkzeug.utils import secure_filename
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from models import db, User, Message
+from models import db, User, Message, UploadRecord
 from sqlalchemy.orm import joinedload
 import base64
 import calendar
@@ -501,6 +501,11 @@ def schedule():
                     print("=== save_dispatch_data 함수 완료 ===")
                     print(f"=== 배차 데이터 엑셀 파일 GitHub 업로드 시도 ===")
                     success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
+                    github_url = f'https://github.com/ojy-hmtaxi-erp/uploads/{os.path.basename(filepath)}'
+                    if success:
+                        record = UploadRecord(filename=filename, uploader=current_user.name, github_url=github_url, upload_type='schedule')
+                        db.session.add(record)
+                        db.session.commit()
                     if not success:
                         print(f"엑셀 파일 GitHub 업로드 실패: {error}")
                     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
@@ -567,6 +572,11 @@ def pay_lease():
                     # 파일로 저장
                     save_lease_data(salary_data)
                     success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
+                    github_url = f'https://github.com/ojy-hmtaxi-erp/uploads/{os.path.basename(filepath)}'
+                    if success:
+                        record = UploadRecord(filename=filename, uploader=current_user.name, github_url=github_url, upload_type='pay_lease')
+                        db.session.add(record)
+                        db.session.commit()
                     if not success:
                         print(f"엑셀 파일 GitHub 업로드 실패: {error}")
                     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
@@ -644,6 +654,11 @@ def accident():
                 
                 flash(f'<{filename}> 파일이 성공적으로 업로드되었습니다. (업로드 일시: {session.get("upload_time")})', 'success')
                 success, error = upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
+                github_url = f'https://github.com/ojy-hmtaxi-erp/uploads/{os.path.basename(file_path)}'
+                if success:
+                    record = UploadRecord(filename=filename, uploader=current_user.name, github_url=github_url, upload_type='accident')
+                    db.session.add(record)
+                    db.session.commit()
                 if not success:
                     print(f"엑셀 파일 GitHub 업로드 실패: {error}")
 
@@ -1139,6 +1154,11 @@ def driver():
                 }
                 save_driver_data(driver_data)
                 success, error = upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
+                github_url = f'https://github.com/ojy-hmtaxi-erp/uploads/{os.path.basename(file_path)}'
+                if success:
+                    record = UploadRecord(filename=filename, uploader=current_user.name, github_url=github_url, upload_type='driver')
+                    db.session.add(record)
+                    db.session.commit()
                 if not success:
                     print(f"엑셀 파일 GitHub 업로드 실패: {error}")
                 return render_template('driver.html', driver_data=driver_data, messages=messages, current_user=current_user)
@@ -1514,6 +1534,24 @@ def admin_delete_user(user_id):
 @login_required
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+
+@app.route('/api/latest-upload')
+def latest_upload():
+    upload_type = request.args.get('type')
+    q = UploadRecord.query
+    if upload_type:
+        q = q.filter_by(upload_type=upload_type)
+    record = q.order_by(UploadRecord.upload_time.desc()).first()
+    if record:
+        return {
+            "filename": record.filename,
+            "uploader": record.uploader,
+            "upload_time": record.upload_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "github_url": record.github_url,
+            "upload_type": record.upload_type
+        }
+    else:
+        return {}, 204
 
 if __name__ == '__main__':
     print("=== Flask 앱 시작 ===")
