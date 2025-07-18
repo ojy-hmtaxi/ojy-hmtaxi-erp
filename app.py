@@ -503,8 +503,7 @@ def schedule():
                     success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
                     github_url = f'https://github.com/ojy-hmtaxi-erp/uploads/{os.path.basename(filepath)}'
                     if success:
-                        uploader_name = current_user.name if current_user.name else current_user.username
-                        record = UploadRecord(filename=filename, uploader=uploader_name, github_url=github_url, upload_type='schedule')
+                        record = UploadRecord(filename=filename, uploader=current_user.name, github_url=github_url, upload_type='schedule')
                         db.session.add(record)
                         db.session.commit()
                     if not success:
@@ -575,8 +574,7 @@ def pay_lease():
                     success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
                     github_url = f'https://github.com/ojy-hmtaxi-erp/uploads/{os.path.basename(filepath)}'
                     if success:
-                        uploader_name = current_user.name if current_user.name else current_user.username
-                        record = UploadRecord(filename=filename, uploader=uploader_name, github_url=github_url, upload_type='pay_lease')
+                        record = UploadRecord(filename=filename, uploader=current_user.name, github_url=github_url, upload_type='pay_lease')
                         db.session.add(record)
                         db.session.commit()
                     if not success:
@@ -658,8 +656,7 @@ def accident():
                 success, error = upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
                 github_url = f'https://github.com/ojy-hmtaxi-erp/uploads/{os.path.basename(file_path)}'
                 if success:
-                    uploader_name = current_user.name if current_user.name else current_user.username
-                    record = UploadRecord(filename=filename, uploader=uploader_name, github_url=github_url, upload_type='accident')
+                    record = UploadRecord(filename=filename, uploader=current_user.name, github_url=github_url, upload_type='accident')
                     db.session.add(record)
                     db.session.commit()
                 if not success:
@@ -1159,8 +1156,7 @@ def driver():
                 success, error = upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
                 github_url = f'https://github.com/ojy-hmtaxi-erp/uploads/{os.path.basename(file_path)}'
                 if success:
-                    uploader_name = current_user.name if current_user.name else current_user.username
-                    record = UploadRecord(filename=filename, uploader=uploader_name, github_url=github_url, upload_type='driver')
+                    record = UploadRecord(filename=filename, uploader=current_user.name, github_url=github_url, upload_type='driver')
                     db.session.add(record)
                     db.session.commit()
                 if not success:
