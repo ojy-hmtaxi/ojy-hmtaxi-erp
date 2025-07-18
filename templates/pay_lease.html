@@ -317,7 +317,15 @@
                     </div>
                     <button type="submit" id="uploadButton">급여 데이터 업데이트 (계산)</button>
                 </form>
-                <div id="uploadResult" class="upload-result">업로드된 파일이 이곳에 표시됩니다.</div>
+                <div id="uploadResult" class="upload-result">
+                    {% if latest_upload %}
+                        <span style="color:#007bff;font-weight:bold;">{{ latest_upload.filename }}</span> 파일이 성공적으로 업로드 되었습니다.
+                        (업로드 일시: {{ latest_upload.upload_time|datetimeformat }} | 업로더: {{ latest_upload.uploader }})
+                        <a href="https://raw.githubusercontent.com/ojy-hmtaxi/ojy-hmtaxi-erp/deploy/uploads/{{ latest_upload.filename|urlencode }}" target="_blank" style="color:#28a745;text-decoration:underline;">[다운로드]</a>
+                    {% else %}
+                        업로드된 파일이 이곳에 표시됩니다.
+                    {% endif %}
+                </div>
             </div>
             
             {% if salary_data %}
@@ -448,8 +456,6 @@
 
             document.getElementById(sheetName).classList.remove('hide');
             evt.currentTarget.classList.add("active");
-
-            localStorage.setItem('lastSelectedSheet', sheetName);
         }
 
         document.addEventListener('DOMContentLoaded', function() {
@@ -722,61 +728,32 @@
 
         document.getElementById('uploadForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            
-            // 버튼 텍스트를 "업로드 중..."으로 변경하고 비활성화
             const uploadButton = document.getElementById('uploadButton');
             const originalText = uploadButton.textContent;
             uploadButton.textContent = '업로드 중...';
             uploadButton.disabled = true;
-            
             const formData = new FormData(this);
             fetch('', {
                 method: 'POST',
                 body: formData
             }).then(response => {
                 if (response.ok) {
-                    const file = document.getElementById('excel_file').files[0];
-                    const now = new Date();
-                    const dateStr = now.getFullYear() + '-' + 
-                                  String(now.getMonth() + 1).padStart(2, '0') + '-' + 
-                                  String(now.getDate()).padStart(2, '0');
-                    const timeStr = String(now.getHours()).padStart(2, '0') + ':' + 
-                                  String(now.getMinutes()).padStart(2, '0');
-                    
-                    const githubRawUrl = `https://raw.githubusercontent.com/ojy-hmtaxi/ojy-hmtaxi-erp/deploy/uploads/${encodeURIComponent(file.name)}`;
-                    const uploadMessage = `<span style=\"color:#007bff;font-weight:bold;\">${file.name}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${dateStr} | ${timeStr} | 업로더: {{ current_user.name }})&nbsp;<a href=\"${githubRawUrl}\" target=\"_blank\" style=\"color:#28a745;text-decoration:underline;\">[다운로드]</a>`;
-                    const resultDiv = document.getElementById('uploadResult');
-                    resultDiv.innerHTML = uploadMessage;
-                    resultDiv.classList.add('show');
-                    
-                    // 메시지를 localStorage에 저장
-                    localStorage.setItem('uploadMessage', uploadMessage);
+                    response.text().then(html => {
+                        // 새로고침 없이 uploadResult만 갱신
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(html, 'text/html');
+                        const newResult = doc.getElementById('uploadResult');
+                        if (newResult) {
+                            document.getElementById('uploadResult').innerHTML = newResult.innerHTML;
+                        }
+                    });
                 }
             }).catch(error => {
                 console.error('Error:', error);
             }).finally(() => {
-                // 버튼 텍스트를 원래대로 복원하고 활성화
                 uploadButton.textContent = originalText;
                 uploadButton.disabled = false;
             });
-        });
-
-        // 페이지 로드 시 저장된 메시지 복원
-        document.addEventListener('DOMContentLoaded', function() {
-            const savedMessage = localStorage.getItem('uploadMessage');
-            if (savedMessage) {
-                const resultDiv = document.getElementById('uploadResult');
-                resultDiv.innerHTML = savedMessage;
-                resultDiv.classList.add('show');
-            }
-        });
-
-        // 새 파일이 선택되면 이전 메시지 삭제
-        document.getElementById('excel_file').addEventListener('change', function() {
-            localStorage.removeItem('uploadMessage');
-            const resultDiv = document.getElementById('uploadResult');
-            resultDiv.innerHTML = '';
-            resultDiv.classList.remove('show');
         });
 
         function sortTable(tableId, columnIndex, direction) {
