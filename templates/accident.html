@@ -635,8 +635,7 @@
                 rows[i].style.display = (keyword === '' || show) ? '' : 'none';
             }
         }
-        document.getElementById('atFaultUnifiedFilter').addEventListener('input', filterAtFaultTableUnified);
-
+        
         // 사고 테이블 통합 필터링 함수 (피해사고)
         function filterNotAtFaultTableUnified() {
             var keyword = document.getElementById('notAtFaultUnifiedFilter').value.trim().toLowerCase();
@@ -651,7 +650,20 @@
                 rows[i].style.display = (keyword === '' || show) ? '' : 'none';
             }
         }
-        document.getElementById('notAtFaultUnifiedFilter').addEventListener('input', filterNotAtFaultTableUnified);
+        
+        // 요소 존재 여부 확인 후 이벤트 리스너 추가
+        document.addEventListener('DOMContentLoaded', function() {
+            const atFaultFilter = document.getElementById('atFaultUnifiedFilter');
+            const notAtFaultFilter = document.getElementById('notAtFaultUnifiedFilter');
+            
+            if (atFaultFilter) {
+                atFaultFilter.addEventListener('input', filterAtFaultTableUnified);
+            }
+            
+            if (notAtFaultFilter) {
+                notAtFaultFilter.addEventListener('input', filterNotAtFaultTableUnified);
+            }
+        });
 
         function openAccidentPrintWindow(type, accidentNo) {
             let url = `/accident/print/${type}/${accidentNo}`;
