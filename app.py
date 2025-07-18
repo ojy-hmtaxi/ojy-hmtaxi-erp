@@ -13,8 +13,11 @@ import calendar
 from github import Github
 from dotenv import load_dotenv
 
-# .env 파일 로드
-load_dotenv()
+# .env 파일 로드 (배포 환경에서는 환경변수 직접 사용)
+try:
+    load_dotenv()
+except:
+    pass  # .env 파일이 없어도 계속 진행
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -711,7 +714,7 @@ def upload_file_to_github(local_path, github_path, commit_message):
     print(f"커밋 메시지: {commit_message}")
     
     github_token = os.environ.get('GITHUB_TOKEN')
-    if not github_token:
+    if not github_token or github_token == 'your_github_token_here':
         print(f"GitHub 업로드 실패: GITHUB_TOKEN 환경변수가 설정되어 있지 않습니다.")
         return False, 'GITHUB_TOKEN 환경변수가 설정되어 있지 않습니다.'
     
