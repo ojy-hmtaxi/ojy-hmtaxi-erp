@@ -732,7 +732,7 @@ def upload_file_to_github(local_path, github_path, commit_message):
             repo.update_file(
                 path=contents.path,
                 message=commit_message,
-                data=content,
+                content=content,
                 sha=contents.sha,
                 branch="deploy"
             )
@@ -1355,6 +1355,15 @@ def uploaded_file(filename):
 
 if __name__ == '__main__':
     print("=== Flask 앱 시작 ===")
+    
+    # 환경변수 확인
+    github_token = os.environ.get('GITHUB_TOKEN')
+    print(f"=== 환경변수 확인 ===")
+    print(f"GITHUB_TOKEN 설정 여부: {'설정됨' if github_token else '설정되지 않음'}")
+    if github_token:
+        print(f"GITHUB_TOKEN 길이: {len(github_token)}")
+        print(f"GITHUB_TOKEN 시작: {github_token[:10]}...")
+    
     create_database()  # 데이터베이스 생성
     print("=== 데이터베이스 생성 완료 ===")
     print("=== Flask 앱 실행 중... ===")
