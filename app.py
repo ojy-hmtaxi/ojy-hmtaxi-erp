@@ -448,13 +448,18 @@ def calculate_salary():
 @app.route('/schedule', methods=['GET', 'POST'])
 @login_required
 def schedule():
+    print("=== /schedule 라우트 호출됨 ===")
     if request.method == 'POST':
+        print("POST 요청 받음")
         if 'excel_file' in request.files:
             file = request.files['excel_file']
+            print(f"파일명: {file.filename}")
             if file.filename != '':
                 filename = file.filename.replace('/', '').replace('\\', '')
                 filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                print(f"저장 경로: {filepath}")
                 file.save(filepath)
+                print(f"파일 저장 완료: {filepath}")
                 
                 try:
                     # 시트별 데이터 처리
@@ -486,7 +491,9 @@ def schedule():
                                             error="엑셀 파일에서 읽을 수 있는 시트가 없습니다.")
                     
                     # 파일로 저장
+                    print("=== save_dispatch_data 함수 호출 ===")
                     save_dispatch_data(dispatch_data)
+                    print("=== save_dispatch_data 함수 완료 ===")
                     print(f"=== 배차 데이터 엑셀 파일 GitHub 업로드 시도 ===")
                     success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
                     if not success:
@@ -747,11 +754,20 @@ def upload_file_to_github(local_path, github_path, commit_message):
         return False, str(e)
 
 def save_dispatch_data(data):
+    print("=== save_dispatch_data 함수 시작 ===")
     filepath = os.path.join(app.config['DATA_FOLDER'], 'dispatch_data.json')
+    print(f"JSON 저장 경로: {filepath}")
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    print("JSON 파일 저장 완료")
     # GitHub 업로드
-    upload_file_to_github(filepath, 'data/dispatch_data.json', 'update dispatch_data.json')
+    print("=== JSON 파일 GitHub 업로드 시도 ===")
+    success, error = upload_file_to_github(filepath, 'data/dispatch_data.json', 'update dispatch_data.json')
+    if not success:
+        print(f"JSON 파일 GitHub 업로드 실패: {error}")
+    else:
+        print("JSON 파일 GitHub 업로드 성공!")
+    print("=== save_dispatch_data 함수 완료 ===")
 
 def load_dispatch_data():
     """저장된 배차 데이터를 불러옴"""
