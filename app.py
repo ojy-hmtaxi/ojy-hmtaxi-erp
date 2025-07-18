@@ -778,8 +778,20 @@ def load_dispatch_data():
     """저장된 배차 데이터를 불러옴"""
     filepath = os.path.join(app.config['DATA_FOLDER'], 'dispatch_data.json')
     if os.path.exists(filepath):
-        with open(filepath, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if content:  # 파일이 비어있지 않은 경우에만 파싱
+                    return json.loads(content)
+                else:
+                    print(f"dispatch_data.json 파일이 비어있습니다.")
+                    return None
+        except json.JSONDecodeError as e:
+            print(f"dispatch_data.json JSON 파싱 오류: {e}")
+            return None
+        except Exception as e:
+            print(f"dispatch_data.json 읽기 오류: {e}")
+            return None
     return None
 
 def save_lease_data(data):
@@ -793,8 +805,20 @@ def load_lease_data():
     """저장된 리스 급여 데이터를 불러옴"""
     filepath = os.path.join(app.config['DATA_FOLDER'], 'lease_data.json')
     if os.path.exists(filepath):
-        with open(filepath, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if content:  # 파일이 비어있지 않은 경우에만 파싱
+                    return json.loads(content)
+                else:
+                    print(f"lease_data.json 파일이 비어있습니다.")
+                    return None
+        except json.JSONDecodeError as e:
+            print(f"lease_data.json JSON 파싱 오류: {e}")
+            return None
+        except Exception as e:
+            print(f"lease_data.json 읽기 오류: {e}")
+            return None
     return None
 
 def save_accident_data(data):
@@ -808,8 +832,20 @@ def load_accident_data():
     """저장된 사고 데이터를 불러옴"""
     filepath = os.path.join(app.config['DATA_FOLDER'], 'accident_data.json')
     if os.path.exists(filepath):
-        with open(filepath, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if content:  # 파일이 비어있지 않은 경우에만 파싱
+                    data = json.loads(content)
+                else:
+                    print(f"accident_data.json 파일이 비어있습니다.")
+                    return None
+        except json.JSONDecodeError as e:
+            print(f"accident_data.json JSON 파싱 오류: {e}")
+            return None
+        except Exception as e:
+            print(f"accident_data.json 읽기 오류: {e}")
+            return None
             
             # 요약 데이터 생성
             if data and ('at_fault' in data or 'not_at_fault' in data):
@@ -944,8 +980,20 @@ def save_driver_data(data):
 def load_driver_data():
     filepath = os.path.join(app.config['DATA_FOLDER'], 'driver_data.json')
     if os.path.exists(filepath):
-        with open(filepath, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if content:  # 파일이 비어있지 않은 경우에만 파싱
+                    return json.loads(content)
+                else:
+                    print(f"driver_data.json 파일이 비어있습니다.")
+                    return None
+        except json.JSONDecodeError as e:
+            print(f"driver_data.json JSON 파싱 오류: {e}")
+            return None
+        except Exception as e:
+            print(f"driver_data.json 읽기 오류: {e}")
+            return None
     return None
 
 @app.route('/driver', methods=['GET', 'POST'])
