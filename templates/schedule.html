@@ -422,9 +422,9 @@
                         <label for="excel_file">엑셀 파일 선택:</label>
                         <input type="file" id="excel_file" name="excel_file" accept=".xlsx,.xls" required>
                     </div>
-                    <button type="submit">배차 데이터 불러오기</button>
+                    <button type="submit" id="uploadButton">배차 데이터 업데이트</button>
                 </form>
-                <div id="uploadResult" class="upload-result"></div>
+                <div id="uploadResult" class="upload-result">업로드된 파일이 이곳에 표시됩니다.</div>
             </div>
 
             {% if error %}
@@ -682,6 +682,12 @@
         document.getElementById('uploadForm').addEventListener('submit', function(e) {
             e.preventDefault();
             
+            // 버튼 텍스트를 "업로드 중..."으로 변경하고 비활성화
+            const uploadButton = document.getElementById('uploadButton');
+            const originalText = uploadButton.textContent;
+            uploadButton.textContent = '업로드 중...';
+            uploadButton.disabled = true;
+            
             const formData = new FormData(this);
             fetch('', {
                 method: 'POST',
@@ -707,6 +713,10 @@
                 }
             }).catch(error => {
                 console.error('Error:', error);
+            }).finally(() => {
+                // 버튼 텍스트를 원래대로 복원하고 활성화
+                uploadButton.textContent = originalText;
+                uploadButton.disabled = false;
             });
         });
 
