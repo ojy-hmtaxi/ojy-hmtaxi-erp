@@ -449,6 +449,8 @@ def calculate_salary():
 @login_required
 def schedule():
     print("=== /schedule 라우트 호출됨 ===")
+    print(f"요청 메서드: {request.method}")
+    print(f"현재 사용자: {current_user.username if current_user else 'None'}")
     if request.method == 'POST':
         print("POST 요청 받음")
         if 'excel_file' in request.files:
@@ -1352,5 +1354,8 @@ def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
 if __name__ == '__main__':
+    print("=== Flask 앱 시작 ===")
     create_database()  # 데이터베이스 생성
+    print("=== 데이터베이스 생성 완료 ===")
+    print("=== Flask 앱 실행 중... ===")
     app.run(host='127.0.0.1', port=5000, debug=True)
