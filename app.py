@@ -1351,7 +1351,7 @@ def save_map_image():
                 repo.update_file(
                     path=contents.path,
                     message=f"update map image {version}",
-                    data=img_bytes,
+                    content=img_bytes,
                     sha=contents.sha,
                     branch="deploy"
                 )
