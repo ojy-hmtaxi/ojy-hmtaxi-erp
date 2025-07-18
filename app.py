@@ -2,11 +2,11 @@ from flask import Flask, render_template, request, session, redirect, url_for, f
 import pandas as pd
 import os
 import json
-from datetime import timedelta, datetime
+from datetime import timedelta
 from collections import OrderedDict
 from werkzeug.utils import secure_filename
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from models import db, User, Message
+from models import db, User, Message, UploadRecord
 from sqlalchemy.orm import joinedload
 import base64
 import calendar
@@ -501,6 +501,11 @@ def schedule():
                     print("=== save_dispatch_data 함수 완료 ===")
                     print(f"=== 배차 데이터 엑셀 파일 GitHub 업로드 시도 ===")
                     success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
+                    github_url = f'https://github.com/ojy-hmtaxi-erp/uploads/{os.path.basename(filepath)}'
+                    if success:
+                        record = UploadRecord(filename=filename, uploader=current_user.name, github_url=github_url, upload_type='schedule')
+                        db.session.add(record)
+                        db.session.commit()
                     if not success:
                         print(f"엑셀 파일 GitHub 업로드 실패: {error}")
                     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
@@ -514,45 +519,6 @@ def schedule():
     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
     return render_template('schedule.html', dispatch_data=dispatch_data, messages=messages, current_user=current_user)
 
-# 업로드 로그 파일 경로
-UPLOAD_LOG_PATH = os.path.join(app.config['DATA_FOLDER'], 'lease_upload_log.json')
-
-def save_lease_upload_log(filename, uploader):
-    log_entry = {
-        'filename': filename,
-        'upload_time': datetime.now().timestamp(),
-        'uploader': uploader
-    }
-    logs = []
-    if os.path.exists(UPLOAD_LOG_PATH):
-        try:
-            with open(UPLOAD_LOG_PATH, 'r', encoding='utf-8') as f:
-                logs = json.load(f)
-        except Exception:
-            logs = []
-    logs.append(log_entry)
-    with open(UPLOAD_LOG_PATH, 'w', encoding='utf-8') as f:
-        json.dump(logs, f, ensure_ascii=False, indent=2)
-
-def get_latest_lease_upload_log():
-    if os.path.exists(UPLOAD_LOG_PATH):
-        try:
-            with open(UPLOAD_LOG_PATH, 'r', encoding='utf-8') as f:
-                logs = json.load(f)
-                if logs:
-                    return logs[-1]
-        except Exception:
-            return None
-    return None
-
-# Jinja2 datetimeformat 필터 등록
-def datetimeformat(value, format='%Y-%m-%d %H:%M:%S'):
-    try:
-        return datetime.fromtimestamp(float(value)).strftime(format)
-    except Exception:
-        return value
-app.jinja_env.filters['datetimeformat'] = datetimeformat
-
 @app.route('/pay_lease', methods=['GET', 'POST'])
 @login_required
 def pay_lease():
@@ -563,22 +529,30 @@ def pay_lease():
                 filename = file.filename.replace('/', '').replace('\\', '')
                 filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                 file.save(filepath)
+                
                 try:
                     sheet_names = ['01월', '02월', '03월', '04월', '05월', '06월', '07월', '08월', '09월', '10월', '11월', '12월']
                     salary_data = OrderedDict()
+                    
                     for sheet in sheet_names:
                         try:
                             df = pd.read_excel(filepath, sheet_name=sheet)
                             required_columns = ['실입금', '리스료', '연료비']
                             if not all(col in df.columns for col in required_columns):
                                 continue
+                            
                             df['급여'] = (df['실입금'] - df['리스료'] - df['연료비']) * 0.8
+                            
+                            # 사번, 이름, 차종 컬럼이 있는 경우 포함, 없는 경우 빈 문자열로 처리
                             additional_columns = ['사번', '이름', '차종']
                             for col in additional_columns:
                                 if col not in df.columns:
                                     df[col] = ''
+                            
+                            # 데이터 저장 시 추가 컬럼 포함
                             columns_to_save = ['사번', '이름', '차종', '실입금', '리스료', '연료비', '급여']
                             numeric_data = df[columns_to_save].fillna('').astype(str).to_dict('records')
+                            
                             salary_data[sheet] = {
                                 'data': numeric_data,
                                 'summary': {
@@ -590,24 +564,31 @@ def pay_lease():
                             }
                         except:
                             continue
+                    
                     if not salary_data:
-                        return render_template('pay_lease.html', error="엑셀 파일에 '실입금', '리스료', '연료비' 컬럼이 있는 시트가 없습니다.")
+                        return render_template('pay_lease.html', 
+                                            error="엑셀 파일에 '실입금', '리스료', '연료비' 컬럼이 있는 시트가 없습니다.")
+                    
+                    # 파일로 저장
                     save_lease_data(salary_data)
                     success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
+                    github_url = f'https://github.com/ojy-hmtaxi-erp/uploads/{os.path.basename(filepath)}'
+                    if success:
+                        record = UploadRecord(filename=filename, uploader=current_user.name, github_url=github_url, upload_type='pay_lease')
+                        db.session.add(record)
+                        db.session.commit()
                     if not success:
                         print(f"엑셀 파일 GitHub 업로드 실패: {error}")
-                    # 업로드 로그 기록
-                    save_lease_upload_log(filename, getattr(current_user, 'name', getattr(current_user, 'username', ''))) 
                     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
-                    # 업로드 후 최신 로그 전달
-                    latest_upload = get_latest_lease_upload_log()
-                    return render_template('pay_lease.html', salary_data=salary_data, messages=messages, current_user=current_user, latest_upload=latest_upload)
+                    return render_template('pay_lease.html', salary_data=salary_data, messages=messages, current_user=current_user)
                 except Exception as e:
-                    return render_template('pay_lease.html', error=f"엑셀 파일 처리 중 오류가 발생했습니다: {str(e)}")
+                    return render_template('pay_lease.html', 
+                                        error=f"엑셀 파일 처리 중 오류가 발생했습니다: {str(e)}")
+    
+    # GET 요청이거나 저장된 데이터가 있는 경우
     salary_data = load_lease_data()
     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
-    latest_upload = get_latest_lease_upload_log()
-    return render_template('pay_lease.html', salary_data=salary_data, messages=messages, current_user=current_user, latest_upload=latest_upload)
+    return render_template('pay_lease.html', salary_data=salary_data, messages=messages, current_user=current_user)
 
 @app.route('/accident', methods=['GET', 'POST'])
 @login_required
@@ -673,6 +654,11 @@ def accident():
                 
                 flash(f'<{filename}> 파일이 성공적으로 업로드되었습니다. (업로드 일시: {session.get("upload_time")})', 'success')
                 success, error = upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
+                github_url = f'https://github.com/ojy-hmtaxi-erp/uploads/{os.path.basename(file_path)}'
+                if success:
+                    record = UploadRecord(filename=filename, uploader=current_user.name, github_url=github_url, upload_type='accident')
+                    db.session.add(record)
+                    db.session.commit()
                 if not success:
                     print(f"엑셀 파일 GitHub 업로드 실패: {error}")
 
@@ -1168,6 +1154,11 @@ def driver():
                 }
                 save_driver_data(driver_data)
                 success, error = upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
+                github_url = f'https://github.com/ojy-hmtaxi-erp/uploads/{os.path.basename(file_path)}'
+                if success:
+                    record = UploadRecord(filename=filename, uploader=current_user.name, github_url=github_url, upload_type='driver')
+                    db.session.add(record)
+                    db.session.commit()
                 if not success:
                     print(f"엑셀 파일 GitHub 업로드 실패: {error}")
                 return render_template('driver.html', driver_data=driver_data, messages=messages, current_user=current_user)
@@ -1543,6 +1534,24 @@ def admin_delete_user(user_id):
 @login_required
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+
+@app.route('/api/latest-upload')
+def latest_upload():
+    upload_type = request.args.get('type')
+    q = UploadRecord.query
+    if upload_type:
+        q = q.filter_by(upload_type=upload_type)
+    record = q.order_by(UploadRecord.upload_time.desc()).first()
+    if record:
+        return {
+            "filename": record.filename,
+            "uploader": record.uploader,
+            "upload_time": record.upload_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "github_url": record.github_url,
+            "upload_type": record.upload_type
+        }
+    else:
+        return {}, 204
 
 if __name__ == '__main__':
     print("=== Flask 앱 시작 ===")
