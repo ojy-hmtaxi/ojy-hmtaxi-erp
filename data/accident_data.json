@@ -3695,5 +3695,778 @@
     "처리여부",
     "비고",
     "사고경위"
-  ]
+  ],
+  "summary": {
+    "total_count": 105,
+    "at_fault_count": 58,
+    "not_at_fault_count": 47,
+    "at_fault_pending_count": 23,
+    "not_at_fault_pending_count": 22,
+    "at_fault_total_repair": "23,515,430",
+    "at_fault_total_treatment": "24,106,580",
+    "not_at_fault_total_damage": "44,750,000",
+    "not_at_fault_total_payment": "22,619,340",
+    "driver_stats": [
+      {
+        "name": "박준환",
+        "at_fault_count": 2,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "김상민",
+        "at_fault_count": 1,
+        "repair_payment": "620,000",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "조희문",
+        "at_fault_count": 3,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 1,
+        "damage_estimate": "1,000,000"
+      },
+      {
+        "name": "최호섭",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 2,
+        "damage_estimate": "350,000"
+      },
+      {
+        "name": "이순종",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "3,066,000",
+        "not_at_fault_count": 1,
+        "damage_estimate": "500,000"
+      },
+      {
+        "name": "이신영",
+        "at_fault_count": 3,
+        "repair_payment": "750,000",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "서명오",
+        "at_fault_count": 1,
+        "repair_payment": "1,178,400",
+        "treatment_payment": "0",
+        "not_at_fault_count": 2,
+        "damage_estimate": "1,300,000"
+      },
+      {
+        "name": "김은상",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "1,200,000",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "정유래",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 2,
+        "damage_estimate": "2,000,000"
+      },
+      {
+        "name": "문동호",
+        "at_fault_count": 1,
+        "repair_payment": "500,000",
+        "treatment_payment": "0",
+        "not_at_fault_count": 4,
+        "damage_estimate": "2,800,000"
+      },
+      {
+        "name": "한민철",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 1,
+        "damage_estimate": "800,000"
+      },
+      {
+        "name": "김순명",
+        "at_fault_count": 1,
+        "repair_payment": "400,000",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "장세진",
+        "at_fault_count": 1,
+        "repair_payment": "1,522,500",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "이관노",
+        "at_fault_count": 2,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "이치삼",
+        "at_fault_count": 1,
+        "repair_payment": "600,000",
+        "treatment_payment": "3,356,000",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "김영기",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 1,
+        "damage_estimate": "3,500,000"
+      },
+      {
+        "name": "이은선",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "윤종은",
+        "at_fault_count": 3,
+        "repair_payment": "13,983,000",
+        "treatment_payment": "0",
+        "not_at_fault_count": 1,
+        "damage_estimate": "6,500,000"
+      },
+      {
+        "name": "강계령",
+        "at_fault_count": 2,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "채기종",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "이규광",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "김영목",
+        "at_fault_count": 1,
+        "repair_payment": "1,091,700",
+        "treatment_payment": "1,538,000",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "정민영",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "김대환",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "500,000",
+        "not_at_fault_count": 1,
+        "damage_estimate": "1,200,000"
+      },
+      {
+        "name": "송대용",
+        "at_fault_count": 2,
+        "repair_payment": "1,100,000",
+        "treatment_payment": "0",
+        "not_at_fault_count": 1,
+        "damage_estimate": "600,000"
+      },
+      {
+        "name": "구병태",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "서상덕",
+        "at_fault_count": 2,
+        "repair_payment": "500,000",
+        "treatment_payment": "0",
+        "not_at_fault_count": 1,
+        "damage_estimate": "2,500,000"
+      },
+      {
+        "name": "김종석",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "정수찬",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 2,
+        "damage_estimate": "1,000,000"
+      },
+      {
+        "name": "김형연",
+        "at_fault_count": 2,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 1,
+        "damage_estimate": "900,000"
+      },
+      {
+        "name": "강호원",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 1,
+        "damage_estimate": "2,000,000"
+      },
+      {
+        "name": "강도영",
+        "at_fault_count": 2,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "김미숙",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "최종우",
+        "at_fault_count": 2,
+        "repair_payment": "1,269,830",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "서명석",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "14,146,580",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "김동석",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "조흥진",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "한종",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 1,
+        "damage_estimate": "600,000"
+      },
+      {
+        "name": "김인섭",
+        "at_fault_count": 2,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 1,
+        "damage_estimate": "400,000"
+      },
+      {
+        "name": "윤득중",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "김진수",
+        "at_fault_count": 2,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "김종호",
+        "at_fault_count": 1,
+        "repair_payment": "0",
+        "treatment_payment": "300,000",
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "name": "금일섭",
+        "at_fault_count": 0,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 1,
+        "damage_estimate": "700,000"
+      },
+      {
+        "name": "박종일",
+        "at_fault_count": 0,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 2,
+        "damage_estimate": "1,600,000"
+      },
+      {
+        "name": "황인옥",
+        "at_fault_count": 0,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 2,
+        "damage_estimate": "2,300,000"
+      },
+      {
+        "name": "선민호",
+        "at_fault_count": 0,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 2,
+        "damage_estimate": "1,700,000"
+      },
+      {
+        "name": "김성삼",
+        "at_fault_count": 0,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 1,
+        "damage_estimate": "500,000"
+      },
+      {
+        "name": "오용수",
+        "at_fault_count": 0,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 1,
+        "damage_estimate": "700,000"
+      },
+      {
+        "name": "김현영",
+        "at_fault_count": 0,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 1,
+        "damage_estimate": "500,000"
+      },
+      {
+        "name": "이상영",
+        "at_fault_count": 0,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 1,
+        "damage_estimate": "700,000"
+      },
+      {
+        "name": "김창재",
+        "at_fault_count": 0,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 4,
+        "damage_estimate": "2,500,000"
+      },
+      {
+        "name": "박성한",
+        "at_fault_count": 0,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 1,
+        "damage_estimate": "300,000"
+      },
+      {
+        "name": "백경현",
+        "at_fault_count": 0,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 4,
+        "damage_estimate": "1,700,000"
+      },
+      {
+        "name": "민세건",
+        "at_fault_count": 0,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 1,
+        "damage_estimate": "600,000"
+      },
+      {
+        "name": "김도경선",
+        "at_fault_count": 0,
+        "repair_payment": "0",
+        "treatment_payment": "0",
+        "not_at_fault_count": 1,
+        "damage_estimate": "2,500,000"
+      }
+    ],
+    "vehicle_stats": [
+      {
+        "number": "1900",
+        "at_fault_count": 1,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1868",
+        "at_fault_count": 1,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1808",
+        "at_fault_count": 2,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1893",
+        "at_fault_count": 1,
+        "not_at_fault_count": 2,
+        "damage_estimate": "350,000"
+      },
+      {
+        "number": "1859",
+        "at_fault_count": 2,
+        "not_at_fault_count": 4,
+        "damage_estimate": "2,700,000"
+      },
+      {
+        "number": "1828",
+        "at_fault_count": 4,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1853",
+        "at_fault_count": 2,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1845",
+        "at_fault_count": 1,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1829",
+        "at_fault_count": 1,
+        "not_at_fault_count": 2,
+        "damage_estimate": "2,000,000"
+      },
+      {
+        "number": "1807",
+        "at_fault_count": 1,
+        "not_at_fault_count": 1,
+        "damage_estimate": "800,000"
+      },
+      {
+        "number": "1907",
+        "at_fault_count": 1,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1803",
+        "at_fault_count": 2,
+        "not_at_fault_count": 1,
+        "damage_estimate": "900,000"
+      },
+      {
+        "number": "1802",
+        "at_fault_count": 1,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1821",
+        "at_fault_count": 1,
+        "not_at_fault_count": 1,
+        "damage_estimate": "700,000"
+      },
+      {
+        "number": "1886",
+        "at_fault_count": 1,
+        "not_at_fault_count": 2,
+        "damage_estimate": "1,600,000"
+      },
+      {
+        "number": "1852",
+        "at_fault_count": 2,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1903",
+        "at_fault_count": 2,
+        "not_at_fault_count": 1,
+        "damage_estimate": "6,500,000"
+      },
+      {
+        "number": "1879",
+        "at_fault_count": 2,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1832",
+        "at_fault_count": 1,
+        "not_at_fault_count": 1,
+        "damage_estimate": "600,000"
+      },
+      {
+        "number": "1817",
+        "at_fault_count": 4,
+        "not_at_fault_count": 1,
+        "damage_estimate": "2,500,000"
+      },
+      {
+        "number": "1902",
+        "at_fault_count": 1,
+        "not_at_fault_count": 1,
+        "damage_estimate": "1,200,000"
+      },
+      {
+        "number": "1865",
+        "at_fault_count": 3,
+        "not_at_fault_count": 1,
+        "damage_estimate": "600,000"
+      },
+      {
+        "number": "1881",
+        "at_fault_count": 1,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1895",
+        "at_fault_count": 1,
+        "not_at_fault_count": 2,
+        "damage_estimate": "1,300,000"
+      },
+      {
+        "number": "1839",
+        "at_fault_count": 1,
+        "not_at_fault_count": 1,
+        "damage_estimate": "500,000"
+      },
+      {
+        "number": "1876",
+        "at_fault_count": 1,
+        "not_at_fault_count": 1,
+        "damage_estimate": "300,000"
+      },
+      {
+        "number": "1890",
+        "at_fault_count": 1,
+        "not_at_fault_count": 1,
+        "damage_estimate": "2,000,000"
+      },
+      {
+        "number": "1823",
+        "at_fault_count": 3,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1838",
+        "at_fault_count": 1,
+        "not_at_fault_count": 1,
+        "damage_estimate": "700,000"
+      },
+      {
+        "number": "1889",
+        "at_fault_count": 2,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1869",
+        "at_fault_count": 1,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1849",
+        "at_fault_count": 1,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1840",
+        "at_fault_count": 2,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1871",
+        "at_fault_count": 1,
+        "not_at_fault_count": 1,
+        "damage_estimate": "400,000"
+      },
+      {
+        "number": "1835",
+        "at_fault_count": 1,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1904",
+        "at_fault_count": 2,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1812",
+        "at_fault_count": 1,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1814",
+        "at_fault_count": 1,
+        "not_at_fault_count": 0,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1861",
+        "at_fault_count": 0,
+        "not_at_fault_count": 2,
+        "damage_estimate": "1,300,000"
+      },
+      {
+        "number": "1915",
+        "at_fault_count": 0,
+        "not_at_fault_count": 1,
+        "damage_estimate": "500,000"
+      },
+      {
+        "number": "6026",
+        "at_fault_count": 0,
+        "not_at_fault_count": 1,
+        "damage_estimate": "600,000"
+      },
+      {
+        "number": "1820",
+        "at_fault_count": 0,
+        "not_at_fault_count": 1,
+        "damage_estimate": "1,800,000"
+      },
+      {
+        "number": "1813",
+        "at_fault_count": 0,
+        "not_at_fault_count": 1,
+        "damage_estimate": "500,000"
+      },
+      {
+        "number": "1805",
+        "at_fault_count": 0,
+        "not_at_fault_count": 1,
+        "damage_estimate": "700,000"
+      },
+      {
+        "number": "1894",
+        "at_fault_count": 0,
+        "not_at_fault_count": 4,
+        "damage_estimate": "2,500,000"
+      },
+      {
+        "number": "1827",
+        "at_fault_count": 0,
+        "not_at_fault_count": 1,
+        "damage_estimate": "700,000"
+      },
+      {
+        "number": "1844",
+        "at_fault_count": 0,
+        "not_at_fault_count": 3,
+        "damage_estimate": "1,700,000"
+      },
+      {
+        "number": "1883",
+        "at_fault_count": 0,
+        "not_at_fault_count": 1,
+        "damage_estimate": "3,500,000"
+      },
+      {
+        "number": "1898",
+        "at_fault_count": 0,
+        "not_at_fault_count": 2,
+        "damage_estimate": "1,300,000"
+      },
+      {
+        "number": "1901",
+        "at_fault_count": 0,
+        "not_at_fault_count": 1,
+        "damage_estimate": "1,000,000"
+      },
+      {
+        "number": "1897",
+        "at_fault_count": 0,
+        "not_at_fault_count": 1,
+        "damage_estimate": "0"
+      },
+      {
+        "number": "1912",
+        "at_fault_count": 0,
+        "not_at_fault_count": 1,
+        "damage_estimate": "500,000"
+      },
+      {
+        "number": "1847",
+        "at_fault_count": 0,
+        "not_at_fault_count": 1,
+        "damage_estimate": "2,500,000"
+      }
+    ]
+  }
 }
