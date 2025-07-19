@@ -1543,15 +1543,15 @@ def latest_upload():
         q = q.filter_by(upload_type=upload_type)
     record = q.order_by(UploadRecord.upload_time.desc()).first()
     if record:
-        return {
+        return jsonify({
             "filename": record.filename,
             "uploader": record.uploader,
             "upload_time": record.upload_time.strftime("%Y-%m-%d %H:%M:%S"),
             "github_url": record.github_url,
             "upload_type": record.upload_type
-        }
+        })
     else:
-        return {}, 204
+        return jsonify({"message": "No upload record found"}), 404
 
 if __name__ == '__main__':
     print("=== Flask 앱 시작 ===")
