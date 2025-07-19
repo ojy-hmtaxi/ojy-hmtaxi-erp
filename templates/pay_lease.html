@@ -813,16 +813,20 @@
             });
         }
 
-        document.querySelector('#summaryTab').addEventListener('click', function() {
-            if (salaryChartInstance) {
-                salaryChartInstance.resize();
-                salaryChartInstance.update();
-            }
-            if (incomeChartInstance) {
-                incomeChartInstance.resize();
-                incomeChartInstance.update();
-            }
-        });
+        // summaryTab 요소가 존재할 때만 이벤트 리스너 추가
+        const summaryTab = document.querySelector('#summaryTab');
+        if (summaryTab) {
+            summaryTab.addEventListener('click', function() {
+                if (salaryChartInstance) {
+                    salaryChartInstance.resize();
+                    salaryChartInstance.update();
+                }
+                if (incomeChartInstance) {
+                    incomeChartInstance.resize();
+                    incomeChartInstance.update();
+                }
+            });
+        }
 
         // 업로드 기록 불러오기
         document.addEventListener('DOMContentLoaded', function() {
