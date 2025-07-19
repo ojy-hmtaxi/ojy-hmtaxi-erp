@@ -831,9 +831,14 @@
         // 업로드 기록 불러오기
         document.addEventListener('DOMContentLoaded', function() {
             fetch('/api/latest-upload?type=pay_lease')
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
-                    if (data.filename) {
+                    if (data && data.filename) {
                         const msg = `<span style="color:#007bff;font-weight:bold;">${data.filename}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${data.upload_time} | 업로더: ${data.uploader})&nbsp;<a href="${data.github_url}" target="_blank" style="color:#28a745;text-decoration:underline;">[다운로드]</a>`;
                         document.getElementById('uploadResult').innerHTML = msg;
                         document.getElementById('uploadResult').classList.add('show');
