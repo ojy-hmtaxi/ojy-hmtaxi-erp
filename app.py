@@ -14,7 +14,6 @@ from github import Github
 from dotenv import load_dotenv
 import pytz
 from pathlib import Path
-from . import upload_file_to_github
 
 # .env 파일 로드 (배포 환경에서는 환경변수 직접 사용)
 try:
