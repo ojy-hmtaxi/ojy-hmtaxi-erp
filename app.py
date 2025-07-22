@@ -501,9 +501,9 @@ def schedule():
                     print("=== save_dispatch_data 함수 완료 ===")
                     print(f"=== 배차 데이터 엑셀 파일 GitHub 업로드 시도 ===")
                     success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
-                    github_url = f'https://github.com/ojy-hmtaxi-erp/uploads/{os.path.basename(filepath)}'
+                    flask_url = url_for('uploaded_file', filename=os.path.basename(filepath), _external=True)
                     if success:
-                        record = UploadRecord(filename=filename, uploader=current_user.name, github_url=github_url, upload_type='schedule')
+                        record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='schedule')
                         db.session.add(record)
                         db.session.commit()
                     if not success:
@@ -572,9 +572,9 @@ def pay_lease():
                     # 파일로 저장
                     save_lease_data(salary_data)
                     success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
-                    github_url = f'https://github.com/ojy-hmtaxi-erp/uploads/{os.path.basename(filepath)}'
+                    flask_url = url_for('uploaded_file', filename=os.path.basename(filepath), _external=True)
                     if success:
-                        record = UploadRecord(filename=filename, uploader=current_user.name, github_url=github_url, upload_type='pay_lease')
+                        record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='pay_lease')
                         db.session.add(record)
                         db.session.commit()
                     if not success:
@@ -623,8 +623,19 @@ def accident():
                     df = df.fillna('')
                     
                     for col in df.columns:
-                        # 날짜/시간 컬럼 변환
-                        if '일시' in col or '일' in col:
+                        # 사고관리 날짜/시간 컬럼별 포맷 지정
+                        if col == '사고일시':
+                            try:
+                                df[col] = pd.to_datetime(df[col], format='%m/%d %H:%M', errors='coerce').dt.strftime('%m/%d %H:%M').fillna('')
+                            except:
+                                df[col] = df[col].astype(str).str.strip()
+                        elif col == '입금일':
+                            try:
+                                df[col] = pd.to_datetime(df[col], format='%m/%d', errors='coerce').dt.strftime('%m/%d').fillna('')
+                            except:
+                                df[col] = df[col].astype(str).str.strip()
+                        # 기타 날짜/시간 컬럼(기존 방식 유지)
+                        elif '일시' in col or '일' in col:
                             try:
                                 df[col] = pd.to_datetime(df[col], errors='coerce').dt.strftime('%Y-%m-%d %H:%M:%S').fillna('')
                             except:
@@ -654,9 +665,9 @@ def accident():
                 
                 flash(f'<{filename}> 파일이 성공적으로 업로드되었습니다. (업로드 일시: {session.get("upload_time")})', 'success')
                 success, error = upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
-                github_url = f'https://github.com/ojy-hmtaxi-erp/uploads/{os.path.basename(file_path)}'
+                flask_url = url_for('uploaded_file', filename=os.path.basename(file_path), _external=True)
                 if success:
-                    record = UploadRecord(filename=filename, uploader=current_user.name, github_url=github_url, upload_type='accident')
+                    record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='accident')
                     db.session.add(record)
                     db.session.commit()
                 if not success:
@@ -1147,6 +1158,14 @@ def driver():
                 for col in required_columns:
                     if col not in df.columns:
                         df[col] = ''
+                # 기사관리 날짜 컬럼별 포맷 지정
+                date_cols = ['갱신시작', '갱신마감', '입사일자', '퇴사일자']
+                for col in date_cols:
+                    if col in df.columns:
+                        try:
+                            df[col] = pd.to_datetime(df[col], format='%Y-%m-%d', errors='coerce').dt.strftime('%Y-%m-%d').fillna('')
+                        except:
+                            df[col] = df[col].astype(str).str.strip()
                 driver_list = df[required_columns].fillna('').astype(str).to_dict('records')
                 driver_data = {
                     'list': driver_list,
@@ -1154,9 +1173,9 @@ def driver():
                 }
                 save_driver_data(driver_data)
                 success, error = upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
-                github_url = f'https://github.com/ojy-hmtaxi-erp/uploads/{os.path.basename(file_path)}'
+                flask_url = url_for('uploaded_file', filename=os.path.basename(file_path), _external=True)
                 if success:
-                    record = UploadRecord(filename=filename, uploader=current_user.name, github_url=github_url, upload_type='driver')
+                    record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='driver')
                     db.session.add(record)
                     db.session.commit()
                 if not success:

@@ -68,11 +68,6 @@
             </a>
         </li>
         <li class="nav-item">
-            <a class="nav-link {% if request.endpoint == 'pay_lease' %}active{% endif %}" href="/pay_lease">
-                급여 계산(리스)
-            </a>
-        </li>
-        <li class="nav-item">
             <a class="nav-link {% if request.endpoint == 'schedule' %}active{% endif %}" href="/schedule">
                 배차 관리
             </a>
@@ -85,6 +80,11 @@
         <li class="nav-item">
             <a class="nav-link {% if request.endpoint == 'accident' %}active{% endif %}" href="/accident">
                 사고 관리
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'pay_lease' %}active{% endif %}" href="/pay_lease">
+                급여 계산(리스)
             </a>
         </li>
         <li class="nav-item">
