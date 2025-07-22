@@ -1074,7 +1074,7 @@
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                alert('이미지 저장 성공! (/uploads/maps/' + version + '.png)');
+                alert('이미지 저장 성공!');
             } else {
                 alert('저장 실패: ' + data.error);
             }
@@ -1099,7 +1099,7 @@
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                alert('서버에 JSON 저장 성공! (/uploads/maps/' + version + '.json)');
+                alert('서버에 JSON 저장 성공!');
             } else {
                 alert('저장 실패: ' + data.error);
             }
@@ -1120,7 +1120,6 @@
                     canvas.renderAll();
                     setMode('select');
                 });
-                alert('서버에서 JSON 불러오기 성공! (/uploads/maps/' + version + '.json)');
             } else {
                 alert('불러오기 실패: ' + data.error);
             }
