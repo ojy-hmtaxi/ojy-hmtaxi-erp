@@ -12,6 +12,7 @@ import base64
 import calendar
 from github import Github
 from dotenv import load_dotenv
+import pytz
 
 # .env 파일 로드 (배포 환경에서는 환경변수 직접 사용)
 try:
@@ -659,8 +660,9 @@ def accident():
                 save_accident_data(accident_data)
                 
                 # 업로드 정보 저장
+                kst = pytz.timezone('Asia/Seoul')
                 session['last_accident_file'] = filename
-                session['upload_time'] = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
+                session['upload_time'] = pd.Timestamp.now(tz=kst).strftime('%Y-%m-%d %H:%M:%S')
                 session['uploader_name'] = current_user.name if hasattr(current_user, 'name') else current_user.username
                 
                 flash(f'<{filename}> 파일이 성공적으로 업로드되었습니다. (업로드 일시: {session.get("upload_time")})', 'success')
@@ -1166,6 +1168,8 @@ def driver():
                             df[col] = pd.to_datetime(df[col], format='%Y-%m-%d', errors='coerce').dt.strftime('%Y-%m-%d').fillna('')
                         except:
                             df[col] = df[col].astype(str).str.strip()
+                kst = pytz.timezone('Asia/Seoul')
+                upload_time = pd.Timestamp.now(tz=kst).strftime('%Y-%m-%d %H:%M:%S')
                 driver_list = df[required_columns].fillna('').astype(str).to_dict('records')
                 driver_data = {
                     'list': driver_list,
@@ -1414,8 +1418,9 @@ def save_map_image():
     return {'success': True}
 
 @app.route('/uploads/maps/<filename>')
-def uploaded_map(filename):
-    return send_from_directory(os.path.join('uploads', 'maps'), filename)
+@login_required
+def download_map_file(filename):
+    return send_from_directory('uploads/maps', filename)
 
 @app.route('/save_map_json', methods=['POST'])
 @login_required
@@ -1443,6 +1448,7 @@ def load_map_json():
         return jsonify({'success': False, 'error': '해당 버전의 지도 데이터가 없습니다.'}), 404
     with open(load_path, 'r', encoding='utf-8') as f:
         json_data = f.read()
+    # 클라이언트에서 /uploads/maps/<filename> 라우트(@login_required)로도 직접 접근 가능
     return jsonify({'success': True, 'json': json_data})
 
 @app.route('/profile', methods=['GET', 'POST'])
