@@ -309,6 +309,17 @@ def calculate_salary():
                             not_at_fault = accident_data.get('not_at_fault', [])
                             total_at_fault = len(at_fault)
                             total_not_at_fault = len(not_at_fault)
+                            # 가해보상금(수리): '수리지급'의 총합
+                            def parse_amount(amount_str):
+                                if not amount_str or amount_str == '' or amount_str == '-':
+                                    return 0
+                                try:
+                                    return int(str(amount_str).replace(',', ''))
+                                except:
+                                    return 0
+                            total_at_fault_repair = sum(parse_amount(a.get('수리지급', 0)) for a in at_fault)
+                            # 피해보상금: '금액'의 총합
+                            total_not_at_fault_payment = sum(parse_amount(a.get('금액', 0)) for a in not_at_fault)
                             for a in at_fault:
                                 # 미결 가해사고
                                 if a.get('처리여부', '').strip() == '미결':
@@ -399,6 +410,17 @@ def calculate_salary():
             not_at_fault = accident_data.get('not_at_fault', [])
             total_at_fault = len(at_fault)
             total_not_at_fault = len(not_at_fault)
+            # 가해보상금(수리): '수리지급'의 총합
+            def parse_amount(amount_str):
+                if not amount_str or amount_str == '' or amount_str == '-':
+                    return 0
+                try:
+                    return int(str(amount_str).replace(',', ''))
+                except:
+                    return 0
+            total_at_fault_repair = sum(parse_amount(a.get('수리지급', 0)) for a in at_fault)
+            # 피해보상금: '금액'의 총합
+            total_not_at_fault_payment = sum(parse_amount(a.get('금액', 0)) for a in not_at_fault)
             for a in at_fault:
                 # 미결 가해사고
                 if a.get('처리여부', '').strip() == '미결':
