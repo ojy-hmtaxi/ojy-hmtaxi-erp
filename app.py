@@ -1576,6 +1576,51 @@ def latest_upload():
     else:
         return jsonify({"message": "No upload record found"}), 404
 
+# 1. /uploads/maps/<filename> 라우트에서 모든 파일 제공
+@app.route('/uploads/maps/<filename>')
+def download_map_file(filename):
+    return send_from_directory('uploads/maps', filename)
+
+# 2. /save_map_json: uploads/maps/파일명.json 저장
+@app.route('/save_map_json', methods=['POST'])
+def save_map_json():
+    req = request.get_json()
+    version = req.get('version')
+    json_data = req.get('json')
+    if not version or not json_data:
+        return jsonify({'success': False, 'error': '버전명 또는 데이터 누락'})
+    file_path = os.path.join('uploads/maps', f'{version}.json')
+    with open(file_path, 'w', encoding='utf-8') as f:
+        f.write(json_data if isinstance(json_data, str) else json.dumps(json_data, ensure_ascii=False))
+    return jsonify({'success': True})
+
+# 3. /load_map_json: uploads/maps/파일명.json 불러오기
+@app.route('/load_map_json')
+def load_map_json():
+    version = request.args.get('version', 'intro')
+    file_path = os.path.join('uploads/maps', f'{version}.json')
+    if not os.path.exists(file_path):
+        return jsonify({'success': False, 'error': '파일이 존재하지 않습니다.'})
+    with open(file_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    return jsonify({'success': True, 'json': data})
+
+# 4. /save_map_image: uploads/maps/파일명.png 저장
+@app.route('/save_map_image', methods=['POST'])
+def save_map_image():
+    req = request.get_json()
+    version = req.get('version')
+    image_data = req.get('image')
+    if not version or not image_data:
+        return jsonify({'success': False, 'error': '버전명 또는 이미지 데이터 누락'})
+    file_path = os.path.join('uploads/maps', f'{version}.png')
+    # data:image/png;base64,... 형식에서 base64 부분만 추출
+    if image_data.startswith('data:image/png;base64,'):
+        image_data = image_data.split(',', 1)[1]
+    with open(file_path, 'wb') as f:
+        f.write(base64.b64decode(image_data))
+    return jsonify({'success': True})
+
 if __name__ == '__main__':
     print("=== Flask 앱 시작 ===")
     

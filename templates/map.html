@@ -342,8 +342,7 @@
                 fill: currentColor,
                 editable: true,
                 width: 100,
-                textAlign: 'center',
-                textBaseline: 'alphabetic'
+                textAlign: 'center'
             });
             canvas.add(textbox);
             canvas.setActiveObject(textbox);
@@ -574,10 +573,6 @@
             const clipboardData = localStorage.getItem('clipboard');
             if (clipboardData) {
                 const objData = JSON.parse(clipboardData);
-                // textBaseline 문제 해결을 위해 텍스트 객체 수정
-                if (objData.type === 'textbox' || objData.type === 'text') {
-                    objData.textBaseline = 'alphabetic';
-                }
                 fabric.util.enlivenObjects([objData], function(objects) {
                     objects.forEach(function(obj) {
                         // 원본 객체에서 약간 오프셋된 위치에 붙여넣기
@@ -607,10 +602,6 @@
                 // 객체 복제 및 좌표/기준점 보정
                 const objDataArray = activeObjs.map(obj => {
                     const objData = obj.toObject();
-                    // textBaseline 문제 해결을 위해 텍스트 객체 수정
-                    if (objData.type === 'textbox' || objData.type === 'text') {
-                        objData.textBaseline = 'alphabetic';
-                    }
                     return objData;
                 });
                 fabric.util.enlivenObjects(objDataArray, function(clones) {
@@ -1083,7 +1074,7 @@
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                alert('이미지 저장 성공!');
+                alert('이미지 저장 성공! (/uploads/maps/' + version + '.png)');
             } else {
                 alert('저장 실패: ' + data.error);
             }
@@ -1108,7 +1099,7 @@
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                alert('서버에 JSON 저장 성공!');
+                alert('서버에 JSON 저장 성공! (/uploads/maps/' + version + '.json)');
             } else {
                 alert('저장 실패: ' + data.error);
             }
@@ -1129,6 +1120,7 @@
                     canvas.renderAll();
                     setMode('select');
                 });
+                alert('서버에서 JSON 불러오기 성공! (/uploads/maps/' + version + '.json)');
             } else {
                 alert('불러오기 실패: ' + data.error);
             }
