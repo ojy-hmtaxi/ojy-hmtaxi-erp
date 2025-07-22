@@ -1433,7 +1433,7 @@ def save_map_json():
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, f'{version}.json')
     with open(save_path, 'w', encoding='utf-8') as f:
-        f.write(json_data)
+        f.write(json_data if isinstance(json_data, str) else json.dumps(json_data, ensure_ascii=False))
     return {'success': True}
 
 @app.route('/load_map_json')
