@@ -20,7 +20,7 @@ try:
 except:
     pass  # .env 파일이 없어도 계속 진행
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['DATA_FOLDER'] = 'data'  # 데이터 저장용 폴더
 app.config['SECRET_KEY'] = 'hanmi_taxi_secret_key'  # 실제 운영 환경에서는 환경 변수로 관리
@@ -1556,7 +1556,7 @@ def admin_delete_user(user_id):
 @app.route('/uploads/<filename>')
 @login_required
 def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 @app.route('/api/latest-upload')
 def latest_upload():
