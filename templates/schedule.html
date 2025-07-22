@@ -294,16 +294,8 @@
             margin-top: 20px;
         }
 
-        .sheet-content {
-            padding: 20px;
-            background-color: white;
-            border-radius: 0 4px 4px 4px;
-            display: none;
-        }
-
-        .sheet-content.active {
-            display: block;
-        }
+        .sheet-content { display: none; }
+        .sheet-content.active { display: block; }
 
         /* 월간 배차일정 테이블 컨테이너 스타일 */
         .sheet-content .table-container {
@@ -520,7 +512,7 @@
                         {% endfor %}
                     </div>
                     {% for sheet_name, data in dispatch_data.items() %}
-                    <div id="sheet-{{ sheet_name }}" class="sheet-content" style="display: {% if loop.first %}block{% else %}none{% endif %}">
+                    <div id="sheet-{{ sheet_name }}" class="sheet-content{% if loop.first %} active{% endif %}">
                         <div class="schedule-container">
                             <table class="dispatch-table">
                                 <thead>
@@ -554,7 +546,7 @@
             // 모든 시트 컨텐츠 숨기기
             var sheetContents = document.getElementsByClassName("sheet-content");
             for (var i = 0; i < sheetContents.length; i++) {
-                sheetContents[i].style.display = "none";
+                sheetContents[i].classList.remove("active");
             }
 
             // 모든 시트 탭 버튼 비활성화
@@ -564,7 +556,7 @@
             }
 
             // 선택한 시트 보이기
-            document.getElementById(sheetName).style.display = "block";
+            document.getElementById(sheetName).classList.add("active");
             evt.currentTarget.classList.add("active");
 
             // 선택된 월 표시 업데이트

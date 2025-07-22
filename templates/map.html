@@ -857,7 +857,7 @@
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                canvas.loadFromJSON(data.json, function() {
+                canvas.loadFromJSON(fixImageUrls(data.json), function() {
                     canvas.renderAll();
                     setMode('select');
                 });
@@ -1125,7 +1125,7 @@
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                canvas.loadFromJSON(data.json, function() {
+                canvas.loadFromJSON(fixImageUrls(data.json), function() {
                     canvas.renderAll();
                     setMode('select');
                 });
@@ -1134,6 +1134,24 @@
             }
         });
     };
+
+    // 캔버스 JSON 불러올 때 이미지 경로 교정 함수
+    function fixImageUrls(json) {
+        if (typeof json === 'string') json = JSON.parse(json);
+        function traverse(obj) {
+            if (obj && typeof obj === 'object') {
+                for (let key in obj) {
+                    if (typeof obj[key] === 'object') {
+                        traverse(obj[key]);
+                    } else if (key === 'src' && typeof obj[key] === 'string') {
+                        obj[key] = obj[key].replace('http://localhost:5000', window.location.origin);
+                    }
+                }
+            }
+        }
+        traverse(json);
+        return json;
+    }
 </script>
 </body>
 </html> 
