@@ -13,6 +13,8 @@ import calendar
 from github import Github
 from dotenv import load_dotenv
 import pytz
+from pathlib import Path
+from . import upload_file_to_github
 
 # .env 파일 로드 (배포 환경에서는 환경변수 직접 사용)
 try:
@@ -733,57 +735,6 @@ for folder in [app.config['UPLOAD_FOLDER'], app.config['DATA_FOLDER']]:
     if not os.path.exists(folder):
         os.makedirs(folder)
 
-def upload_file_to_github(local_path, github_path, commit_message):
-    print(f"=== GitHub 업로드 시작 ===")
-    print(f"로컬 파일: {local_path}")
-    print(f"GitHub 경로: {github_path}")
-    print(f"커밋 메시지: {commit_message}")
-    
-    github_token = os.environ.get('GITHUB_TOKEN')
-    if not github_token or github_token == 'your_github_token_here':
-        print(f"GitHub 업로드 실패: GITHUB_TOKEN 환경변수가 설정되어 있지 않습니다.")
-        return False, 'GITHUB_TOKEN 환경변수가 설정되어 있지 않습니다.'
-    
-    print(f"GitHub 토큰 확인: {'설정됨' if github_token else '설정되지 않음'}")
-    
-    try:
-        g = Github(github_token)
-        repo = g.get_user().get_repo('ojy-hmtaxi-erp')
-        print(f"GitHub 저장소 연결 성공: {repo.name}")
-        
-        with open(local_path, 'rb') as f:
-            content = f.read()
-        print(f"파일 읽기 성공: {len(content)} bytes")
-        
-        try:
-            contents = repo.get_contents(github_path, ref="deploy")
-            print(f"기존 파일 발견, 업데이트 시도...")
-            repo.update_file(
-                path=contents.path,
-                message=commit_message,
-                content=content,
-                sha=contents.sha,
-                branch="deploy"
-            )
-            print(f"GitHub 업로드 성공: {github_path}")
-        except Exception as e:
-            if "404" in str(e) or "Not Found" in str(e):
-                print(f"새 파일 생성 시도...")
-                repo.create_file(
-                    path=github_path,
-                    message=commit_message,
-                    content=content,
-                    branch="deploy"
-                )
-                print(f"GitHub 새 파일 생성 성공: {github_path}")
-            else:
-                print(f"GitHub 업로드 실패: {str(e)}")
-                return False, str(e)
-        return True, None
-    except Exception as e:
-        print(f"GitHub 업로드 실패: {str(e)}")
-        return False, str(e)
-
 def save_dispatch_data(data):
     print("=== save_dispatch_data 함수 시작 ===")
     filepath = os.path.join(app.config['DATA_FOLDER'], 'dispatch_data.json')
@@ -1366,55 +1317,23 @@ def accident_print(type, accident_no):
 @app.route('/save_map_image', methods=['POST'])
 @login_required
 def save_map_image():
-    data = request.get_json()
-    version = data.get('version')
-    image_data = data.get('image')
-    if not version or not image_data:
-        return {'success': False, 'error': '버전명 또는 이미지 데이터 누락'}, 400
-    header, encoded = image_data.split(',', 1)
-    img_bytes = base64.b64decode(encoded)
+    file = request.files.get('file')
+    version = request.form.get('version')
+    if not file or not version:
+        print("[지도 PNG 저장 실패] 파일 또는 버전명 누락")
+        return {'success': False, 'error': '파일 또는 버전명 누락'}, 400
     save_dir = os.path.join('uploads', 'maps')
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, f'{version}.png')
-    with open(save_path, 'wb') as f:
-        f.write(img_bytes)
-
-    # === GitHub 업로드 ===
-    github_token = os.environ.get('GITHUB_TOKEN')
-    if github_token:
-        try:
-            g = Github(github_token)
-            repo = g.get_user().get_repo('ojy-hmtaxi-erp')
-            github_path = f'uploads/maps/{version}.png'
-            
-            # 파일이 이미 존재하는지 확인
-            try:
-                contents = repo.get_contents(github_path, ref="deploy")
-                # 파일이 존재하면 업데이트
-                repo.update_file(
-                    path=contents.path,
-                    message=f"update map image {version}",
-                    content=img_bytes,
-                    sha=contents.sha,
-                    branch="deploy"
-                )
-            except Exception as e:
-                # 파일이 존재하지 않으면 새로 생성
-                if "404" in str(e) or "Not Found" in str(e):
-                    repo.create_file(
-                        path=github_path,
-                        message=f"add map image {version}",
-                        content=img_bytes,
-                        branch="deploy"
-                    )
-                else:
-                    raise e
-        except Exception as e:
-            return {'success': False, 'error': f'GitHub 업로드 실패: {str(e)}'}, 500
+    file.save(save_path)
+    print(f"[Flask 라우트 저장] 지도 PNG 저장 완료: {save_path}")
+    # GitHub 업로드
+    github_path = f'uploads/maps/{version}.png'
+    success, error = upload_file_to_github(save_path, github_path, f'upload map png {version}')
+    if success:
+        print(f"[GitHub 저장] 지도 PNG 업로드 성공: {github_path}")
     else:
-        return {'success': False, 'error': 'GITHUB_TOKEN 환경변수가 설정되어 있지 않습니다.'}, 500
-    # === //GitHub 업로드 ===
-
+        print(f"[GitHub 저장] 지도 PNG 업로드 실패: {github_path}, 에러: {error}")
     return {'success': True}
 
 @app.route('/uploads/maps/<filename>')
@@ -1429,12 +1348,21 @@ def save_map_json():
     version = data.get('version')
     json_data = data.get('json')
     if not version or not json_data:
-        return {'success': False, 'error': '버전명 또는 JSON 데이터 누락'}, 400
+        print("[지도 JSON 저장 실패] 버전명 또는 데이터 누락")
+        return {'success': False, 'error': '버전명 또는 데이터 누락'}, 400
     save_dir = os.path.join('uploads', 'maps')
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, f'{version}.json')
     with open(save_path, 'w', encoding='utf-8') as f:
         f.write(json_data)
+    print(f"[Flask 라우트 저장] 지도 JSON 저장 완료: {save_path}")
+    # GitHub 업로드
+    github_path = f'uploads/maps/{version}.json'
+    success, error = upload_file_to_github(save_path, github_path, f'upload map json {version}')
+    if success:
+        print(f"[GitHub 저장] 지도 JSON 업로드 성공: {github_path}")
+    else:
+        print(f"[GitHub 저장] 지도 JSON 업로드 실패: {github_path}, 에러: {error}")
     return {'success': True}
 
 @app.route('/load_map_json')
