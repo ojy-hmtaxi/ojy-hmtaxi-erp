@@ -1576,7 +1576,6 @@ def admin_delete_user(user_id):
     return redirect(url_for('admin_users'))
 
 @app.route('/uploads/<filename>')
-@login_required
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
