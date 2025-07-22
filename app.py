@@ -1587,10 +1587,18 @@ def latest_upload():
         q = q.filter_by(upload_type=upload_type)
     record = q.order_by(UploadRecord.upload_time.desc()).first()
     if record:
+        import pytz
+        from datetime import datetime
+        kst = pytz.timezone('Asia/Seoul')
+        # upload_time이 datetime 객체라면 KST로 변환
+        if hasattr(record, 'upload_time') and isinstance(record.upload_time, datetime):
+            upload_time_kst = record.upload_time.astimezone(kst).strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            upload_time_kst = record.upload_time  # 이미 문자열이면 그대로
         return jsonify({
             "filename": record.filename,
             "uploader": record.uploader,
-            "upload_time": record.upload_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "upload_time": upload_time_kst,
             "github_url": record.github_url,
             "upload_type": record.upload_type
         })
