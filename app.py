@@ -518,10 +518,9 @@ def schedule():
                         return render_template('schedule.html', 
                                             error="엑셀 파일에서 읽을 수 있는 시트가 없습니다.")
                     
-                    # 파일로 저장
-                    print("=== save_dispatch_data 함수 호출 ===")
+                    # 파일로 저장  
                     save_dispatch_data(dispatch_data)
-                    print("=== save_dispatch_data 함수 완료 ===")
+                    
                     # === 깃허브 푸시 및 관련 print 로그 비활성화 시작 ===
                     # print(f"=== 배차 데이터 엑셀 파일 GitHub 업로드 시도 ===")
                     # success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
@@ -554,13 +553,20 @@ def schedule():
 @app.route('/pay_lease', methods=['GET', 'POST'])
 @login_required
 def pay_lease():
+    print("=== /pay_lease 라우트 호출됨 ===")
+    print(f"요청 메서드: {request.method}")
+    print(f"현재 사용자: {current_user.username if current_user else 'None'}")
     if request.method == 'POST':
+        print("POST 요청 받음")
         if 'excel_file' in request.files:
             file = request.files['excel_file']
+            print(f"파일명: {file.filename}")
             if file.filename != '':
                 filename = file.filename.replace('/', '').replace('\\', '')
                 filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                print(f"저장 경로: {filepath}")
                 file.save(filepath)
+                print(f"파일 저장 완료: {filepath}")
                 
                 try:
                     sheet_names = ['01월', '02월', '03월', '04월', '05월', '06월', '07월', '08월', '09월', '10월', '11월', '12월']
@@ -601,8 +607,9 @@ def pay_lease():
                         return render_template('pay_lease.html', 
                                             error="엑셀 파일에 '실입금', '리스료', '연료비' 컬럼이 있는 시트가 없습니다.")
                     
-                    # 파일로 저장
+                    # 파일로 저장 
                     save_lease_data(salary_data)
+                    
                     # === 깃허브 푸시 및 관련 print 로그 비활성화 시작 ===
                     # print(f"=== 리스 급여 데이터 엑셀 파일 GitHub 업로드 시도 ===")
                     # success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
@@ -634,12 +641,17 @@ def pay_lease():
 @app.route('/accident', methods=['GET', 'POST'])
 @login_required
 def accident():
+    print("=== /accident 라우트 호출됨 ===")
+    print(f"요청 메서드: {request.method}")
+    print(f"현재 사용자: {current_user.username if current_user else 'None'}")
     if request.method == 'POST':
+        print("POST 요청 받음")
         if 'excel_file' not in request.files:
             flash('파일이 선택되지 않았습니다.', 'error')
             return redirect(request.url)
         
         file = request.files['excel_file']
+        print(f"파일명: {file.filename}")
         if file.filename == '':
             flash('파일이 선택되지 않았습니다.', 'error')
             return redirect(request.url)
@@ -647,7 +659,9 @@ def accident():
         if file and allowed_file(file.filename):
             filename = file.filename.replace('/', '').replace('\\', '')
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            print(f"저장 경로: {file_path}")
             file.save(file_path)
+            print(f"파일 저장 완료: {file_path}")
             
             try:
                 # 엑셀 파일에서 시트 읽기
@@ -697,6 +711,7 @@ def accident():
                     'not_at_fault_columns': list(not_at_fault_df.columns)
                 }
                 
+                # 파일로 저장 
                 save_accident_data(accident_data)
                 
                 # 업로드 정보 저장
@@ -869,9 +884,13 @@ def load_dispatch_data():
     return None
 
 def save_lease_data(data):
+    print("=== save_lease_data 함수 시작 ===")
     filepath = os.path.join(app.config['DATA_FOLDER'], 'lease_data.json')
+    print(f"JSON 저장 경로: {filepath}")
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    print("JSON 파일 저장 완료")
+    # === 깃허브 푸시 및 관련 print 로그 비활성화 ===
     # upload_file_to_github(filepath, 'data/lease_data.json', 'update lease_data.json')
 
 def load_lease_data():
@@ -895,6 +914,7 @@ def load_lease_data():
     return None
 
 def save_accident_data(data):
+    print("=== save_accident_data 함수 시작 ===")
     # 요약 데이터 생성
     if data and ('at_fault' in data or 'not_at_fault' in data):
         at_fault_data = data.get('at_fault', [])
@@ -1009,8 +1029,11 @@ def save_accident_data(data):
         }
     
     filepath = os.path.join(app.config['DATA_FOLDER'], 'accident_data.json')
+    print(f"JSON 저장 경로: {filepath}")
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    print("JSON 파일 저장 완료")
+    # === 깃허브 푸시 및 관련 print 로그 비활성화 ===
     # upload_file_to_github(filepath, 'data/accident_data.json', 'update accident_data.json')
 
 def load_accident_data():
@@ -1156,9 +1179,13 @@ def map():
 # 운전기사 데이터 저장/불러오기 함수
 
 def save_driver_data(data):
+    print("=== save_driver_data 함수 시작 ===")
     filepath = os.path.join(app.config['DATA_FOLDER'], 'driver_data.json')
+    print(f"JSON 저장 경로: {filepath}")
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    print("JSON 파일 저장 완료")
+    # === 깃허브 푸시 및 관련 print 로그 비활성화 ===
     # upload_file_to_github(filepath, 'data/driver_data.json', 'update driver_data.json')
 
 def load_driver_data():
@@ -1183,18 +1210,25 @@ def load_driver_data():
 @app.route('/driver', methods=['GET', 'POST'])
 @login_required
 def driver():
+    print("=== /driver 라우트 호출됨 ===")
+    print(f"요청 메서드: {request.method}")
+    print(f"현재 사용자: {current_user.username if current_user else 'None'}")
     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
     required_columns = ['사번', '이름', '나이', '주민등록번호', '면허번호', '갱신시작', '갱신마감', '입사일자', '퇴사일자', '연락처', '거주지']
     if request.method == 'POST':
+        print("POST 요청 받음")
         if 'excel_file' not in request.files:
             return render_template('driver.html', error='파일이 선택되지 않았습니다.', driver_data=load_driver_data(), messages=messages, current_user=current_user)
         file = request.files['excel_file']
+        print(f"파일명: {file.filename}")
         if file.filename == '':
             return render_template('driver.html', error='파일이 선택되지 않았습니다.', driver_data=load_driver_data(), messages=messages, current_user=current_user)
         if file and allowed_file(file.filename):
             filename = file.filename.replace('/', '').replace('\\', '')
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            print(f"저장 경로: {file_path}")
             file.save(file_path)
+            print(f"파일 저장 완료: {file_path}")
             try:
                 df = pd.read_excel(file_path, sheet_name=0)
                 df.columns = [str(col).strip() for col in df.columns]
@@ -1220,6 +1254,7 @@ def driver():
                     'list': driver_list,
                     'columns': required_columns
                 }
+                # 파일로 저장 
                 save_driver_data(driver_data)
                 # === 깃허브 푸시 및 관련 print 로그 비활성화 시작 ===
                 # print(f"=== 운전기사 데이터 엑셀 파일 GitHub 업로드 시도 ===")
@@ -1622,11 +1657,22 @@ def latest_upload():
         import pytz
         from datetime import datetime
         kst = pytz.timezone('Asia/Seoul')
-        # upload_time이 datetime 객체라면 KST로 변환
+        
+        # upload_time 처리 - 더 확실한 KST 변환
         if hasattr(record, 'upload_time') and isinstance(record.upload_time, datetime):
-            upload_time_kst = record.upload_time.astimezone(kst).strftime('%Y-%m-%d %H:%M:%S')
+            # datetime 객체인 경우 KST로 변환
+            if record.upload_time.tzinfo is None:
+                # timezone이 없는 경우 UTC로 가정하고 KST로 변환
+                utc = pytz.timezone('UTC')
+                utc_time = utc.localize(record.upload_time)
+                upload_time_kst = utc_time.astimezone(kst).strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                # timezone이 있는 경우 KST로 변환
+                upload_time_kst = record.upload_time.astimezone(kst).strftime('%Y-%m-%d %H:%M:%S')
         else:
-            upload_time_kst = record.upload_time  # 이미 문자열이면 그대로
+            # 문자열인 경우 그대로 사용 (이미 KST로 저장되어 있음)
+            upload_time_kst = record.upload_time
+            
         return jsonify({
             "filename": record.filename,
             "uploader": record.uploader,
