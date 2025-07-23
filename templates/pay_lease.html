@@ -743,8 +743,8 @@
                     const timeStr = String(now.getHours()).padStart(2, '0') + ':' + 
                                   String(now.getMinutes()).padStart(2, '0');
                     
-                    const githubRawUrl = `https://raw.githubusercontent.com/ojy-hmtaxi/ojy-hmtaxi-erp/deploy/uploads/${encodeURIComponent(file.name)}`;
-                    const uploadMessage = `<span style=\"color:#007bff;font-weight:bold;\">${file.name}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${dateStr} | ${timeStr} | 업로더: {{ current_user.name }})&nbsp;<a href=\"${githubRawUrl}\" target=\"_blank\" style=\"color:#28a745;text-decoration:underline;\">[다운로드]</a>`;
+                    const serverUrl = `${window.location.origin}/uploads/${encodeURIComponent(file.name)}`;
+                    const uploadMessage = `<span style=\"color:#007bff;font-weight:bold;\">${file.name}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${dateStr} | ${timeStr} | 업로더: {{ current_user.name }})&nbsp;<a href=\"${serverUrl}\" target=\"_blank\" style=\"color:#28a745;text-decoration:underline;\">[다운로드]</a>`;
                     const resultDiv = document.getElementById('uploadResult');
                     resultDiv.innerHTML = uploadMessage;
                     resultDiv.classList.add('show');
@@ -834,7 +834,8 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.filename) {
-                        const msg = `<span style=\"color:#007bff;font-weight:bold;\">${data.filename}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${data.upload_time} | 업로더: ${data.uploader})&nbsp;<a href=\"${data.github_url}\" target=\"_blank\" style=\"color:#28a745;text-decoration:underline;\">[다운로드]</a>`;
+                        const serverUrl = `${window.location.origin}/uploads/${encodeURIComponent(data.filename)}`;
+                        const msg = `<span style=\"color:#007bff;font-weight:bold;\">${data.filename}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${data.upload_time} | 업로더: ${data.uploader})&nbsp;<a href=\"${serverUrl}\" target=\"_blank\" style=\"color:#28a745;text-decoration:underline;\">[다운로드]</a>`;
                         document.getElementById('uploadResult').innerHTML = msg;
                         document.getElementById('uploadResult').classList.add('show');
                     }
