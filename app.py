@@ -536,8 +536,8 @@ def schedule():
                     # UploadRecord 데이터베이스 저장 (깃허브 푸시 없이)
                     flask_url = url_for('uploaded_file', filename=os.path.basename(filepath), _external=True)
                     record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='schedule')
-                        db.session.add(record)
-                        db.session.commit()
+                    db.session.add(record)
+                    db.session.commit()
                     
                     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
                     return render_template('schedule.html', dispatch_data=dispatch_data, messages=messages, current_user=current_user)
@@ -625,8 +625,8 @@ def pay_lease():
                     # UploadRecord 데이터베이스 저장 (깃허브 푸시 없이)
                     flask_url = url_for('uploaded_file', filename=os.path.basename(filepath), _external=True)
                     record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='pay_lease')
-                        db.session.add(record)
-                        db.session.commit()
+                    db.session.add(record)
+                    db.session.commit()
                     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
                     return render_template('pay_lease.html', salary_data=salary_data, messages=messages, current_user=current_user)
                 except Exception as e:
@@ -736,8 +736,8 @@ def accident():
                 # UploadRecord 데이터베이스 저장 (깃허브 푸시 없이)
                 flask_url = url_for('uploaded_file', filename=os.path.basename(file_path), _external=True)
                 record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='accident')
-                    db.session.add(record)
-                    db.session.commit()
+                db.session.add(record)
+                db.session.commit()
 
             except Exception as e:
                 flash(f'파일 처리 중 오류 발생: {e}', 'error')
@@ -1271,8 +1271,8 @@ def driver():
                 # UploadRecord 데이터베이스 저장 (깃허브 푸시 없이)
                 flask_url = url_for('uploaded_file', filename=os.path.basename(file_path), _external=True)
                 record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='driver')
-                    db.session.add(record)
-                    db.session.commit()
+                db.session.add(record)
+                db.session.commit()
                 return render_template('driver.html', driver_data=driver_data, messages=messages, current_user=current_user)
             except Exception as e:
                 return render_template('driver.html', error=f'파일 처리 중 오류: {str(e)}', driver_data=load_driver_data(), messages=messages, current_user=current_user)
