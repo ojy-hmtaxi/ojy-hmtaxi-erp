@@ -776,18 +776,37 @@
             resultDiv.classList.remove('show');
         });
 
-        window.onload = function() {
+        // 최신 업로드 정보 가져오기
+        function loadLatestUpload() {
             fetch('/api/latest-upload?type=schedule')
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
                 .then(data => {
-                    if (data.filename) {
+                    if (data && data.filename) {
                         const serverUrl = `${window.location.origin}/uploads/${encodeURIComponent(data.filename)}`;
                         const msg = `<span style=\"color:#007bff;font-weight:bold;\">${data.filename}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${data.upload_time} | 업로더: ${data.uploader})&nbsp;<a href=\"${serverUrl}\" target=\"_blank\" style=\"color:#28a745;text-decoration:underline;\">[다운로드]</a>`;
-                        document.getElementById('uploadResult').innerHTML = msg;
-                        document.getElementById('uploadResult').classList.add('show');
+                        const resultDiv = document.getElementById('uploadResult');
+                        if (resultDiv) {
+                            resultDiv.innerHTML = msg;
+                            resultDiv.classList.add('show');
+                        }
                     }
+                })
+                .catch(error => {
+                    console.log('최신 업로드 정보를 가져오는데 실패했습니다:', error);
                 });
-        };
+        }
+
+        // 페이지 로드 완료 후 최신 업로드 정보 로드
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', loadLatestUpload);
+        } else {
+            loadLatestUpload();
+        }
     </script>
 </body>
 </html>
