@@ -239,19 +239,7 @@
             console.log('현재 시간:', new Date().toLocaleString('ko-KR', {timeZone: 'Asia/Seoul'}));
         });
 
-        // 업로드 성공 후 리프레시 카운트다운 표시 함수
-        function showRefreshCountdown(resultDiv, originalMessage, countdownSeconds = 3) {
-            let countdown = countdownSeconds;
-            const countdownInterval = setInterval(() => {
-                if (countdown > 0) {
-                    resultDiv.innerHTML = originalMessage + ` <span style="color:#ff6b6b;font-weight:bold;">(${countdown}초 후 페이지가 새로고침됩니다)</span>`;
-                    countdown--;
-                } else {
-                    clearInterval(countdownInterval);
-                    window.location.reload();
-                }
-            }, 1000);
-        }
+
 
         // 현재 활성화된 메뉴 항목 표시
         document.addEventListener('DOMContentLoaded', function() {

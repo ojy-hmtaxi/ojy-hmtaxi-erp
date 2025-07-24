@@ -321,7 +321,7 @@ const datasets = categories.map(cat => ({
     data: months.map(m => dispatchStats[m] ? dispatchStats[m][cat] : 0),
     fill: false,
     borderColor: cat === '주간' ? '#007bff' : cat === '야간' ? '#28a745' : cat === '일차' ? '#ffc107' : '#dc3545',
-    tension: 0.1,
+    tension: 0.05,
     yAxisID: 'y'
 }));
 
@@ -375,7 +375,7 @@ new Chart(incomeCtx, {
             borderColor: '#007bff',
             backgroundColor: 'rgba(0,123,255,0.1)',
             fill: true,
-            tension: 0.1
+            tension: 0.05
         }]
     },
     options: {
