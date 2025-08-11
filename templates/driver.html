@@ -10,7 +10,7 @@
 
 {% block head %}
 <style>
-    .container {
+    .custom-container {
         background-color: white;
         padding: 20px;
         border-radius: 8px;
@@ -98,7 +98,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="container">
+<div class="custom-container">
     <h1>운전기사 관리</h1>
     {% if error %}
     <div class="error">{{ error }}</div>
