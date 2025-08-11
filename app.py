@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, session, redirect, url_for, f
 import pandas as pd
 import os
 import json
-from datetime import timedelta
+from datetime import timedelta, datetime
 from collections import OrderedDict
 from werkzeug.utils import secure_filename
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -10,7 +10,7 @@ from models import db, User, Message, UploadRecord
 from sqlalchemy.orm import joinedload
 import base64
 import calendar
-from github import Github
+
 from dotenv import load_dotenv
 import pytz
 
@@ -797,56 +797,7 @@ for folder in [app.config['UPLOAD_FOLDER'], app.config['DATA_FOLDER']]:
     if not os.path.exists(folder):
         os.makedirs(folder)
 
-def upload_file_to_github(local_path, github_path, commit_message):
-    print(f"=== GitHub 업로드 시작 ===")
-    print(f"로컬 파일: {local_path}")
-    print(f"GitHub 경로: {github_path}")
-    print(f"커밋 메시지: {commit_message}")
-    
-    github_token = os.environ.get('GITHUB_TOKEN')
-    if not github_token or github_token == 'your_github_token_here':
-        print(f"GitHub 업로드 실패: GITHUB_TOKEN 환경변수가 설정되어 있지 않습니다.")
-        return False, 'GITHUB_TOKEN 환경변수가 설정되어 있지 않습니다.'
-    
-    print(f"GitHub 토큰 확인: {'설정됨' if github_token else '설정되지 않음'}")
-    
-    try:
-        g = Github(github_token)
-        repo = g.get_user().get_repo('ojy-hmtaxi-erp')
-        print(f"GitHub 저장소 연결 성공: {repo.name}")
-        
-        with open(local_path, 'rb') as f:
-            content = f.read()
-        print(f"파일 읽기 성공: {len(content)} bytes")
-        
-        try:
-            contents = repo.get_contents(github_path, ref="deploy")
-            print(f"기존 파일 발견, 업데이트 시도...")
-            repo.update_file(
-                path=contents.path,
-                message=commit_message,
-                content=content,
-                sha=contents.sha,
-                branch="deploy"
-            )
-            print(f"GitHub 업로드 성공: {github_path}")
-        except Exception as e:
-            if "404" in str(e) or "Not Found" in str(e):
-                print(f"새 파일 생성 시도...")
-                repo.create_file(
-                    path=github_path,
-                    message=commit_message,
-                    content=content,
-                    branch="deploy"
-                )
-                print(f"GitHub 새 파일 생성 성공: {github_path}")
-            else:
-                print(f"GitHub 업로드 실패: {str(e)}")
-                return False, str(e)
-        return True, None
-    except Exception as e:
-        print(f"GitHub 업로드 실패: {str(e)}")
-        return False, str(e)
+
 
 def save_dispatch_data(data):
     print("=== save_dispatch_data 함수 시작 ===")
@@ -1455,88 +1406,180 @@ def accident_print(type, accident_no):
 @app.route('/save_map_image', methods=['POST'])
 @login_required
 def save_map_image():
+    print("=== 🗺️ 사고지도 이미지 저장 시작 ===")
+    print(f"📅 저장 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"👤 사용자: {current_user.username} (ID: {current_user.id})")
+    
     data = request.get_json()
     version = data.get('version')
     image_data = data.get('image')
+    
+    print(f"📋 요청 데이터 - 버전: {version}")
+    print(f"📊 이미지 데이터 길이: {len(image_data) if image_data else 0} characters")
+    
     if not version or not image_data:
+        print("❌ 저장 실패: 버전명 또는 이미지 데이터 누락")
         return {'success': False, 'error': '버전명 또는 이미지 데이터 누락'}, 400
-    header, encoded = image_data.split(',', 1)
-    img_bytes = base64.b64decode(encoded)
-    save_dir = os.path.join('uploads', 'maps')
-    os.makedirs(save_dir, exist_ok=True)
-    save_path = os.path.join(save_dir, f'{version}.png')
-    with open(save_path, 'wb') as f:
-        f.write(img_bytes)
-
-    # === GitHub 업로드 ===
-    github_token = os.environ.get('GITHUB_TOKEN')
-    if github_token:
-        try:
-            g = Github(github_token)
-            repo = g.get_user().get_repo('ojy-hmtaxi-erp')
-            github_path = f'uploads/maps/{version}.png'
-            
-            # 파일이 이미 존재하는지 확인
-            try:
-                contents = repo.get_contents(github_path, ref="deploy")
-                # 파일이 존재하면 업데이트
-                repo.update_file(
-                    path=contents.path,
-                    message=f"update map image {version}",
-                    content=img_bytes,
-                    sha=contents.sha,
-                    branch="deploy"
-                )
-            except Exception as e:
-                # 파일이 존재하지 않으면 새로 생성
-                if "404" in str(e) or "Not Found" in str(e):
-                    repo.create_file(
-                        path=github_path,
-                        message=f"add map image {version}",
-                        content=img_bytes,
-                        branch="deploy"
-                    )
-                else:
-                    raise e
-        except Exception as e:
-            return {'success': False, 'error': f'GitHub 업로드 실패: {str(e)}'}, 500
-    else:
-        return {'success': False, 'error': 'GITHUB_TOKEN 환경변수가 설정되어 있지 않습니다.'}, 500
-    # === //GitHub 업로드 ===
-
-    return {'success': True}
+    
+    try:
+        header, encoded = image_data.split(',', 1)
+        img_bytes = base64.b64decode(encoded)
+        print(f"🖼️ 이미지 디코딩 완료: {len(img_bytes)} bytes")
+        
+        # Cloudtype 환경에서는 절대 경로 사용
+        if os.environ.get('CLOUDTYPE_ENV'):
+            # Cloudtype 환경변수가 설정된 경우 절대 경로 사용
+            save_dir = '/tmp/uploads/maps'
+            print(f"☁️ Cloudtype 환경 감지: 절대 경로 사용")
+        else:
+            # 로컬 개발 환경에서는 상대 경로 사용
+            save_dir = os.path.join('uploads', 'maps')
+            print(f"💻 로컬 환경: 상대 경로 사용")
+        
+        print(f"📁 저장 디렉토리: {save_dir}")
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, f'{version}.png')
+        
+        with open(save_path, 'wb') as f:
+            f.write(img_bytes)
+        
+        print(f"✅ 이미지 저장 성공: {save_path}")
+        print(f"📏 파일 크기: {os.path.getsize(save_path)} bytes")
+        print("=== 🗺️ 사고지도 이미지 저장 완료 ===\n")
+        
+        return {'success': True}
+        
+    except Exception as e:
+        print(f"❌ 이미지 저장 중 오류 발생: {str(e)}")
+        print("=== 🗺️ 사고지도 이미지 저장 실패 ===\n")
+        return {'success': False, 'error': f'이미지 저장 실패: {str(e)}'}, 500
 
 @app.route('/uploads/maps/<filename>')
 def uploaded_map(filename):
-    return send_from_directory(os.path.join('uploads', 'maps'), filename)
+    print("=== 🖼️ 사고지도 이미지 서빙 시작 ===")
+    print(f"📅 서빙 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"📁 요청 파일: {filename}")
+    
+    try:
+        # Cloudtype 환경에서는 절대 경로 사용
+        if os.environ.get('CLOUDTYPE_ENV'):
+            # Cloudtype 환경변수가 설정된 경우 절대 경로 사용
+            serve_dir = '/tmp/uploads/maps'
+            print(f"☁️ Cloudtype 환경 감지: 절대 경로 사용")
+        else:
+            # 로컬 개발 환경에서는 상대 경로 사용
+            serve_dir = os.path.join('uploads', 'maps')
+            print(f"💻 로컬 환경: 상대 경로 사용")
+        
+        print(f"📁 서빙 디렉토리: {serve_dir}")
+        file_path = os.path.join(serve_dir, filename)
+        
+        if os.path.exists(file_path):
+            file_size = os.path.getsize(file_path)
+            print(f"✅ 이미지 서빙 성공: {file_path}")
+            print(f"📏 파일 크기: {file_size} bytes")
+            print("=== 🖼️ 사고지도 이미지 서빙 완료 ===\n")
+        else:
+            print(f"⚠️ 파일이 존재하지 않음: {file_path}")
+        
+        return send_from_directory(serve_dir, filename)
+        
+    except Exception as e:
+        print(f"❌ 이미지 서빙 중 오류 발생: {str(e)}")
+        print("=== 🖼️ 사고지도 이미지 서빙 실패 ===\n")
+        return jsonify({'error': f'이미지 서빙 실패: {str(e)}'}), 500
 
 @app.route('/save_map_json', methods=['POST'])
 @login_required
 def save_map_json():
+    print("=== 📄 사고지도 JSON 저장 시작 ===")
+    print(f"📅 저장 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"👤 사용자: {current_user.username} (ID: {current_user.id})")
+    
     data = request.get_json()
     version = data.get('version')
     json_data = data.get('json')
+    
+    print(f"📋 요청 데이터 - 버전: {version}")
+    print(f"📊 JSON 데이터 길이: {len(json_data) if json_data else 0} characters")
+    
     if not version or not json_data:
+        print("❌ 저장 실패: 버전명 또는 JSON 데이터 누락")
         return {'success': False, 'error': '버전명 또는 JSON 데이터 누락'}, 400
-    save_dir = os.path.join('uploads', 'maps')
-    os.makedirs(save_dir, exist_ok=True)
-    save_path = os.path.join(save_dir, f'{version}.json')
-    with open(save_path, 'w', encoding='utf-8') as f:
-        f.write(json_data)
-    return {'success': True}
+    
+    try:
+        # Cloudtype 환경에서는 절대 경로 사용
+        if os.environ.get('CLOUDTYPE_ENV'):
+            # Cloudtype 환경변수가 설정된 경우 절대 경로 사용
+            save_dir = '/tmp/uploads/maps'
+            print(f"☁️ Cloudtype 환경 감지: 절대 경로 사용")
+        else:
+            # 로컬 개발 환경에서는 상대 경로 사용
+            save_dir = os.path.join('uploads', 'maps')
+            print(f"💻 로컬 환경: 상대 경로 사용")
+        
+        print(f"📁 저장 디렉토리: {save_dir}")
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, f'{version}.json')
+        
+        with open(save_path, 'w', encoding='utf-8') as f:
+            f.write(json_data)
+        
+        print(f"✅ JSON 저장 성공: {save_path}")
+        print(f"📏 파일 크기: {os.path.getsize(save_path)} bytes")
+        print("=== 📄 사고지도 JSON 저장 완료 ===\n")
+        
+        return {'success': True}
+        
+    except Exception as e:
+        print(f"❌ JSON 저장 중 오류 발생: {str(e)}")
+        print("=== 📄 사고지도 JSON 저장 실패 ===\n")
+        return {'success': False, 'error': f'JSON 저장 실패: {str(e)}'}, 500
 
 @app.route('/load_map_json')
 @login_required
 def load_map_json():
+    print("=== 📖 사고지도 JSON 불러오기 시작 ===")
+    print(f"📅 불러오기 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"👤 사용자: {current_user.username} (ID: {current_user.id})")
+    
     version = request.args.get('version')
+    print(f"📋 요청 데이터 - 버전: {version}")
+    
     if not version:
+        print("❌ 불러오기 실패: 버전명 누락")
         return jsonify({'success': False, 'error': '버전명 누락'}), 400
-    load_path = os.path.join('uploads', 'maps', f'{version}.json')
-    if not os.path.exists(load_path):
-        return jsonify({'success': False, 'error': '해당 버전의 지도 데이터가 없습니다.'}), 404
-    with open(load_path, 'r', encoding='utf-8') as f:
-        json_data = f.read()
-    return jsonify({'success': True, 'json': json_data})
+    
+    try:
+        # Cloudtype 환경에서는 절대 경로 사용
+        if os.environ.get('CLOUDTYPE_ENV'):
+            # Cloudtype 환경변수가 설정된 경우 절대 경로 사용
+            load_path = os.path.join('/tmp/uploads/maps', f'{version}.json')
+            print(f"☁️ Cloudtype 환경 감지: 절대 경로 사용")
+        else:
+            # 로컬 개발 환경에서는 상대 경로 사용
+            load_path = os.path.join('uploads', 'maps', f'{version}.json')
+            print(f"💻 로컬 환경: 상대 경로 사용")
+        
+        print(f"📁 파일 경로: {load_path}")
+        
+        if not os.path.exists(load_path):
+            print(f"❌ 파일이 존재하지 않음: {load_path}")
+            return jsonify({'success': False, 'error': '해당 버전의 지도 데이터가 없습니다.'}), 404
+        
+        with open(load_path, 'r', encoding='utf-8') as f:
+            json_data = f.read()
+        
+        print(f"✅ JSON 불러오기 성공: {load_path}")
+        print(f"📏 파일 크기: {len(json_data)} characters")
+        print("=== 📖 사고지도 JSON 불러오기 완료 ===\n")
+        
+        return jsonify({'success': True, 'json': json_data})
+        
+    except Exception as e:
+        print(f"❌ JSON 불러오기 중 오류 발생: {str(e)}")
+        print("=== 📖 사고지도 JSON 불러오기 실패 ===\n")
+        return jsonify({'success': False, 'error': f'JSON 불러오기 실패: {str(e)}'}), 500
 
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
