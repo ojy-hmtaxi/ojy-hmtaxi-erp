@@ -1,0 +1,17 @@
+warning: in the working copy of 'templates/base.html', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/templates/base.html b/templates/base.html[m
+[1mindex fbefc97..7acd4c1 100644[m
+[1m--- a/templates/base.html[m
+[1m+++ b/templates/base.html[m
+[36m@@ -180,7 +180,7 @@[m
+                             <li><a class="dropdown-item" href="{{ url_for('profile') }}">회원정보 수정</a></li>[m
+                         </ul>[m
+                     </div>[m
+[31m-                    <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">[m
+[32m+[m[32m                    <a href="{{ url_for('logout') }}" class="btn btn-outline-danger" style="margin-left: 10px;">[m
+                         <i class="fas fa-sign-out-alt me-2"></i>로그아웃[m
+                     </a>[m
+                 {% else %}[m
+* [32mdeploy[m
+  main[m
+  test[m

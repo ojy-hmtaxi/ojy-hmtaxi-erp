@@ -8,13 +8,7 @@
 
 {% block title %}급여 계산(리스){% endblock %}
 
-{% block content %}
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>한미ERP - 급여 계산(리스)</title>
+{% block head %}
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
@@ -298,8 +292,9 @@
         .tabs.show { display: block; }
         .tabs.hide { display: none; }
     </style>
-</head>
-<body>
+{% endblock %}
+
+{% block content %}
     {{ right_sidebar(messages, current_user) }}
     <div class="main-content">
         <div class="container">
@@ -886,6 +881,4 @@
                 });
         };
     </script>
-</body>
-</html>
 {% endblock %} 
