@@ -1401,7 +1401,12 @@ def accident_print(type, accident_no):
     # context['차종']는 accident_info(원본 데이터)의 '차종' 값만 사용
     context['차종'] = accident_info.get('차종', '')
 
-    return render_template(template, accident=context)
+    # Cloudtype 환경 설정을 템플릿에 전달
+    config = {
+        'CLOUDTYPE_ENV': os.environ.get('CLOUDTYPE_ENV')
+    }
+    
+    return render_template(template, accident=context, config=config)
 
 @app.route('/save_map_image', methods=['POST'])
 @login_required
