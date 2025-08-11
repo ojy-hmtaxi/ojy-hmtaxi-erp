@@ -16,7 +16,7 @@
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            max-width: 1200px;
+            width: 90%;
             margin: 0 auto;
         }
         h1 {
@@ -243,8 +243,7 @@
 
 {% block content %}
     {{ right_sidebar(messages, current_user) }}
-    <div class="main-content">
-        <div class="container">
+    <div class="container">
             <h1>리스택시 기사 급여 계산기</h1>
             
             {% if error %}
