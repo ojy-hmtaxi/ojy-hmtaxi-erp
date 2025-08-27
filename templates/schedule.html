@@ -8,35 +8,17 @@
 
 {% block title %}배차 관리{% endblock %}
 
-{% block content %}
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>한미ERP - 배차 관리</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            background-color: #f5f5f5;
-        }
-        .main-content {
-            margin-left: 100px;
-            margin-right: auto;
-            padding: 20px;
-            flex: 1;
-        }
-        .container {
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            max-width: 1200px;
-            margin: 0 auto;
-        }
+{% block head %}
+<style>
+    .custom-container {
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        width: 100%;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
         h1 {
             color: #333;
             text-align: center;
@@ -294,16 +276,8 @@
             margin-top: 20px;
         }
 
-        .sheet-content {
-            padding: 20px;
-            background-color: white;
-            border-radius: 0 4px 4px 4px;
-            display: none;
-        }
-
-        .sheet-content.active {
-            display: block;
-        }
+        .sheet-content { display: none; }
+        .sheet-content.active { display: block; }
 
         /* 월간 배차일정 테이블 컨테이너 스타일 */
         .sheet-content .table-container {
@@ -409,11 +383,11 @@
             margin-left: 100px;
         }
     </style>
-</head>
-<body>
-    {{ right_sidebar(messages, current_user) }}
-    <div class="main-content">
-        <div class="container">
+{% endblock %}
+
+{% block content %}
+{{ right_sidebar(messages, current_user) }}
+    <div class="custom-container">
             <h1>배차 관리</h1>
             
             <div class="excel-upload">
@@ -519,8 +493,12 @@
                         <button class="sheet-tab-button {% if loop.first %}active{% endif %}" onclick="openSheetTab(event, 'sheet-{{ sheet_name }}')">{{ sheet_name }}</button>
                         {% endfor %}
                     </div>
+                    <!-- 배차 통합 검색 필터 -->
+                    <div style="margin-bottom:12px;">
+                        <input type="text" id="scheduleUnifiedFilter" placeholder="차량번호, 차종, 근무유형, 운전기사 검색" style="width:100%;">
+                    </div>
                     {% for sheet_name, data in dispatch_data.items() %}
-                    <div id="sheet-{{ sheet_name }}" class="sheet-content" style="display: {% if loop.first %}block{% else %}none{% endif %}">
+                    <div id="sheet-{{ sheet_name }}" class="sheet-content{% if loop.first %} active{% endif %}">
                         <div class="schedule-container">
                             <table class="dispatch-table">
                                 <thead>
@@ -554,7 +532,7 @@
             // 모든 시트 컨텐츠 숨기기
             var sheetContents = document.getElementsByClassName("sheet-content");
             for (var i = 0; i < sheetContents.length; i++) {
-                sheetContents[i].style.display = "none";
+                sheetContents[i].classList.remove("active");
             }
 
             // 모든 시트 탭 버튼 비활성화
@@ -564,7 +542,7 @@
             }
 
             // 선택한 시트 보이기
-            document.getElementById(sheetName).style.display = "block";
+            document.getElementById(sheetName).classList.add("active");
             evt.currentTarget.classList.add("active");
 
             // 선택된 월 표시 업데이트
@@ -677,7 +655,44 @@
                     document.getElementById('selectedMonth').textContent = '- ' + firstTabButton.textContent;
                 }
             }
+
+            // 배차 통합 검색 필터 이벤트 리스너 추가
+            const filterInput = document.getElementById('scheduleUnifiedFilter');
+            if (filterInput) {
+                filterInput.addEventListener('input', function() {
+                    filterScheduleTable(this.value);
+                });
+            }
         });
+
+        // 배차 통합 검색 필터 함수
+        function filterScheduleTable(searchTerm) {
+            const activeSheet = document.querySelector('.sheet-content.active');
+            if (!activeSheet) return;
+
+            const table = activeSheet.querySelector('.dispatch-table tbody');
+            if (!table) return;
+
+            const rows = table.querySelectorAll('tr');
+            const searchLower = searchTerm.toLowerCase();
+
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 4) {
+                    const 차량번호 = cells[0].textContent.toLowerCase();
+                    const 차종 = cells[1].textContent.toLowerCase();
+                    const 근무유형 = cells[2].textContent.toLowerCase();
+                    const 운전기사 = cells[3].textContent.toLowerCase();
+
+                    const matches = 차량번호.includes(searchLower) || 
+                                   차종.includes(searchLower) || 
+                                   근무유형.includes(searchLower) || 
+                                   운전기사.includes(searchLower);
+
+                    row.style.display = matches ? '' : 'none';
+                }
+            });
+        }
 
         document.getElementById('uploadForm').addEventListener('submit', function(e) {
             e.preventDefault();
@@ -702,14 +717,19 @@
                     const timeStr = String(now.getHours()).padStart(2, '0') + ':' + 
                                   String(now.getMinutes()).padStart(2, '0');
                     
-                    const githubRawUrl = `https://raw.githubusercontent.com/ojy-hmtaxi/ojy-hmtaxi-erp/deploy/uploads/${encodeURIComponent(file.name)}`;
-                    const uploadMessage = `<span style="color:#007bff;font-weight:bold;">${file.name}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${dateStr} | ${timeStr} | 업로더: {{ current_user.name }})&nbsp;<a href="${githubRawUrl}" target="_blank" style="color:#28a745;text-decoration:underline;">[다운로드]</a>`;
+                    const serverUrl = `${window.location.origin}/uploads/${encodeURIComponent(file.name)}`;
+                    const uploadMessage = `<span style=\"color:#007bff;font-weight:bold;\">${file.name}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${dateStr} | ${timeStr} | 업로더: {{ current_user.name }})&nbsp;<a href=\"${serverUrl}\" target=\"_blank\" style=\"color:#28a745;text-decoration:underline;\">[다운로드]</a>`;
                     const resultDiv = document.getElementById('uploadResult');
                     resultDiv.innerHTML = uploadMessage;
                     resultDiv.classList.add('show');
                     
                     // 메시지를 localStorage에 저장
                     localStorage.setItem('scheduleUploadMessage', uploadMessage);
+                    
+                    // 1초 후 페이지 자동 리프레시
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
                 }
             }).catch(error => {
                 console.error('Error:', error);
@@ -738,18 +758,36 @@
             resultDiv.classList.remove('show');
         });
 
-        window.onload = function() {
+        // 최신 업로드 정보 가져오기
+        function loadLatestUpload() {
             fetch('/api/latest-upload?type=schedule')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.filename) {
-                        const msg = `<span style=\"color:#007bff;font-weight:bold;\">${data.filename}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${data.upload_time} | 업로더: ${data.uploader})&nbsp;<a href=\"${data.github_url}\" target=\"_blank\" style=\"color:#28a745;text-decoration:underline;\">[다운로드]</a>`;
-                        document.getElementById('uploadResult').innerHTML = msg;
-                        document.getElementById('uploadResult').classList.add('show');
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
                     }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data && data.filename) {
+                        const serverUrl = `${window.location.origin}/uploads/${encodeURIComponent(data.filename)}`;
+                        const msg = `<span style=\"color:#007bff;font-weight:bold;\">${data.filename}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${data.upload_time} | 업로더: ${data.uploader})&nbsp;<a href=\"${serverUrl}\" target=\"_blank\" style=\"color:#28a745;text-decoration:underline;\">[다운로드]</a>`;
+                        const resultDiv = document.getElementById('uploadResult');
+                        if (resultDiv) {
+                            resultDiv.innerHTML = msg;
+                            resultDiv.classList.add('show');
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.log('최신 업로드 정보를 가져오는데 실패했습니다:', error);
                 });
-        };
+        }
+
+        // 페이지 로드 완료 후 최신 업로드 정보 로드
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', loadLatestUpload);
+        } else {
+            loadLatestUpload();
+        }
     </script>
-</body>
-</html>
 {% endblock %} 

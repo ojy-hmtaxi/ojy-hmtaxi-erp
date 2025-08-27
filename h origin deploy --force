@@ -1,0 +1,5 @@
+[33m3c4150b[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdeploy[m[33m)[m fix: 사고지도 이미지 경로 절대경로 변환 및 textBaseline 오류 완전 해결
+[33mca0a13f[m merge: 원격 변경사항 병합
+[33md2e5505[m fix: 사고지도 이미지 경로 문제 해결 및 Fabric.js textBaseline 오류 수정
+[33me943c3c[m upload 사고관리_2024.xlsx
+[33m6c4ab52[m update accident_data.json

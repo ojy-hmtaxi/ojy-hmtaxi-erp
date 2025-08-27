@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, session, redirect, url_for, f
 import pandas as pd
 import os
 import json
-from datetime import timedelta
+from datetime import timedelta, datetime
 from collections import OrderedDict
 from werkzeug.utils import secure_filename
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -10,7 +10,7 @@ from models import db, User, Message, UploadRecord
 from sqlalchemy.orm import joinedload
 import base64
 import calendar
-from github import Github
+
 from dotenv import load_dotenv
 import pytz
 
@@ -20,7 +20,7 @@ try:
 except:
     pass  # .env 파일이 없어도 계속 진행
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['DATA_FOLDER'] = 'data'  # 데이터 저장용 폴더
 app.config['SECRET_KEY'] = 'hanmi_taxi_secret_key'  # 실제 운영 환경에서는 환경 변수로 관리
@@ -309,6 +309,17 @@ def calculate_salary():
                             not_at_fault = accident_data.get('not_at_fault', [])
                             total_at_fault = len(at_fault)
                             total_not_at_fault = len(not_at_fault)
+                            # 가해보상금(수리): '수리지급'의 총합
+                            def parse_amount(amount_str):
+                                if not amount_str or amount_str == '' or amount_str == '-':
+                                    return 0
+                                try:
+                                    return int(str(amount_str).replace(',', ''))
+                                except:
+                                    return 0
+                            total_at_fault_repair = sum(parse_amount(a.get('수리지급', 0)) for a in at_fault)
+                            # 피해보상금: '금액'의 총합
+                            total_not_at_fault_payment = sum(parse_amount(a.get('금액', 0)) for a in not_at_fault)
                             for a in at_fault:
                                 # 미결 가해사고
                                 if a.get('처리여부', '').strip() == '미결':
@@ -399,6 +410,17 @@ def calculate_salary():
             not_at_fault = accident_data.get('not_at_fault', [])
             total_at_fault = len(at_fault)
             total_not_at_fault = len(not_at_fault)
+            # 가해보상금(수리): '수리지급'의 총합
+            def parse_amount(amount_str):
+                if not amount_str or amount_str == '' or amount_str == '-':
+                    return 0
+                try:
+                    return int(str(amount_str).replace(',', ''))
+                except:
+                    return 0
+            total_at_fault_repair = sum(parse_amount(a.get('수리지급', 0)) for a in at_fault)
+            # 피해보상금: '금액'의 총합
+            total_not_at_fault_payment = sum(parse_amount(a.get('금액', 0)) for a in not_at_fault)
             for a in at_fault:
                 # 미결 가해사고
                 if a.get('처리여부', '').strip() == '미결':
@@ -497,18 +519,14 @@ def schedule():
                                             error="엑셀 파일에서 읽을 수 있는 시트가 없습니다.")
                     
                     # 파일로 저장
-                    print("=== save_dispatch_data 함수 호출 ===")
                     save_dispatch_data(dispatch_data)
-                    print("=== save_dispatch_data 함수 완료 ===")
-                    print(f"=== 배차 데이터 엑셀 파일 GitHub 업로드 시도 ===")
-                    success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
+                    
+                    # UploadRecord 데이터베이스 저장
                     flask_url = url_for('uploaded_file', filename=os.path.basename(filepath), _external=True)
-                    if success:
-                        record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='schedule')
-                        db.session.add(record)
-                        db.session.commit()
-                    if not success:
-                        print(f"엑셀 파일 GitHub 업로드 실패: {error}")
+                    record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='schedule')
+                    db.session.add(record)
+                    db.session.commit()
+                    
                     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
                     return render_template('schedule.html', dispatch_data=dispatch_data, messages=messages, current_user=current_user)
                 except Exception as e:
@@ -523,13 +541,20 @@ def schedule():
 @app.route('/pay_lease', methods=['GET', 'POST'])
 @login_required
 def pay_lease():
+    print("=== /pay_lease 라우트 호출됨 ===")
+    print(f"요청 메서드: {request.method}")
+    print(f"현재 사용자: {current_user.username if current_user else 'None'}")
     if request.method == 'POST':
+        print("POST 요청 받음")
         if 'excel_file' in request.files:
             file = request.files['excel_file']
+            print(f"파일명: {file.filename}")
             if file.filename != '':
                 filename = file.filename.replace('/', '').replace('\\', '')
                 filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                print(f"저장 경로: {filepath}")
                 file.save(filepath)
+                print(f"파일 저장 완료: {filepath}")
                 
                 try:
                     sheet_names = ['01월', '02월', '03월', '04월', '05월', '06월', '07월', '08월', '09월', '10월', '11월', '12월']
@@ -572,14 +597,12 @@ def pay_lease():
                     
                     # 파일로 저장
                     save_lease_data(salary_data)
-                    success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
+                    
+                    # UploadRecord 데이터베이스 저장
                     flask_url = url_for('uploaded_file', filename=os.path.basename(filepath), _external=True)
-                    if success:
-                        record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='pay_lease')
-                        db.session.add(record)
-                        db.session.commit()
-                    if not success:
-                        print(f"엑셀 파일 GitHub 업로드 실패: {error}")
+                    record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='pay_lease')
+                    db.session.add(record)
+                    db.session.commit()
                     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
                     return render_template('pay_lease.html', salary_data=salary_data, messages=messages, current_user=current_user)
                 except Exception as e:
@@ -594,12 +617,17 @@ def pay_lease():
 @app.route('/accident', methods=['GET', 'POST'])
 @login_required
 def accident():
+    print("=== /accident 라우트 호출됨 ===")
+    print(f"요청 메서드: {request.method}")
+    print(f"현재 사용자: {current_user.username if current_user else 'None'}")
     if request.method == 'POST':
+        print("POST 요청 받음")
         if 'excel_file' not in request.files:
             flash('파일이 선택되지 않았습니다.', 'error')
             return redirect(request.url)
         
         file = request.files['excel_file']
+        print(f"파일명: {file.filename}")
         if file.filename == '':
             flash('파일이 선택되지 않았습니다.', 'error')
             return redirect(request.url)
@@ -607,7 +635,9 @@ def accident():
         if file and allowed_file(file.filename):
             filename = file.filename.replace('/', '').replace('\\', '')
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            print(f"저장 경로: {file_path}")
             file.save(file_path)
+            print(f"파일 저장 완료: {file_path}")
             
             try:
                 # 엑셀 파일에서 시트 읽기
@@ -657,6 +687,7 @@ def accident():
                     'not_at_fault_columns': list(not_at_fault_df.columns)
                 }
                 
+                # 파일로 저장 
                 save_accident_data(accident_data)
                 
                 # 업로드 정보 저장
@@ -666,14 +697,11 @@ def accident():
                 session['uploader_name'] = current_user.name if hasattr(current_user, 'name') else current_user.username
                 
                 flash(f'<{filename}> 파일이 성공적으로 업로드되었습니다. (업로드 일시: {session.get("upload_time")})', 'success')
-                success, error = upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
+                # UploadRecord 데이터베이스 저장
                 flask_url = url_for('uploaded_file', filename=os.path.basename(file_path), _external=True)
-                if success:
-                    record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='accident')
-                    db.session.add(record)
-                    db.session.commit()
-                if not success:
-                    print(f"엑셀 파일 GitHub 업로드 실패: {error}")
+                record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='accident')
+                db.session.add(record)
+                db.session.commit()
 
             except Exception as e:
                 flash(f'파일 처리 중 오류 발생: {e}', 'error')
@@ -733,56 +761,7 @@ for folder in [app.config['UPLOAD_FOLDER'], app.config['DATA_FOLDER']]:
     if not os.path.exists(folder):
         os.makedirs(folder)
 
-def upload_file_to_github(local_path, github_path, commit_message):
-    print(f"=== GitHub 업로드 시작 ===")
-    print(f"로컬 파일: {local_path}")
-    print(f"GitHub 경로: {github_path}")
-    print(f"커밋 메시지: {commit_message}")
-    
-    github_token = os.environ.get('GITHUB_TOKEN')
-    if not github_token or github_token == 'your_github_token_here':
-        print(f"GitHub 업로드 실패: GITHUB_TOKEN 환경변수가 설정되어 있지 않습니다.")
-        return False, 'GITHUB_TOKEN 환경변수가 설정되어 있지 않습니다.'
-    
-    print(f"GitHub 토큰 확인: {'설정됨' if github_token else '설정되지 않음'}")
-    
-    try:
-        g = Github(github_token)
-        repo = g.get_user().get_repo('ojy-hmtaxi-erp')
-        print(f"GitHub 저장소 연결 성공: {repo.name}")
-        
-        with open(local_path, 'rb') as f:
-            content = f.read()
-        print(f"파일 읽기 성공: {len(content)} bytes")
-        
-        try:
-            contents = repo.get_contents(github_path, ref="deploy")
-            print(f"기존 파일 발견, 업데이트 시도...")
-            repo.update_file(
-                path=contents.path,
-                message=commit_message,
-                content=content,
-                sha=contents.sha,
-                branch="deploy"
-            )
-            print(f"GitHub 업로드 성공: {github_path}")
-        except Exception as e:
-            if "404" in str(e) or "Not Found" in str(e):
-                print(f"새 파일 생성 시도...")
-                repo.create_file(
-                    path=github_path,
-                    message=commit_message,
-                    content=content,
-                    branch="deploy"
-                )
-                print(f"GitHub 새 파일 생성 성공: {github_path}")
-            else:
-                print(f"GitHub 업로드 실패: {str(e)}")
-                return False, str(e)
-        return True, None
-    except Exception as e:
-        print(f"GitHub 업로드 실패: {str(e)}")
-        return False, str(e)
+
 
 def save_dispatch_data(data):
     print("=== save_dispatch_data 함수 시작 ===")
@@ -791,14 +770,7 @@ def save_dispatch_data(data):
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     print("JSON 파일 저장 완료")
-    # GitHub 업로드
-    print("=== JSON 파일 GitHub 업로드 시도 ===")
-    success, error = upload_file_to_github(filepath, 'data/dispatch_data.json', 'update dispatch_data.json')
-    if not success:
-        print(f"JSON 파일 GitHub 업로드 실패: {error}")
-    else:
-        print("JSON 파일 GitHub 업로드 성공!")
-    print("=== save_dispatch_data 함수 완료 ===")
+
 
 def load_dispatch_data():
     """저장된 배차 데이터를 불러옴"""
@@ -821,11 +793,13 @@ def load_dispatch_data():
     return None
 
 def save_lease_data(data):
+    print("=== save_lease_data 함수 시작 ===")
     filepath = os.path.join(app.config['DATA_FOLDER'], 'lease_data.json')
+    print(f"JSON 저장 경로: {filepath}")
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    # GitHub 업로드
-    upload_file_to_github(filepath, 'data/lease_data.json', 'update lease_data.json')
+    print("JSON 파일 저장 완료")
+
 
 def load_lease_data():
     """저장된 리스 급여 데이터를 불러옴"""
@@ -848,6 +822,7 @@ def load_lease_data():
     return None
 
 def save_accident_data(data):
+    print("=== save_accident_data 함수 시작 ===")
     # 요약 데이터 생성
     if data and ('at_fault' in data or 'not_at_fault' in data):
         at_fault_data = data.get('at_fault', [])
@@ -962,10 +937,11 @@ def save_accident_data(data):
         }
     
     filepath = os.path.join(app.config['DATA_FOLDER'], 'accident_data.json')
+    print(f"JSON 저장 경로: {filepath}")
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    # GitHub 업로드
-    upload_file_to_github(filepath, 'data/accident_data.json', 'update accident_data.json')
+    print("JSON 파일 저장 완료")
+
 
 def load_accident_data():
     """저장된 사고 데이터를 불러옴"""
@@ -1110,11 +1086,13 @@ def map():
 # 운전기사 데이터 저장/불러오기 함수
 
 def save_driver_data(data):
+    print("=== save_driver_data 함수 시작 ===")
     filepath = os.path.join(app.config['DATA_FOLDER'], 'driver_data.json')
+    print(f"JSON 저장 경로: {filepath}")
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    # GitHub 업로드
-    upload_file_to_github(filepath, 'data/driver_data.json', 'update driver_data.json')
+    print("JSON 파일 저장 완료")
+
 
 def load_driver_data():
     filepath = os.path.join(app.config['DATA_FOLDER'], 'driver_data.json')
@@ -1138,18 +1116,25 @@ def load_driver_data():
 @app.route('/driver', methods=['GET', 'POST'])
 @login_required
 def driver():
+    print("=== /driver 라우트 호출됨 ===")
+    print(f"요청 메서드: {request.method}")
+    print(f"현재 사용자: {current_user.username if current_user else 'None'}")
     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
     required_columns = ['사번', '이름', '나이', '주민등록번호', '면허번호', '갱신시작', '갱신마감', '입사일자', '퇴사일자', '연락처', '거주지']
     if request.method == 'POST':
+        print("POST 요청 받음")
         if 'excel_file' not in request.files:
             return render_template('driver.html', error='파일이 선택되지 않았습니다.', driver_data=load_driver_data(), messages=messages, current_user=current_user)
         file = request.files['excel_file']
+        print(f"파일명: {file.filename}")
         if file.filename == '':
             return render_template('driver.html', error='파일이 선택되지 않았습니다.', driver_data=load_driver_data(), messages=messages, current_user=current_user)
         if file and allowed_file(file.filename):
             filename = file.filename.replace('/', '').replace('\\', '')
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            print(f"저장 경로: {file_path}")
             file.save(file_path)
+            print(f"파일 저장 완료: {file_path}")
             try:
                 df = pd.read_excel(file_path, sheet_name=0)
                 df.columns = [str(col).strip() for col in df.columns]
@@ -1175,15 +1160,13 @@ def driver():
                     'list': driver_list,
                     'columns': required_columns
                 }
+                # 파일로 저장 
                 save_driver_data(driver_data)
-                success, error = upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
+                # UploadRecord 데이터베이스 저장
                 flask_url = url_for('uploaded_file', filename=os.path.basename(file_path), _external=True)
-                if success:
-                    record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='driver')
-                    db.session.add(record)
-                    db.session.commit()
-                if not success:
-                    print(f"엑셀 파일 GitHub 업로드 실패: {error}")
+                record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='driver')
+                db.session.add(record)
+                db.session.commit()
                 return render_template('driver.html', driver_data=driver_data, messages=messages, current_user=current_user)
             except Exception as e:
                 return render_template('driver.html', error=f'파일 처리 중 오류: {str(e)}', driver_data=load_driver_data(), messages=messages, current_user=current_user)
@@ -1361,93 +1344,190 @@ def accident_print(type, accident_no):
     # context['차종']는 accident_info(원본 데이터)의 '차종' 값만 사용
     context['차종'] = accident_info.get('차종', '')
 
-    return render_template(template, accident=context)
+    # Cloudtype 환경 설정을 템플릿에 전달
+    config = {
+        'CLOUDTYPE_ENV': os.environ.get('CLOUDTYPE_ENV')
+    }
+    
+    return render_template(template, accident=context, config=config)
 
 @app.route('/save_map_image', methods=['POST'])
 @login_required
 def save_map_image():
+    print("=== 🗺️ 사고지도 이미지 저장 시작 ===")
+    print(f"📅 저장 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"👤 사용자: {current_user.username} (ID: {current_user.id})")
+    
     data = request.get_json()
     version = data.get('version')
     image_data = data.get('image')
+    
+    print(f"📋 요청 데이터 - 버전: {version}")
+    print(f"📊 이미지 데이터 길이: {len(image_data) if image_data else 0} characters")
+    
     if not version or not image_data:
+        print("❌ 저장 실패: 버전명 또는 이미지 데이터 누락")
         return {'success': False, 'error': '버전명 또는 이미지 데이터 누락'}, 400
-    header, encoded = image_data.split(',', 1)
-    img_bytes = base64.b64decode(encoded)
-    save_dir = os.path.join('uploads', 'maps')
-    os.makedirs(save_dir, exist_ok=True)
-    save_path = os.path.join(save_dir, f'{version}.png')
-    with open(save_path, 'wb') as f:
-        f.write(img_bytes)
-
-    # === GitHub 업로드 ===
-    github_token = os.environ.get('GITHUB_TOKEN')
-    if github_token:
-        try:
-            g = Github(github_token)
-            repo = g.get_user().get_repo('ojy-hmtaxi-erp')
-            github_path = f'uploads/maps/{version}.png'
-            
-            # 파일이 이미 존재하는지 확인
-            try:
-                contents = repo.get_contents(github_path, ref="deploy")
-                # 파일이 존재하면 업데이트
-                repo.update_file(
-                    path=contents.path,
-                    message=f"update map image {version}",
-                    content=img_bytes,
-                    sha=contents.sha,
-                    branch="deploy"
-                )
-            except Exception as e:
-                # 파일이 존재하지 않으면 새로 생성
-                if "404" in str(e) or "Not Found" in str(e):
-                    repo.create_file(
-                        path=github_path,
-                        message=f"add map image {version}",
-                        content=img_bytes,
-                        branch="deploy"
-                    )
-                else:
-                    raise e
-        except Exception as e:
-            return {'success': False, 'error': f'GitHub 업로드 실패: {str(e)}'}, 500
-    else:
-        return {'success': False, 'error': 'GITHUB_TOKEN 환경변수가 설정되어 있지 않습니다.'}, 500
-    # === //GitHub 업로드 ===
-
-    return {'success': True}
+    
+    try:
+        header, encoded = image_data.split(',', 1)
+        img_bytes = base64.b64decode(encoded)
+        print(f"🖼️ 이미지 디코딩 완료: {len(img_bytes)} bytes")
+        
+        # Cloudtype 환경에서는 절대 경로 사용
+        if os.environ.get('CLOUDTYPE_ENV'):
+            # Cloudtype 환경변수가 설정된 경우 절대 경로 사용
+            save_dir = '/tmp/uploads/maps'
+            print(f"☁️ Cloudtype 환경 감지: 절대 경로 사용")
+        else:
+            # 로컬 개발 환경에서는 상대 경로 사용
+            save_dir = os.path.join('uploads', 'maps')
+            print(f"💻 로컬 환경: 상대 경로 사용")
+        
+        print(f"📁 저장 디렉토리: {save_dir}")
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, f'{version}.png')
+        
+        with open(save_path, 'wb') as f:
+            f.write(img_bytes)
+        
+        print(f"✅ 이미지 저장 성공: {save_path}")
+        print(f"📏 파일 크기: {os.path.getsize(save_path)} bytes")
+        print("=== 🗺️ 사고지도 이미지 저장 완료 ===\n")
+        
+        return {'success': True}
+        
+    except Exception as e:
+        print(f"❌ 이미지 저장 중 오류 발생: {str(e)}")
+        print("=== 🗺️ 사고지도 이미지 저장 실패 ===\n")
+        return {'success': False, 'error': f'이미지 저장 실패: {str(e)}'}, 500
 
 @app.route('/uploads/maps/<filename>')
 def uploaded_map(filename):
-    return send_from_directory(os.path.join('uploads', 'maps'), filename)
+    print("=== 🖼️ 사고지도 이미지 서빙 시작 ===")
+    print(f"📅 서빙 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"📁 요청 파일: {filename}")
+    
+    try:
+        # Cloudtype 환경에서는 절대 경로 사용
+        if os.environ.get('CLOUDTYPE_ENV'):
+            # Cloudtype 환경변수가 설정된 경우 절대 경로 사용
+            serve_dir = '/tmp/uploads/maps'
+            print(f"☁️ Cloudtype 환경 감지: 절대 경로 사용")
+        else:
+            # 로컬 개발 환경에서는 상대 경로 사용
+            serve_dir = os.path.join('uploads', 'maps')
+            print(f"💻 로컬 환경: 상대 경로 사용")
+        
+        print(f"📁 서빙 디렉토리: {serve_dir}")
+        file_path = os.path.join(serve_dir, filename)
+        
+        if os.path.exists(file_path):
+            file_size = os.path.getsize(file_path)
+            print(f"✅ 이미지 서빙 성공: {file_path}")
+            print(f"📏 파일 크기: {file_size} bytes")
+            print("=== 🖼️ 사고지도 이미지 서빙 완료 ===\n")
+        else:
+            print(f"⚠️ 파일이 존재하지 않음: {file_path}")
+        
+        return send_from_directory(serve_dir, filename)
+        
+    except Exception as e:
+        print(f"❌ 이미지 서빙 중 오류 발생: {str(e)}")
+        print("=== 🖼️ 사고지도 이미지 서빙 실패 ===\n")
+        return jsonify({'error': f'이미지 서빙 실패: {str(e)}'}), 500
 
 @app.route('/save_map_json', methods=['POST'])
 @login_required
 def save_map_json():
+    print("=== 📄 사고지도 JSON 저장 시작 ===")
+    print(f"📅 저장 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"👤 사용자: {current_user.username} (ID: {current_user.id})")
+    
     data = request.get_json()
     version = data.get('version')
     json_data = data.get('json')
+    
+    print(f"📋 요청 데이터 - 버전: {version}")
+    print(f"📊 JSON 데이터 길이: {len(json_data) if json_data else 0} characters")
+    
     if not version or not json_data:
+        print("❌ 저장 실패: 버전명 또는 JSON 데이터 누락")
         return {'success': False, 'error': '버전명 또는 JSON 데이터 누락'}, 400
-    save_dir = os.path.join('uploads', 'maps')
-    os.makedirs(save_dir, exist_ok=True)
-    save_path = os.path.join(save_dir, f'{version}.json')
-    with open(save_path, 'w', encoding='utf-8') as f:
-        f.write(json_data)
-    return {'success': True}
+    
+    try:
+        # Cloudtype 환경에서는 절대 경로 사용
+        if os.environ.get('CLOUDTYPE_ENV'):
+            # Cloudtype 환경변수가 설정된 경우 절대 경로 사용
+            save_dir = '/tmp/uploads/maps'
+            print(f"☁️ Cloudtype 환경 감지: 절대 경로 사용")
+        else:
+            # 로컬 개발 환경에서는 상대 경로 사용
+            save_dir = os.path.join('uploads', 'maps')
+            print(f"💻 로컬 환경: 상대 경로 사용")
+        
+        print(f"📁 저장 디렉토리: {save_dir}")
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, f'{version}.json')
+        
+        with open(save_path, 'w', encoding='utf-8') as f:
+            f.write(json_data)
+        
+        print(f"✅ JSON 저장 성공: {save_path}")
+        print(f"📏 파일 크기: {os.path.getsize(save_path)} bytes")
+        print("=== 📄 사고지도 JSON 저장 완료 ===\n")
+        
+        return {'success': True}
+        
+    except Exception as e:
+        print(f"❌ JSON 저장 중 오류 발생: {str(e)}")
+        print("=== 📄 사고지도 JSON 저장 실패 ===\n")
+        return {'success': False, 'error': f'JSON 저장 실패: {str(e)}'}, 500
 
 @app.route('/load_map_json')
 @login_required
 def load_map_json():
+    print("=== 📖 사고지도 JSON 불러오기 시작 ===")
+    print(f"📅 불러오기 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"👤 사용자: {current_user.username} (ID: {current_user.id})")
+    
     version = request.args.get('version')
+    print(f"📋 요청 데이터 - 버전: {version}")
+    
     if not version:
+        print("❌ 불러오기 실패: 버전명 누락")
         return jsonify({'success': False, 'error': '버전명 누락'}), 400
-    load_path = os.path.join('uploads', 'maps', f'{version}.json')
-    if not os.path.exists(load_path):
-        return jsonify({'success': False, 'error': '해당 버전의 지도 데이터가 없습니다.'}), 404
-    with open(load_path, 'r', encoding='utf-8') as f:
-        json_data = f.read()
-    return jsonify({'success': True, 'json': json_data})
+    
+    try:
+        # Cloudtype 환경에서는 절대 경로 사용
+        if os.environ.get('CLOUDTYPE_ENV'):
+            # Cloudtype 환경변수가 설정된 경우 절대 경로 사용
+            load_path = os.path.join('/tmp/uploads/maps', f'{version}.json')
+            print(f"☁️ Cloudtype 환경 감지: 절대 경로 사용")
+        else:
+            # 로컬 개발 환경에서는 상대 경로 사용
+            load_path = os.path.join('uploads', 'maps', f'{version}.json')
+            print(f"💻 로컬 환경: 상대 경로 사용")
+        
+        print(f"📁 파일 경로: {load_path}")
+        
+        if not os.path.exists(load_path):
+            print(f"❌ 파일이 존재하지 않음: {load_path}")
+            return jsonify({'success': False, 'error': '해당 버전의 지도 데이터가 없습니다.'}), 404
+        
+        with open(load_path, 'r', encoding='utf-8') as f:
+            json_data = f.read()
+        
+        print(f"✅ JSON 불러오기 성공: {load_path}")
+        print(f"📏 파일 크기: {len(json_data)} characters")
+        print("=== 📖 사고지도 JSON 불러오기 완료 ===\n")
+        
+        return jsonify({'success': True, 'json': json_data})
+        
+    except Exception as e:
+        print(f"❌ JSON 불러오기 중 오류 발생: {str(e)}")
+        print("=== 📖 사고지도 JSON 불러오기 실패 ===\n")
+        return jsonify({'success': False, 'error': f'JSON 불러오기 실패: {str(e)}'}), 500
 
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
@@ -1554,9 +1634,8 @@ def admin_delete_user(user_id):
     return redirect(url_for('admin_users'))
 
 @app.route('/uploads/<filename>')
-@login_required
 def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 @app.route('/api/latest-upload')
 def latest_upload():
@@ -1566,10 +1645,29 @@ def latest_upload():
         q = q.filter_by(upload_type=upload_type)
     record = q.order_by(UploadRecord.upload_time.desc()).first()
     if record:
+        import pytz
+        from datetime import datetime
+        kst = pytz.timezone('Asia/Seoul')
+        
+        # upload_time 처리 - 더 확실한 KST 변환
+        if hasattr(record, 'upload_time') and isinstance(record.upload_time, datetime):
+            # datetime 객체인 경우 KST로 변환
+            if record.upload_time.tzinfo is None:
+                # timezone이 없는 경우 UTC로 가정하고 KST로 변환
+                utc = pytz.timezone('UTC')
+                utc_time = utc.localize(record.upload_time)
+                upload_time_kst = utc_time.astimezone(kst).strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                # timezone이 있는 경우 KST로 변환
+                upload_time_kst = record.upload_time.astimezone(kst).strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            # 문자열인 경우 그대로 사용 (이미 KST로 저장되어 있음)
+            upload_time_kst = record.upload_time
+            
         return jsonify({
             "filename": record.filename,
             "uploader": record.uploader,
-            "upload_time": record.upload_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "upload_time": upload_time_kst,
             "github_url": record.github_url,
             "upload_type": record.upload_type
         })
@@ -1578,14 +1676,6 @@ def latest_upload():
 
 if __name__ == '__main__':
     print("=== Flask 앱 시작 ===")
-    
-    # 환경변수 확인
-    github_token = os.environ.get('GITHUB_TOKEN')
-    print(f"=== 환경변수 확인 ===")
-    print(f"GITHUB_TOKEN 설정 여부: {'설정됨' if github_token else '설정되지 않음'}")
-    if github_token:
-        print(f"GITHUB_TOKEN 길이: {len(github_token)}")
-        print(f"GITHUB_TOKEN 시작: {github_token[:10]}...")
     
     create_database()  # 데이터베이스 생성
     print("=== 데이터베이스 생성 완료 ===")
