@@ -521,19 +521,7 @@ def schedule():
                     # 파일로 저장
                     save_dispatch_data(dispatch_data)
                     
-                    # === 깃허브 푸시 및 관련 print 로그 비활성화 시작 ===
-                    # print(f"=== 배차 데이터 엑셀 파일 GitHub 업로드 시도 ===")
-                    # success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
-                    # flask_url = url_for('uploaded_file', filename=os.path.basename(filepath), _external=True)
-                    # if success:
-                    #     record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='schedule')
-                    #     db.session.add(record)
-                    #     db.session.commit()
-                    # if not success:
-                    #     print(f"엑셀 파일 GitHub 업로드 실패: {error}")
-                    # === //깃허브 푸시 및 관련 print 로그 비활성화 끝 ===
-                    
-                    # UploadRecord 데이터베이스 저장 (깃허브 푸시 없이)
+                    # UploadRecord 데이터베이스 저장
                     flask_url = url_for('uploaded_file', filename=os.path.basename(filepath), _external=True)
                     record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='schedule')
                     db.session.add(record)
@@ -610,19 +598,7 @@ def pay_lease():
                     # 파일로 저장
                     save_lease_data(salary_data)
                     
-                    # === 깃허브 푸시 및 관련 print 로그 비활성화 시작 ===
-                    # print(f"=== 리스 급여 데이터 엑셀 파일 GitHub 업로드 시도 ===")
-                    # success, error = upload_file_to_github(filepath, f'uploads/{os.path.basename(filepath)}', f'upload {os.path.basename(filepath)}')
-                    # flask_url = url_for('uploaded_file', filename=os.path.basename(filepath), _external=True)
-                    # if success:
-                    #     record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='pay_lease')
-                    #     db.session.add(record)
-                    #     db.session.commit()
-                    # if not success:
-                    #     print(f"엑셀 파일 GitHub 업로드 실패: {error}")
-                    # === //깃허브 푸시 및 관련 print 로그 비활성화 끝 ===
-                    
-                    # UploadRecord 데이터베이스 저장 (깃허브 푸시 없이)
+                    # UploadRecord 데이터베이스 저장
                     flask_url = url_for('uploaded_file', filename=os.path.basename(filepath), _external=True)
                     record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='pay_lease')
                     db.session.add(record)
@@ -721,19 +697,7 @@ def accident():
                 session['uploader_name'] = current_user.name if hasattr(current_user, 'name') else current_user.username
                 
                 flash(f'<{filename}> 파일이 성공적으로 업로드되었습니다. (업로드 일시: {session.get("upload_time")})', 'success')
-                # === 깃허브 푸시 및 관련 print 로그 비활성화 시작 ===
-                # print(f"=== 사고 데이터 엑셀 파일 GitHub 업로드 시도 ===")
-                # success, error = upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
-                # flask_url = url_for('uploaded_file', filename=os.path.basename(file_path), _external=True)
-                # if success:
-                #     record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='accident')
-                #     db.session.add(record)
-                #     db.session.commit()
-                # if not success:
-                #     print(f"엑셀 파일 GitHub 업로드 실패: {error}")
-                # === //깃허브 푸시 및 관련 print 로그 비활성화 끝 ===
-                
-                # UploadRecord 데이터베이스 저장 (깃허브 푸시 없이)
+                # UploadRecord 데이터베이스 저장
                 flask_url = url_for('uploaded_file', filename=os.path.basename(file_path), _external=True)
                 record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='accident')
                 db.session.add(record)
@@ -806,13 +770,7 @@ def save_dispatch_data(data):
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     print("JSON 파일 저장 완료")
-    # === 깃허브 푸시 및 관련 print 로그 비활성화 ===
-    # success, error = upload_file_to_github(filepath, 'data/dispatch_data.json', 'update dispatch_data.json')
-    # if not success:
-    #     print(f"JSON 파일 GitHub 업로드 실패: {error}")
-    # else:
-    #     print("JSON 파일 GitHub 업로드 성공!")
-    # === //깃허브 푸시 및 관련 print 로그 비활성화 끝 ===
+
 
 def load_dispatch_data():
     """저장된 배차 데이터를 불러옴"""
@@ -841,8 +799,7 @@ def save_lease_data(data):
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     print("JSON 파일 저장 완료")
-    # === 깃허브 푸시 및 관련 print 로그 비활성화 ===
-    # upload_file_to_github(filepath, 'data/lease_data.json', 'update lease_data.json')
+
 
 def load_lease_data():
     """저장된 리스 급여 데이터를 불러옴"""
@@ -984,8 +941,7 @@ def save_accident_data(data):
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     print("JSON 파일 저장 완료")
-    # === 깃허브 푸시 및 관련 print 로그 비활성화 ===
-    # upload_file_to_github(filepath, 'data/accident_data.json', 'update accident_data.json')
+
 
 def load_accident_data():
     """저장된 사고 데이터를 불러옴"""
@@ -1136,8 +1092,7 @@ def save_driver_data(data):
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     print("JSON 파일 저장 완료")
-    # === 깃허브 푸시 및 관련 print 로그 비활성화 ===
-    # upload_file_to_github(filepath, 'data/driver_data.json', 'update driver_data.json')
+
 
 def load_driver_data():
     filepath = os.path.join(app.config['DATA_FOLDER'], 'driver_data.json')
@@ -1207,19 +1162,7 @@ def driver():
                 }
                 # 파일로 저장 
                 save_driver_data(driver_data)
-                # === 깃허브 푸시 및 관련 print 로그 비활성화 시작 ===
-                # print(f"=== 운전기사 데이터 엑셀 파일 GitHub 업로드 시도 ===")
-                # success, error = upload_file_to_github(file_path, f'uploads/{os.path.basename(file_path)}', f'upload {os.path.basename(file_path)}')
-                # flask_url = url_for('uploaded_file', filename=os.path.basename(file_path), _external=True)
-                # if success:
-                #     record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='driver')
-                #     db.session.add(record)
-                #     db.session.commit()
-                # if not success:
-                #     print(f"엑셀 파일 GitHub 업로드 실패: {error}")
-                # === //깃허브 푸시 및 관련 print 로그 비활성화 끝 ===
-                
-                # UploadRecord 데이터베이스 저장 (깃허브 푸시 없이)
+                # UploadRecord 데이터베이스 저장
                 flask_url = url_for('uploaded_file', filename=os.path.basename(file_path), _external=True)
                 record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='driver')
                 db.session.add(record)
@@ -1733,14 +1676,6 @@ def latest_upload():
 
 if __name__ == '__main__':
     print("=== Flask 앱 시작 ===")
-    
-    # 환경변수 확인
-    github_token = os.environ.get('GITHUB_TOKEN')
-    print(f"=== 환경변수 확인 ===")
-    print(f"GITHUB_TOKEN 설정 여부: {'설정됨' if github_token else '설정되지 않음'}")
-    if github_token:
-        print(f"GITHUB_TOKEN 길이: {len(github_token)}")
-        print(f"GITHUB_TOKEN 시작: {github_token[:10]}...")
     
     create_database()  # 데이터베이스 생성
     print("=== 데이터베이스 생성 완료 ===")

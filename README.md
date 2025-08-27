@@ -11,17 +11,7 @@ pip install -r requirements.txt
 
 ### 2. 환경변수 설정
 
-프로젝트 루트에 `.env` 파일을 생성하고 다음 내용을 추가하세요:
-
-```
-GITHUB_TOKEN=your_github_personal_access_token_here
-```
-
-#### GitHub Personal Access Token 생성 방법:
-1. GitHub.com → Settings → Developer settings → Personal access tokens → Tokens (classic)
-2. Generate new token (classic)
-3. 권한 설정: `repo` (전체 체크)
-4. 토큰 생성 후 복사하여 `.env` 파일에 붙여넣기
+현재 프로젝트는 서버 로컬 경로에 데이터를 저장하므로 별도의 환경변수 설정이 필요하지 않습니다.
 
 ### 3. 애플리케이션 실행
 ```bash
@@ -30,9 +20,7 @@ python app.py
 
 ## 보안 주의사항
 
-- **절대 `.env` 파일을 Git에 커밋하지 마세요!**
-- GitHub Personal Access Token이 노출되면 즉시 재생성하세요
-- `.env` 파일은 로컬에만 보관하세요
+- 현재 프로젝트는 서버 로컬 경로에 데이터를 저장하므로 별도의 보안 설정이 필요하지 않습니다.
 
 ## 기능
 

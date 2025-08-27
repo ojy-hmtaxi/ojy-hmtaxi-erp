@@ -1,17 +1,3 @@
-warning: in the working copy of 'templates/base.html', LF will be replaced by CRLF the next time Git touches it
-[1mdiff --git a/templates/base.html b/templates/base.html[m
-[1mindex fbefc97..7acd4c1 100644[m
-[1m--- a/templates/base.html[m
-[1m+++ b/templates/base.html[m
-[36m@@ -180,7 +180,7 @@[m
-                             <li><a class="dropdown-item" href="{{ url_for('profile') }}">회원정보 수정</a></li>[m
-                         </ul>[m
-                     </div>[m
-[31m-                    <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">[m
-[32m+[m[32m                    <a href="{{ url_for('logout') }}" class="btn btn-outline-danger" style="margin-left: 10px;">[m
-                         <i class="fas fa-sign-out-alt me-2"></i>로그아웃[m
-                     </a>[m
-                 {% else %}[m
-* [32mdeploy[m
-  main[m
-  test[m
+[33m2faad67[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdeploy[m[33m, [m[1;31morigin/deploy[m[33m)[m fix: base.html main-content padding 제거로 container 중앙 정렬 문제 해결
+[33mc55fe41[m fix: 페이지 레이아웃 및 스타일 충돌 문제 해결
+[33m715125e[m fix: schedule.html 페이지 width 문제 해결
