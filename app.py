@@ -1320,9 +1320,9 @@ def driver_profile(driver_id):
                         type: 'bar',
                         label: '승무일수',
                         data: workDays,
-                        backgroundColor: 'rgba(76, 175, 80, 0.7)',
-                        borderColor: 'rgba(76, 175, 80, 1)',
-                        borderWidth: 1,
+                        backgroundColor: 'rgba(76, 175, 80, 0.2)',
+                        borderColor: 'rgba(76, 175, 80, 0.5)',
+                        borderWidth: 0.5,
                         yAxisID: 'y'
                     }},
                     {{
@@ -1333,7 +1333,7 @@ def driver_profile(driver_id):
                         backgroundColor: 'rgba(33, 150, 243, 0.1)',
                         borderWidth: 2,
                         fill: false,
-                        tension: 0.4,
+                        tension: 0.01,
                         yAxisID: 'y1'
                     }},
                     {{
@@ -1344,7 +1344,7 @@ def driver_profile(driver_id):
                         backgroundColor: 'rgba(255, 152, 0, 0.1)',
                         borderWidth: 2,
                         fill: false,
-                        tension: 0.4,
+                        tension: 0.01,
                         yAxisID: 'y1'
                     }},
                     {{
@@ -1355,7 +1355,7 @@ def driver_profile(driver_id):
                         backgroundColor: 'rgba(156, 39, 176, 0.1)',
                         borderWidth: 2,
                         fill: false,
-                        tension: 0.4,
+                        tension: 0.01,
                         yAxisID: 'y1'
                     }}
                 ]
