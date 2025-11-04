@@ -37,5 +37,5 @@ class UploadRecord(db.Model):
     filename = db.Column(db.String(255), nullable=False)
     uploader = db.Column(db.String(100), nullable=False)
     upload_time = db.Column(db.DateTime, default=datetime.utcnow)
-    github_url = db.Column(db.String(500), nullable=False)
+    github_url = db.Column(db.String(500), nullable=True)
     upload_type = db.Column(db.String(50), nullable=False)  # pay_lease, accident, driver, schedule 구분용 

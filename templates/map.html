@@ -526,8 +526,11 @@
         
         const defaultWidth = categoryWidth[category] || 120;
 
+        // URL을 절대 경로로 변환
+        const absoluteUrl = url.startsWith('http') ? url : window.location.origin + url;
+
         if (url.endsWith('.svg')) {
-            fabric.loadSVGFromURL(url, function(objects, options) {
+            fabric.loadSVGFromURL(absoluteUrl, function(objects, options) {
                 const obj = fabric.util.groupSVGElements(objects, options);
                 obj.scaleToWidth(defaultWidth);
                 obj.set({ left: 200, top: 200 });
@@ -535,7 +538,7 @@
                 setMode('select');
             });
         } else {
-        fabric.Image.fromURL(url, function(img) {
+        fabric.Image.fromURL(absoluteUrl, function(img) {
                 img.scaleToWidth(defaultWidth);
                 img.set({ left: 200, top: 200 });
             canvas.add(img);
@@ -569,7 +572,8 @@
         if (e.ctrlKey && e.key === 'v') {
             const clipboardData = localStorage.getItem('clipboard');
             if (clipboardData) {
-                fabric.util.enlivenObjects([JSON.parse(clipboardData)], function(objects) {
+                const objData = JSON.parse(clipboardData);
+                fabric.util.enlivenObjects([objData], function(objects) {
                     objects.forEach(function(obj) {
                         // 원본 객체에서 약간 오프셋된 위치에 붙여넣기
                         obj.set({
@@ -596,31 +600,32 @@
                 });
 
                 // 객체 복제 및 좌표/기준점 보정
-                fabric.util.enlivenObjects(
-                    activeObjs.map(obj => obj.toObject()),
-                    function(clones) {
-                        clones.forEach(obj => {
-                            obj.originX = 'left';
-                            obj.originY = 'top';
-                            obj.left = obj.left - minLeft;
-                            obj.top = obj.top - minTop;
-                        });
-                        const group = new fabric.Group(clones, {
-                            originX: 'center',
-                            originY: 'center'
-                        });
-                        // 캔버스 중앙 좌표 계산
-                        const canvasCenter = canvas.getCenter();
-                        group.left = canvasCenter.left;
-                        group.top = canvasCenter.top;
+                const objDataArray = activeObjs.map(obj => {
+                    const objData = obj.toObject();
+                    return objData;
+                });
+                fabric.util.enlivenObjects(objDataArray, function(clones) {
+                    clones.forEach(obj => {
+                        obj.originX = 'left';
+                        obj.originY = 'top';
+                        obj.left = obj.left - minLeft;
+                        obj.top = obj.top - minTop;
+                    });
+                    const group = new fabric.Group(clones, {
+                        originX: 'center',
+                        originY: 'center'
+                    });
+                    // 캔버스 중앙 좌표 계산
+                    const canvasCenter = canvas.getCenter();
+                    group.left = canvasCenter.left;
+                    group.top = canvasCenter.top;
 
-                        canvas.discardActiveObject();
-                        activeObjs.forEach(obj => canvas.remove(obj));
-                        canvas.add(group);
-                        canvas.setActiveObject(group);
-                        canvas.requestRenderAll();
-                    }
-                );
+                    canvas.discardActiveObject();
+                    activeObjs.forEach(obj => canvas.remove(obj));
+                    canvas.add(group);
+                    canvas.setActiveObject(group);
+                    canvas.requestRenderAll();
+                });
             }
         }
 
@@ -843,7 +848,7 @@
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                canvas.loadFromJSON(data.json, function() {
+                canvas.loadFromJSON(fixImageUrls(data.json), function() {
                     canvas.renderAll();
                     setMode('select');
                 });
@@ -1111,7 +1116,7 @@
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                canvas.loadFromJSON(data.json, function() {
+                canvas.loadFromJSON(fixImageUrls(data.json), function() {
                     canvas.renderAll();
                     setMode('select');
                 });
@@ -1120,6 +1125,24 @@
             }
         });
     };
+
+    // 캔버스 JSON 불러올 때 이미지 경로 교정 함수
+    function fixImageUrls(json) {
+        if (typeof json === 'string') json = JSON.parse(json);
+        function traverse(obj) {
+            if (obj && typeof obj === 'object') {
+                for (let key in obj) {
+                    if (typeof obj[key] === 'object') {
+                        traverse(obj[key]);
+                    } else if (key === 'src' && typeof obj[key] === 'string') {
+                        obj[key] = obj[key].replace('http://localhost:5000', window.location.origin);
+                    }
+                }
+            }
+        }
+        traverse(json);
+        return json;
+    }
 </script>
 </body>
 </html> 
