@@ -1,3 +1,5 @@
-[33m2faad67[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdeploy[m[33m, [m[1;31morigin/deploy[m[33m)[m fix: base.html main-content padding 제거로 container 중앙 정렬 문제 해결
-[33mc55fe41[m fix: 페이지 레이아웃 및 스타일 충돌 문제 해결
-[33m715125e[m fix: schedule.html 페이지 width 문제 해결
+[33m38a939d[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdeploy[m[33m, [m[1;31morigin/deploy[m[33m)[m GitHub 기능 완전 제거 및 프로젝트 정리 완료
+[33me5f9ae0[m fix: Bootstrap .container 클래스 충돌 해결을 위한 커스텀 클래스 적용 - accident.html, driver.html, pay_lease.html, schedule.html의 .container를 .custom-container로 변경 - Bootstrap의 max-width: 1320px와의 충돌 완전 해결 - 정확한 max-width: 1200px 적용으로 레이아웃 일관성 확보
+[33mc8be893[m feat: container 스타일을 width 100%와 max-width 1200px로 최적화 - accident.html, driver.html, pay_lease.html, schedule.html의 .container 스타일 통일 - width: 90%  100%로 변경하여 화면 활용도 향상 - max-width: 1200px 추가로 큰 화면에서 가독성 개선 - 반응형 디자인과 최적 너비의 균형 유지
+[33m4aa4f84[m feat: 모든 페이지의 container 너비를 90%로 통일 및 가운데 정렬 - accident.html, driver.html, pay_lease.html, schedule.html의 .container 스타일 통일 - max-width: 1200px  width: 90%로 변경하여 반응형 개선 - margin: 0 auto로 가운데 정렬 유지
+[33m4f87d97[m fix: Jinja2 템플릿 블록 중복 오류 해결 및 레이아웃 구조 개선 - schedule.html, accident.html, pay_lease.html의 중복 content 블록을 head/content로 분리 - driver.html도 표준 구조로 변경 - base.html top-nav margin-left를 auto로 수정하여 중앙 정렬 - 모든 페이지의 템플릿 상속 구조 정상화

@@ -1288,6 +1288,7 @@ def driver_profile(driver_id):
                 <tr><td class="label">사번</td><td>{driver_info.get('사번','')}</td></tr>
                 <tr><td class="label">나이</td><td>{driver_info.get('나이','')}</td></tr>
                 <tr><td class="label">주민등록번호</td><td>{driver_info.get('주민등록번호','')}</td></tr>
+                <tr><td class="label">연락처</td><td>{driver_info.get('연락처','')}</td></tr>
             </table>
         </div>
         <div class="profile-section">
@@ -1298,12 +1299,6 @@ def driver_profile(driver_id):
                 <tr><td class="label">갱신마감</td><td>{driver_info.get('갱신마감','').split(' ')[0] if driver_info.get('갱신마감') else ''}</td></tr>
                 <tr><td class="label">입사일자</td><td>{driver_info.get('입사일자','').split(' ')[0] if driver_info.get('입사일자') else ''}</td></tr>
                 <tr><td class="label">퇴사일자</td><td>{driver_info.get('퇴사일자','').split(' ')[0] if driver_info.get('퇴사일자') else ''}</td></tr>
-            </table>
-        </div>
-        <div class="profile-section">
-            <h3>연락처</h3>
-            <table class="profile-table">
-                <tr><td class="label">연락처</td><td>{driver_info.get('연락처','')}</td></tr>
             </table>
         </div>
         <div class="profile-section">
