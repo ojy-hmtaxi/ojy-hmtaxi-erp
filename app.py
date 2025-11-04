@@ -1297,13 +1297,8 @@ def driver_profile(driver_id):
             
             <div style="margin-top:30px;">
                 <b>월별 추이 그래프</b>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:15px;">
-                    <div>
-                        <canvas id="workDaysChart" style="max-height:200px;"></canvas>
-                    </div>
-                    <div>
-                        <canvas id="incomeChart" style="max-height:200px;"></canvas>
-                    </div>
+                <div style="margin-top:15px;">
+                    <canvas id="combinedChart" style="max-height:300px;"></canvas>
                 </div>
             </div>
         </div>
@@ -1315,76 +1310,95 @@ def driver_profile(driver_id):
         const fuel = {chart_fuel};
         const salary = {chart_salary};
         
-        // 승무일수 그래프
-        new Chart(document.getElementById('workDaysChart'), {{
+        // 혼합 차트 (막대 + 라인)
+        new Chart(document.getElementById('combinedChart'), {{
             type: 'bar',
-            data: {{
-                labels: months,
-                datasets: [{{
-                    label: '승무일수',
-                    data: workDays,
-                    backgroundColor: 'rgba(76, 175, 80, 0.7)',
-                    borderColor: 'rgba(76, 175, 80, 1)',
-                    borderWidth: 1
-                }}]
-            }},
-            options: {{
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {{
-                    legend: {{ display: true, position: 'top' }},
-                    title: {{ display: true, text: '월별 승무일수' }}
-                }},
-                scales: {{
-                    y: {{ beginAtZero: true }}
-                }}
-            }}
-        }});
-        
-        // 매출/급여 그래프
-        new Chart(document.getElementById('incomeChart'), {{
-            type: 'line',
             data: {{
                 labels: months,
                 datasets: [
                     {{
+                        type: 'bar',
+                        label: '승무일수',
+                        data: workDays,
+                        backgroundColor: 'rgba(76, 175, 80, 0.7)',
+                        borderColor: 'rgba(76, 175, 80, 1)',
+                        borderWidth: 1,
+                        yAxisID: 'y'
+                    }},
+                    {{
+                        type: 'line',
                         label: '매출(실입금)',
                         data: income,
                         borderColor: 'rgba(33, 150, 243, 1)',
                         backgroundColor: 'rgba(33, 150, 243, 0.1)',
                         borderWidth: 2,
-                        fill: true,
-                        tension: 0.4
+                        fill: false,
+                        tension: 0.4,
+                        yAxisID: 'y1'
                     }},
                     {{
+                        type: 'line',
                         label: '연료비',
                         data: fuel,
                         borderColor: 'rgba(255, 152, 0, 1)',
                         backgroundColor: 'rgba(255, 152, 0, 0.1)',
                         borderWidth: 2,
-                        fill: true,
-                        tension: 0.4
+                        fill: false,
+                        tension: 0.4,
+                        yAxisID: 'y1'
                     }},
                     {{
+                        type: 'line',
                         label: '급여',
                         data: salary,
-                        borderColor: 'rgba(76, 175, 80, 1)',
-                        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                        borderColor: 'rgba(156, 39, 176, 1)',
+                        backgroundColor: 'rgba(156, 39, 176, 0.1)',
                         borderWidth: 2,
-                        fill: true,
-                        tension: 0.4
+                        fill: false,
+                        tension: 0.4,
+                        yAxisID: 'y1'
                     }}
                 ]
             }},
             options: {{
                 responsive: true,
                 maintainAspectRatio: true,
+                interaction: {{
+                    mode: 'index',
+                    intersect: false
+                }},
                 plugins: {{
-                    legend: {{ display: true, position: 'top' }},
-                    title: {{ display: true, text: '월별 매출/연료비/급여 추이' }}
+                    legend: {{ 
+                        display: true, 
+                        position: 'top'
+                    }},
+                    title: {{ 
+                        display: true, 
+                        text: '월별 승무일수 및 매출/연료비/급여 추이'
+                    }}
                 }},
                 scales: {{
-                    y: {{ beginAtZero: true }}
+                    y: {{
+                        type: 'linear',
+                        position: 'left',
+                        beginAtZero: true,
+                        title: {{
+                            display: true,
+                            text: '승무일수'
+                        }}
+                    }},
+                    y1: {{
+                        type: 'linear',
+                        position: 'right',
+                        beginAtZero: true,
+                        title: {{
+                            display: true,
+                            text: '금액 (원)'
+                        }},
+                        grid: {{
+                            drawOnChartArea: false
+                        }}
+                    }}
                 }}
             }}
         }});
