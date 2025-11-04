@@ -1187,6 +1187,210 @@ def driver_profile(driver_id):
                 break
     if not driver_info:
         return '<h3>운전기사 정보를 찾을 수 없습니다.</h3>'
+    
+    # 배차 데이터 로드
+    dispatch_data = load_dispatch_data()
+    lease_data = load_lease_data()
+    
+    # 매출/급여 데이터 집계
+    salary_summary = ''
+    if dispatch_data and lease_data:
+        driver_name = driver_info.get('이름', '')
+        driver_emp_id = driver_info.get('사번', '')
+        
+        # 월별 데이터 집계
+        monthly_stats = {}
+        work_type = ''
+        vehicle_types = set()
+        
+        # 배차 데이터에서 승무일 수 집계
+        for month_key in dispatch_data.keys():
+            month_data = dispatch_data[month_key].get('data', [])
+            for record in month_data:
+                if record.get('운전기사', '') == driver_name:
+                    if not work_type:
+                        work_type = record.get('근무유형', '')
+                    vehicle_types.add(record.get('차종', ''))
+                    
+                    # 승무일 수 계산 (일자별 'o' 카운트)
+                    work_days = 0
+                    for day in range(1, 32):
+                        day_str = str(day)
+                        if day_str in record and record[day_str] == 'o':
+                            work_days += 1
+                    
+                    if month_key not in monthly_stats:
+                        monthly_stats[month_key] = {'승무일수': 0}
+                    monthly_stats[month_key]['승무일수'] += work_days
+        
+        # 리스 데이터에서 급여 정보 집계
+        for month_key in lease_data.keys():
+            month_data = lease_data[month_key].get('data', [])
+            for record in month_data:
+                if record.get('사번', '') == driver_emp_id or record.get('이름', '') == driver_name:
+                    if month_key not in monthly_stats:
+                        monthly_stats[month_key] = {}
+                    
+                    monthly_stats[month_key]['실입금'] = int(record.get('실입금', 0))
+                    monthly_stats[month_key]['연료비'] = int(record.get('연료비', 0))
+                    monthly_stats[month_key]['급여'] = float(record.get('급여', 0))
+                    monthly_stats[month_key]['차종'] = record.get('차종', '')
+        
+        # 월 정렬 (01월~12월)
+        sorted_months = sorted(monthly_stats.keys())
+        
+        # 테이블 생성
+        table_rows = []
+        chart_labels = []
+        chart_income = []
+        chart_fuel = []
+        chart_salary = []
+        chart_workdays = []
+        
+        for month in sorted_months:
+            stats = monthly_stats[month]
+            work_days = stats.get('승무일수', 0)
+            income = stats.get('실입금', 0)
+            fuel = stats.get('연료비', 0)
+            salary = stats.get('급여', 0)
+            
+            table_rows.append(f'''
+                <tr>
+                    <td>{month}</td>
+                    <td>{work_days}일</td>
+                    <td>{income:,}원</td>
+                    <td>{fuel:,}원</td>
+                    <td>{salary:,.0f}원</td>
+                </tr>
+            ''')
+            
+            chart_labels.append(month)
+            chart_workdays.append(work_days)
+            chart_income.append(income)
+            chart_fuel.append(fuel)
+            chart_salary.append(int(salary))
+        
+        vehicle_types_str = ', '.join(sorted(vehicle_types)) if vehicle_types else '-'
+        
+        # 매출/급여 섹션 HTML
+        salary_summary = f'''
+        <div class="profile-section">
+            <h3>매출/급여</h3>
+            <table class="profile-table" style="margin-bottom:20px;">
+                <tr><td class="label">근무유형</td><td>{work_type or '-'}</td></tr>
+                <tr><td class="label">배차된 차종</td><td>{vehicle_types_str}</td></tr>
+            </table>
+            
+            <div style="margin-top:20px;">
+                <b>월별 현황</b>
+                <table class="profile-table" style="margin-top:10px;">
+                    <tr style="background:#f8f8f8;font-weight:600;">
+                        <td>월</td>
+                        <td>승무일수</td>
+                        <td>매출(실입금)</td>
+                        <td>연료비</td>
+                        <td>급여</td>
+                    </tr>
+                    {''.join(table_rows) if table_rows else '<tr><td colspan=5>데이터 없음</td></tr>'}
+                </table>
+            </div>
+            
+            <div style="margin-top:30px;">
+                <b>월별 추이 그래프</b>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:15px;">
+                    <div>
+                        <canvas id="workDaysChart" style="max-height:200px;"></canvas>
+                    </div>
+                    <div>
+                        <canvas id="incomeChart" style="max-height:200px;"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <script>
+        const months = {chart_labels};
+        const workDays = {chart_workdays};
+        const income = {chart_income};
+        const fuel = {chart_fuel};
+        const salary = {chart_salary};
+        
+        // 승무일수 그래프
+        new Chart(document.getElementById('workDaysChart'), {{
+            type: 'bar',
+            data: {{
+                labels: months,
+                datasets: [{{
+                    label: '승무일수',
+                    data: workDays,
+                    backgroundColor: 'rgba(76, 175, 80, 0.7)',
+                    borderColor: 'rgba(76, 175, 80, 1)',
+                    borderWidth: 1
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {{
+                    legend: {{ display: true, position: 'top' }},
+                    title: {{ display: true, text: '월별 승무일수' }}
+                }},
+                scales: {{
+                    y: {{ beginAtZero: true }}
+                }}
+            }}
+        }});
+        
+        // 매출/급여 그래프
+        new Chart(document.getElementById('incomeChart'), {{
+            type: 'line',
+            data: {{
+                labels: months,
+                datasets: [
+                    {{
+                        label: '매출(실입금)',
+                        data: income,
+                        borderColor: 'rgba(33, 150, 243, 1)',
+                        backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }},
+                    {{
+                        label: '연료비',
+                        data: fuel,
+                        borderColor: 'rgba(255, 152, 0, 1)',
+                        backgroundColor: 'rgba(255, 152, 0, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }},
+                    {{
+                        label: '급여',
+                        data: salary,
+                        borderColor: 'rgba(76, 175, 80, 1)',
+                        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }}
+                ]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {{
+                    legend: {{ display: true, position: 'top' }},
+                    title: {{ display: true, text: '월별 매출/연료비/급여 추이' }}
+                }},
+                scales: {{
+                    y: {{ beginAtZero: true }}
+                }}
+            }}
+        }});
+        </script>
+        '''
+    
     # 사고 데이터 로드 및 요약
     accident_data = None
     try:
@@ -1251,6 +1455,7 @@ def driver_profile(driver_id):
     # 상세 페이지 카드형 디자인 (이미지 예시 참고)
     return f'''
     <html lang="ko"><head><meta charset="utf-8"><title>운전기사 인사정보</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
     body {{ background:#f5f5f5; font-family:'Noto Sans KR',sans-serif; margin:0; }}
     .profile-wrap {{ max-width:800px; margin:40px auto; background:#fff; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.08); padding:40px 32px; }}
@@ -1315,6 +1520,7 @@ def driver_profile(driver_id):
                 <tr><td class="label">거주지</td><td>{driver_info.get('거주지','')}</td></tr>
             </table>
         </div>
+        {salary_summary}
         {accident_summary}
     </div>
     </body></html>
