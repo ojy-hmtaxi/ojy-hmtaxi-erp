@@ -1261,6 +1261,8 @@ def driver_profile(driver_id):
     .profile-maininfo .id {{ color:#aaa; font-size:1rem; }}
     .profile-section {{ margin-bottom:28px; }}
     .profile-section h3 {{ font-size:1.1rem; color:#4CAF50; margin-bottom:12px; border-bottom:1px solid #e0e0e0; padding-bottom:6px; }}
+    .profile-row {{ display:flex; gap:20px; margin-bottom:28px; }}
+    .profile-row .profile-section {{ flex:1; margin-bottom:0; }}
     .profile-table {{ width:100%; border-collapse:collapse; }}
     .profile-table td {{ padding:7px 10px; color:#333; font-size:1rem; border-bottom:1px solid #f2f2f2; }}
     .profile-table tr:last-child td {{ border-bottom:none; }}
@@ -1268,7 +1270,11 @@ def driver_profile(driver_id):
     .profile-actions {{ position:absolute; top:40px; right:40px; }}
     .profile-actions button {{ margin-left:8px; padding:6px 18px; border-radius:5px; border:none; background:#eee; color:#333; font-weight:500; cursor:pointer; }}
     .profile-actions button.edit {{ background:#4CAF50; color:#fff; }}
-    @media (max-width: 900px) {{ .profile-wrap {{ padding:20px 5vw; }} }}
+    @media (max-width: 900px) {{ 
+        .profile-wrap {{ padding:20px 5vw; }}
+        .profile-row {{ flex-direction:column; }}
+        .profile-row .profile-section {{ margin-bottom:28px; }}
+    }}
     </style></head><body>
     <div class="profile-wrap">
         <div class="profile-header">
@@ -1281,25 +1287,27 @@ def driver_profile(driver_id):
                 <div class="id">면허번호: {driver_info.get('면허번호','')}</div>
             </div>
         </div>
-        <div class="profile-section">
-            <h3>기본 정보</h3>
-            <table class="profile-table">
-                <tr><td class="label">이름</td><td>{driver_info.get('이름','')}</td></tr>
-                <tr><td class="label">사번</td><td>{driver_info.get('사번','')}</td></tr>
-                <tr><td class="label">나이</td><td>{driver_info.get('나이','')}</td></tr>
-                <tr><td class="label">주민등록번호</td><td>{driver_info.get('주민등록번호','')}</td></tr>
-                <tr><td class="label">연락처</td><td>{driver_info.get('연락처','')}</td></tr>
-            </table>
-        </div>
-        <div class="profile-section">
-            <h3>근무 정보</h3>
-            <table class="profile-table">
-                <tr><td class="label">면허번호</td><td>{driver_info.get('면허번호','')}</td></tr>
-                <tr><td class="label">갱신시작</td><td>{driver_info.get('갱신시작','').split(' ')[0] if driver_info.get('갱신시작') else ''}</td></tr>
-                <tr><td class="label">갱신마감</td><td>{driver_info.get('갱신마감','').split(' ')[0] if driver_info.get('갱신마감') else ''}</td></tr>
-                <tr><td class="label">입사일자</td><td>{driver_info.get('입사일자','').split(' ')[0] if driver_info.get('입사일자') else ''}</td></tr>
-                <tr><td class="label">퇴사일자</td><td>{driver_info.get('퇴사일자','').split(' ')[0] if driver_info.get('퇴사일자') else ''}</td></tr>
-            </table>
+        <div class="profile-row">
+            <div class="profile-section">
+                <h3>기본 정보</h3>
+                <table class="profile-table">
+                    <tr><td class="label">이름</td><td>{driver_info.get('이름','')}</td></tr>
+                    <tr><td class="label">사번</td><td>{driver_info.get('사번','')}</td></tr>
+                    <tr><td class="label">나이</td><td>{driver_info.get('나이','')}</td></tr>
+                    <tr><td class="label">주민등록번호</td><td>{driver_info.get('주민등록번호','')}</td></tr>
+                    <tr><td class="label">연락처</td><td>{driver_info.get('연락처','')}</td></tr>
+                </table>
+            </div>
+            <div class="profile-section">
+                <h3>근무 정보</h3>
+                <table class="profile-table">
+                    <tr><td class="label">면허번호</td><td>{driver_info.get('면허번호','')}</td></tr>
+                    <tr><td class="label">갱신시작</td><td>{driver_info.get('갱신시작','').split(' ')[0] if driver_info.get('갱신시작') else ''}</td></tr>
+                    <tr><td class="label">갱신마감</td><td>{driver_info.get('갱신마감','').split(' ')[0] if driver_info.get('갱신마감') else ''}</td></tr>
+                    <tr><td class="label">입사일자</td><td>{driver_info.get('입사일자','').split(' ')[0] if driver_info.get('입사일자') else ''}</td></tr>
+                    <tr><td class="label">퇴사일자</td><td>{driver_info.get('퇴사일자','').split(' ')[0] if driver_info.get('퇴사일자') else ''}</td></tr>
+                </table>
+            </div>
         </div>
         <div class="profile-section">
             <h3>거주지</h3>
