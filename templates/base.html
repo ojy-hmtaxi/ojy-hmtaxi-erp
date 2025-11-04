@@ -201,7 +201,7 @@
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert" style="margin: 0px 20px 10px 10px;">
                         {{ message }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
@@ -239,6 +239,15 @@
         document.addEventListener('DOMContentLoaded', function() {
             console.log('현재 브라우저 시간대:', Intl.DateTimeFormat().resolvedOptions().timeZone);
             console.log('현재 시간:', new Date().toLocaleString('ko-KR', {timeZone: 'Asia/Seoul'}));
+            
+            // alert-success 메시지 9초 후 자동 사라지기
+            const successAlerts = document.querySelectorAll('.alert-success');
+            successAlerts.forEach(function(alert) {
+                setTimeout(function() {
+                    const bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                }, 9000); // 9초
+            });
         });
 
 
