@@ -1322,7 +1322,7 @@ def driver_profile(driver_id):
                         data: workDays,
                         backgroundColor: 'rgba(76, 175, 80, 0.2)',
                         borderColor: 'rgba(76, 175, 80, 0.5)',
-                        borderWidth: 0.5,
+                        borderWidth: 1,
                         yAxisID: 'y'
                     }},
                     {{
