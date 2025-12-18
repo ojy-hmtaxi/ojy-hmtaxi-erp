@@ -224,7 +224,7 @@
                 <div id="at-fault" class="tab-content active">
                     <!-- 가해사고 통합 검색 필터 -->
                     <div style="margin-bottom:12px;">
-                        <input type="text" id="atFaultUnifiedFilter" placeholder="사고번호, 차번, 차종, 기사명, 처리여부(미결/종결) 검색" style="width:100%;">
+                        <input type="text" id="atFaultUnifiedFilter" placeholder="사고번호, 차번, 차종, 사번, 기사명, 처리여부(미결/종결) 검색" style="width:100%;">
                     </div>
                     <table class="table" id="atFaultTable">
                         <thead>
@@ -233,6 +233,7 @@
                                 <th>사고일시</th>
                                 <th>차번</th>
                                 <th>차종</th>
+                                <th>사번</th>
                                 <th>기사명</th>
                                 <th>사고원인</th>
                                 <th>접보사항</th>
@@ -252,6 +253,15 @@
                                 <td>{{ accident.사고일시.split(' ')[0] + ' ' + accident.사고일시.split(' ')[1][:5] if accident.사고일시 and ' ' in accident.사고일시 else accident.사고일시 }}</td>
                                 <td>{{ accident.차번 }}</td>
                                 <td>{{ accident.차종 }}</td>
+                                <td>
+                                    {% set emp_id = accident.get('사번', '')|string|trim %}
+                                    {% if emp_id and emp_id != '' and emp_id != 'nan' and emp_id != 'None' %}
+                                        {% set emp_id_clean = emp_id.replace('.0', '')|trim %}
+                                        <a href="{{ url_for('driver_profile', driver_id=emp_id_clean) }}" target="_blank">{{ emp_id_clean }}</a>
+                                    {% else %}
+                                        {{ '' }}
+                                    {% endif %}
+                                </td>
                                 <td>{{ accident.기사명 }}</td>
                                 <td>{{ accident.사고원인 }}</td>
                                 <td>{{ accident.접보사항 }}</td>
@@ -271,7 +281,7 @@
                 <div id="not-at-fault" class="tab-content">
                     <!-- 피해사고 통합 검색 필터 -->
                     <div style="margin-bottom:12px;">
-                        <input type="text" id="notAtFaultUnifiedFilter" placeholder="사고번호, 차번, 차종, 기사명, 처리여부(미결/종결) 검색" style="width:100%;">
+                        <input type="text" id="notAtFaultUnifiedFilter" placeholder="사고번호, 차번, 차종, 사번, 기사명, 처리여부(미결/종결) 검색" style="width:100%;">
                     </div>
                     <table class="table" id="notAtFaultTable">
                         <thead>
@@ -280,6 +290,7 @@
                                 <th>사고일시</th>
                                 <th>차번</th>
                                 <th>차종</th>
+                                <th>사번</th>
                                 <th>기사명</th>
                                 <th>사고원인</th>
                                 <th class="payment-column">피해견적</th>
@@ -300,6 +311,15 @@
                                 <td>{{ accident.사고일시.split(' ')[0] + ' ' + accident.사고일시.split(' ')[1][:5] if accident.사고일시 and ' ' in accident.사고일시 else accident.사고일시 }}</td>
                                 <td>{{ accident.차번 }}</td>
                                 <td>{{ accident.차종 }}</td>
+                                <td>
+                                    {% set emp_id = accident.get('사번', '')|string|trim %}
+                                    {% if emp_id and emp_id != '' and emp_id != 'nan' and emp_id != 'None' %}
+                                        {% set emp_id_clean = emp_id.replace('.0', '')|trim %}
+                                        <a href="{{ url_for('driver_profile', driver_id=emp_id_clean) }}" target="_blank">{{ emp_id_clean }}</a>
+                                    {% else %}
+                                        {{ '' }}
+                                    {% endif %}
+                                </td>
                                 <td>{{ accident.기사명 }}</td>
                                 <td>{{ accident.사고원인 }}</td>
                                 <td class="payment-column">{{ "{:,}".format(accident.피해견적|int) if accident.피해견적 and accident.피해견적.replace(',', '').isdigit() else accident.피해견적 }}</td>
@@ -635,7 +655,7 @@
             for (var i = 0; i < rows.length; i++) {
                 var cells = rows[i].getElementsByTagName('td');
                 var show = false;
-                for (var j of [0,2,3,4,13]) { // 사고번호, 차번, 차종, 기사명, 처리여부
+                for (var j of [0,2,3,4,5,14]) { // 사고번호, 차번, 차종, 사번, 기사명, 처리여부
                     if (cells[j] && cells[j].textContent.toLowerCase().includes(keyword)) show = true;
                 }
                 rows[i].style.display = (keyword === '' || show) ? '' : 'none';
@@ -650,7 +670,7 @@
             for (var i = 0; i < rows.length; i++) {
                 var cells = rows[i].getElementsByTagName('td');
                 var show = false;
-                for (var j of [0,2,3,4,14]) { // 사고번호, 차번, 차종, 기사명, 처리여부
+                for (var j of [0,2,3,4,5,15]) { // 사고번호, 차번, 차종, 사번, 기사명, 처리여부
                     if (cells[j] && cells[j].textContent.toLowerCase().includes(keyword)) show = true;
                 }
                 rows[i].style.display = (keyword === '' || show) ? '' : 'none';

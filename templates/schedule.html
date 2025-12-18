@@ -202,20 +202,21 @@
         }
 
         /* 셀 내용에 따른 색상 스타일 */
-        .dispatch-table td[data-value="휴"] {
-            color: #ff0000;  /* 빨강 */
-            font-weight: bold;
-        }
-        
         .dispatch-table td[data-value="o"] {
-            color: #008000;  /* 초록 */
+            color: #008000;  /* 초록 - 근무 */
             font-weight: bold;
         }
         
         .dispatch-table td[data-value="x"] {
-            color: #ffa500;  /* 주황 */
+            color: #ff0000;  /* 빨강 - 결근 */
             font-weight: bold;
         }
+        
+        .dispatch-table td[data-value="/"] {
+            color: #ffa500;  /* 주황 - 휴무 */
+            font-weight: bold;
+        }
+        
 
         /* 스크롤바 스타일링 */
         .table-container::-webkit-scrollbar {
