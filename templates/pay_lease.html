@@ -106,6 +106,13 @@
         .table tr:nth-child(even) {
             background-color: #f9f9f9;
         }
+        /* 테이블 호버 스타일 */
+        .table tbody tr:hover {
+            background-color: rgba(135, 206, 235, 0.3);  /* 하늘색 투명도 30% */
+        }
+        .table tbody tr:hover td {
+            background-color: rgba(135, 206, 235, 0.3);  /* 하늘색 투명도 30% */
+        }
         .result {
             margin-top: 20px;
             padding: 15px;
@@ -218,8 +225,11 @@
             background-color: #f0f0f0;
         }
         
-        .summary-table tr:hover {
-            background-color: #f5f5f5;
+        .summary-table tbody tr:hover {
+            background-color: rgba(135, 206, 235, 0.3);  /* 하늘색 투명도 30% */
+        }
+        .summary-table tbody tr:hover td {
+            background-color: rgba(135, 206, 235, 0.3);  /* 하늘색 투명도 30% */
         }
         
         .rank-badge {

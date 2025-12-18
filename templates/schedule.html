@@ -131,59 +131,76 @@
         }
 
         .dispatch-table tbody tr:hover {
-            background-color: #f5f5f5;
+            background-color: rgba(135, 206, 235, 0.3);  /* 하늘색 투명도 30% */
         }
 
         .dispatch-table tbody tr:hover td {
-            background-color: #f5f5f5;
+            background-color: rgba(135, 206, 235, 0.3);  /* 하늘색 투명도 30% */
         }
 
-        /* sticky columns should maintain their background when row is hovered */
-        .dispatch-table tbody tr:hover td:nth-child(-n+4) {
-            background-color: #fff;
-        }
-
-        .dispatch-table th:nth-child(-n+4),
-        .dispatch-table td:nth-child(-n+4) {
+        .dispatch-table th:nth-child(-n+8),
+        .dispatch-table td:nth-child(-n+8) {
             position: sticky;
-            left: 0;
             z-index: 1;
             background-color: #fff;
         }
 
-        /* 첫 4개 컬럼에 대한 특별한 width 설정 */
+        /* 차량번호부터 결근일수까지 컬럼 width 설정 */
         .dispatch-table th:nth-child(1),
         .dispatch-table td:nth-child(1) {
-            width: 70px;
-            min-width: 70px;
+            width: 45px;
+            min-width: 45px;
+            left: 0;
         }
         
         .dispatch-table th:nth-child(2),
         .dispatch-table td:nth-child(2) {
-            width: 80px;
-            min-width: 80px;
+            width: 45px;
+            min-width: 45px;
+            left: 45px;
         }
         
         .dispatch-table th:nth-child(3),
         .dispatch-table td:nth-child(3) {
-            width: 80px;
-            min-width: 80px;
+            width: 45px;
+            min-width: 45px;
+            left: 90px;
         }
         
         .dispatch-table th:nth-child(4),
         .dispatch-table td:nth-child(4) {
-            width: 90px;
-            min-width: 90px;
+            width: 45px;
+            min-width: 45px;
+            left: 135px;
         }
-
-        .dispatch-table th:nth-child(1),
-        .dispatch-table td:nth-child(1) { left: 0; }
-        .dispatch-table th:nth-child(2),
-        .dispatch-table td:nth-child(2) { left: 70px; }
-        .dispatch-table th:nth-child(3),
-        .dispatch-table td:nth-child(3) { left: 150px; }
-        .dispatch-table th:nth-child(4),
-        .dispatch-table td:nth-child(4) { left: 230px; }
+        
+        .dispatch-table th:nth-child(5),
+        .dispatch-table td:nth-child(5) {
+            width: 70px;
+            min-width: 70px;
+            left: 180px;
+        }
+        
+        .dispatch-table th:nth-child(6),
+        .dispatch-table td:nth-child(6) {
+            width: 45px;
+            min-width: 45px;
+            left: 250px;
+        }
+        
+        .dispatch-table th:nth-child(7),
+        .dispatch-table td:nth-child(7) {
+            width: 45px;
+            min-width: 45px;
+            left: 295px;
+        }
+        
+        .dispatch-table th:nth-child(8),
+        .dispatch-table td:nth-child(8) {
+            width: 45px;
+            min-width: 45px;
+            left: 340px;
+        }
 
         .dispatch-table thead tr th {
             position: sticky;
@@ -192,8 +209,14 @@
             background-color: #f0f0f0;
         }
 
-        .dispatch-table thead tr th:nth-child(-n+4) {
+        .dispatch-table thead tr th:nth-child(-n+8) {
             z-index: 3;
+            background-color: #f0f0f0;
+        }
+
+        /* 호버 시 고정 컬럼의 배경색도 하늘색으로 유지 */
+        .dispatch-table tbody tr:hover td:nth-child(-n+8) {
+            background-color: rgba(135, 206, 235, 0.3);  /* 하늘색 투명도 30% */
         }
 
         .dispatch-table thead th {
@@ -280,7 +303,7 @@
         .sheet-content { display: none; }
         .sheet-content.active { display: block; }
 
-        /* 월간 배차일정 테이블 컨테이너 스타일 */
+        /* 월간 배차현황 테이블 컨테이너 스타일 */
         .sheet-content .table-container {
             width: 1200px;
             height: 600px;
@@ -319,6 +342,15 @@
             border-bottom: 2px solid #ddd;
         }
 
+        /* 배차 현황 통계 테이블 호버 스타일 */
+        .stats-table tbody tr:hover {
+            background-color: rgba(135, 206, 235, 0.3);  /* 하늘색 투명도 30% */
+        }
+
+        .stats-table tbody tr:hover td {
+            background-color: rgba(135, 206, 235, 0.3);  /* 하늘색 투명도 30% */
+        }
+
         /* 배차 현황 통계 테이블 컨테이너 스타일 */
         .stats-container {
             margin: 20px auto;
@@ -342,17 +374,18 @@
             position: relative;
         }
 
-        /* 월간 배차일정 테이블 전용 컨테이너 스타일 */
+        /* 월간 배차현황 테이블 전용 컨테이너 스타일 */
         .schedule-container {
-            margin: 20px auto;
+            margin-top: 20px auto;
+            margin-bottom: 20px auto;
             overflow-x: auto;
             max-height: 600px;
             overflow-y: auto;
             border: 1px solid #ddd;
             border-radius: 4px;
             position: relative;
-            width: 95%;
-            padding-right: 20px; /* 오른쪽 여백 추가 */
+            width: 100%;
+            padding-right: 0px; /* 오른쪽 여백 추가 */
         }
 
         /* 시트 컨텐츠 스타일 */
@@ -486,7 +519,7 @@
                     </div>
                 {% endif %}
                 <br>    
-                <h2>월간 배차일정</h2>
+                <h2>월간 배차현황</h2>
                 {% if dispatch_data %}
                 <div class="sheet-tabs">
                     <div class="sheet-tab-buttons">
