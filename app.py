@@ -200,9 +200,10 @@ def calculate_salary():
     # 월별 배차 현황 통계
     dispatch_data_path = os.path.join(app.config['DATA_FOLDER'], 'dispatch_data.json')
     dispatch_stats = {}  # {월: {카테고리: 운행수}}
-    categories = ['주간', '야간', '일차', '리스']
+    categories = ['주간', '야간', '일차', '교대', '리스']
     month_order = ['01월', '02월', '03월', '04월', '05월', '06월', '07월', '08월', '09월', '10월', '11월', '12월']
     driver_counts = {}  # {월: 운전기사수}
+    driver_counts_by_category = {}  # {월: {카테고리: 기사수}}
     if os.path.exists(dispatch_data_path):
         with open(dispatch_data_path, 'r', encoding='utf-8') as f:
             dispatch_data = json.load(f)
@@ -210,6 +211,7 @@ def calculate_salary():
                 month_data = dispatch_data.get(month, {}).get('data', [])
                 cat_counts = {cat: 0 for cat in categories}
                 drivers = set()
+                cat_drivers = {cat: set() for cat in categories}  # 각 카테고리별 기사 집합
                 for row in month_data:
                     cat = row.get('근무유형', '')
                     if cat in categories:
@@ -217,12 +219,17 @@ def calculate_salary():
                             val = row.get(str(day), '')
                             if val == 'o':
                                 cat_counts[cat] += 1
-                    # 운전기사 집계
+                        # 근무유형별 기사 집계
+                        name = row.get('운전기사', '').strip()
+                        if name:
+                            cat_drivers[cat].add(name)
+                    # 전체 운전기사 집계
                     name = row.get('운전기사', '').strip()
                     if name:
                         drivers.add(name)
                 dispatch_stats[month] = cat_counts
                 driver_counts[month] = len(drivers)
+                driver_counts_by_category[month] = {cat: len(cat_drivers[cat]) for cat in categories}
 
     if request.method == 'POST':
         if 'excel_file' in request.files:
@@ -468,6 +475,7 @@ def calculate_salary():
                         dispatch_stats=dispatch_stats,
                         month_order=month_order,
                         driver_counts=driver_counts,
+                        driver_counts_by_category=driver_counts_by_category,
                         monthly_incomes=monthly_incomes,
                         monthly_fuel_costs=monthly_fuel_costs)
 

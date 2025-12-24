@@ -49,8 +49,8 @@
                 </h5>
                 <h2 id="currentMonthIncome">{{ "{:,}".format(current_month_income|default(0)) }}원</h2>
                 <p>
-                    <i id="incomeDiffIcon" class="fas fa-{% if income_diff >= 0 %}arrow-up{% else %}arrow-down{% endif %} me-1"></i>
-                    <span id="incomeDiffText">{% if income_diff >= 0 %}+{% endif %}{{ "{:,}".format(income_diff|default(0)) }}원 
+                    <i id="incomeDiffIcon" class="fas fa-{% if income_diff >= 0 %}arrow-up{% else %}arrow-down{% endif %} me-1" {% if income_diff >= 0 %}style="color: #28a745;"{% else %}style="color: #dc3545;"{% endif %}></i>
+                    <span id="incomeDiffText" {% if income_diff >= 0 %}style="color: #28a745;"{% else %}style="color: #dc3545;"{% endif %}>{% if income_diff >= 0 %}+{% endif %}{{ "{:,}".format(income_diff|default(0)) }}원 
                     ({% if income_diff_percent >= 0 %}+{% endif %}{{ income_diff_percent|default('0') }}%)</span>
                 </p>
             </div>
@@ -70,8 +70,8 @@
                 </h5>
                 <h2 id="currentMonthFuelCost">{{ "{:,}".format(current_month_fuel_cost|default(0)) }}원</h2>
                 <p>
-                    <i id="fuelDiffIcon" class="fas fa-{% if fuel_diff >= 0 %}arrow-up{% else %}arrow-down{% endif %} me-1"></i>
-                    <span id="fuelDiffText">{% if fuel_diff >= 0 %}+{% endif %}{{ "{:,}".format(fuel_diff|default(0)) }}원 
+                    <i id="fuelDiffIcon" class="fas fa-{% if fuel_diff >= 0 %}arrow-up{% else %}arrow-down{% endif %} me-1" {% if fuel_diff >= 0 %}style="color: #28a745;"{% else %}style="color: #dc3545;"{% endif %}></i>
+                    <span id="fuelDiffText" {% if fuel_diff >= 0 %}style="color: #28a745;"{% else %}style="color: #dc3545;"{% endif %}>{% if fuel_diff >= 0 %}+{% endif %}{{ "{:,}".format(fuel_diff|default(0)) }}원 
                     ({% if fuel_diff_percent >= 0 %}+{% endif %}{{ fuel_diff_percent|default('0') }}%)</span>
                 </p>
             </div>
@@ -95,34 +95,67 @@
             <div class="row" >
                 <div class="col-md-3">
                     <div class="d-flex justify-content-between align-items-center">
-                        <span>총 운행수</span>
-                        <strong id="totalTrips">{{ "{:,}".format(total_trips|default(228)) }}건</strong>
+                        <span>총 기사 수</span>
+                        <strong id="totalDrivers">{{ "{:,}".format(total_drivers|default(0)) }}명<span id="totalDriversDiff"></span></strong>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>총 운행일수</span>
+                        <strong id="totalTrips">{{ "{:,}".format(total_trips|default(228)) }}일<span id="totalTripsDiff"></span></strong>
                     </div>
                 </div>
             </div>
+            <br>
             <div class="row">
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <div class="d-flex justify-content-between align-items-center">
                         <span>주간</span>
-                        <strong id="dayTrips">{{ "{:,}".format(day_trips|default(57)) }}건</strong>
+                        <strong id="dayDrivers">{{ "{:,}".format(day_drivers|default(0)) }}명<span id="dayDriversDiff"></span></strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center" style="font-size: 0.85em; color: #666; margin-top: 4px;">
+                        <span>운행일</span>
+                        <span id="dayTrips">{{ "{:,}".format(day_trips|default(57)) }}일<span id="dayTripsDiff"></span></span>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <div class="d-flex justify-content-between align-items-center">
                         <span>야간</span>
-                        <strong id="nightTrips">{{ "{:,}".format(night_trips|default(57)) }}건</strong>
+                        <strong id="nightDrivers">{{ "{:,}".format(night_drivers|default(0)) }}명<span id="nightDriversDiff"></span></strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center" style="font-size: 0.85em; color: #666; margin-top: 4px;">
+                        <span>운행일</span>
+                        <span id="nightTrips">{{ "{:,}".format(night_trips|default(57)) }}일<span id="nightTripsDiff"></span></span>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <div class="d-flex justify-content-between align-items-center">
                         <span>일차</span>
-                        <strong id="dailyTrips">{{ "{:,}".format(daily_trips|default(114)) }}건</strong>
+                        <strong id="dailyDrivers">{{ "{:,}".format(daily_drivers|default(0)) }}명<span id="dailyDriversDiff"></span></strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center" style="font-size: 0.85em; color: #666; margin-top: 4px;">
+                        <span>운행일</span>
+                        <span id="dailyTrips">{{ "{:,}".format(daily_trips|default(114)) }}일<span id="dailyTripsDiff"></span></span>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>교대</span>
+                        <strong id="shiftDrivers">{{ "{:,}".format(shift_drivers|default(0)) }}명<span id="shiftDriversDiff"></span></strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center" style="font-size: 0.85em; color: #666; margin-top: 4px;">
+                        <span>운행일</span>
+                        <span id="shiftTrips">{{ "{:,}".format(shift_trips|default(0)) }}일<span id="shiftTripsDiff"></span></span>
+                    </div>
+                </div>
+                <div class="col-md-2">
                     <div class="d-flex justify-content-between align-items-center">
                         <span>리스</span>
-                        <strong id="leaseTrips">{{ "{:,}".format(lease_trips|default(0)) }}건</strong>
+                        <strong id="leaseDrivers">{{ "{:,}".format(lease_drivers|default(0)) }}명<span id="leaseDriversDiff"></span></strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center" style="font-size: 0.85em; color: #666; margin-top: 4px;">
+                        <span>운행일</span>
+                        <span id="leaseTrips">{{ "{:,}".format(lease_trips|default(0)) }}일<span id="leaseTripsDiff"></span></span>
                     </div>
                 </div>
             </div>
@@ -221,8 +254,9 @@
 // 서버에서 전달받은 데이터
 const months = JSON.parse('{{ month_order|default("[]")|tojson|safe }}');
 const dispatchStats = JSON.parse('{{ dispatch_stats|default("{}")|tojson|safe }}');
-const categories = ['주간', '야간', '일차', '리스'];
+const categories = ['주간', '야간', '일차', '교대', '리스'];
 const driverCounts = JSON.parse('{{ driver_counts|default("{}")|tojson|safe }}');
+const driverCountsByCategory = JSON.parse('{{ driver_counts_by_category|default("{}")|tojson|safe }}');
 const monthlyIncomes = JSON.parse('{{ monthly_incomes|default("{}")|tojson|safe }}');
 const monthlyFuelCosts = JSON.parse('{{ monthly_fuel_costs|default("{}")|tojson|safe }}');
 const incomeData = months.map(m => monthlyIncomes[m] || 0);
@@ -234,11 +268,93 @@ let dispatchMonth = '{{ selected_month }}';
 
 function updateDispatchStatus(month) {
     const stats = dispatchStats[month] || {};
-    document.getElementById('totalTrips').innerText = Object.values(stats).reduce((a, b) => a + (b || 0), 0).toLocaleString() + '건';
-    document.getElementById('dayTrips').innerText = (stats['주간'] || 0).toLocaleString() + '건';
-    document.getElementById('nightTrips').innerText = (stats['야간'] || 0).toLocaleString() + '건';
-    document.getElementById('dailyTrips').innerText = (stats['일차'] || 0).toLocaleString() + '건';
-    document.getElementById('leaseTrips').innerText = (stats['리스'] || 0).toLocaleString() + '건';
+    const driverStats = driverCountsByCategory[month] || {};
+    
+    // 이전 달 계산
+    const currentIndex = months.indexOf(month);
+    const prevIndex = currentIndex > 0 ? currentIndex - 1 : months.length - 1;
+    const prevMonth = months[prevIndex];
+    const prevStats = dispatchStats[prevMonth] || {};
+    const prevDriverStats = driverCountsByCategory[prevMonth] || {};
+    const prevDriverCount = driverCounts[prevMonth] || 0;
+    
+    // 총 기사 수
+    const totalDrivers = driverCounts[month] || 0;
+    const totalDriversDiff = totalDrivers - prevDriverCount;
+    document.getElementById('totalDrivers').innerHTML = totalDrivers.toLocaleString() + '명' + 
+        (totalDriversDiff !== 0 ? ' <span id="totalDriversDiff" style="font-weight: normal; color: ' + (totalDriversDiff > 0 ? '#28a745' : '#dc3545') + ';">(' + (totalDriversDiff > 0 ? '+' : '') + totalDriversDiff + ')</span>' : '');
+    
+    // 총 배차일수
+    const totalTrips = Object.values(stats).reduce((a, b) => a + (b || 0), 0);
+    const prevTotalTrips = Object.values(prevStats).reduce((a, b) => a + (b || 0), 0);
+    const totalTripsDiff = totalTrips - prevTotalTrips;
+    document.getElementById('totalTrips').innerHTML = totalTrips.toLocaleString() + '일' + 
+        (totalTripsDiff !== 0 ? ' <span id="totalTripsDiff" style="font-weight: normal; color: ' + (totalTripsDiff > 0 ? '#28a745' : '#dc3545') + ';">(' + (totalTripsDiff > 0 ? '+' : '') + totalTripsDiff + ')</span>' : '');
+    
+    // 주간
+    const dayTrips = stats['주간'] || 0;
+    const prevDayTrips = prevStats['주간'] || 0;
+    const dayTripsDiff = dayTrips - prevDayTrips;
+    document.getElementById('dayTrips').innerHTML = dayTrips.toLocaleString() + '일' + 
+        (dayTripsDiff !== 0 ? ' <span id="dayTripsDiff" style="color: ' + (dayTripsDiff > 0 ? '#28a745' : '#dc3545') + ';">(' + (dayTripsDiff > 0 ? '+' : '') + dayTripsDiff + ')</span>' : '');
+    
+    const dayDrivers = driverStats['주간'] || 0;
+    const prevDayDrivers = prevDriverStats['주간'] || 0;
+    const dayDriversDiff = dayDrivers - prevDayDrivers;
+    document.getElementById('dayDrivers').innerHTML = dayDrivers.toLocaleString() + '명' + 
+        (dayDriversDiff !== 0 ? ' <span id="dayDriversDiff" style="font-weight: normal; color: ' + (dayDriversDiff > 0 ? '#28a745' : '#dc3545') + ';">(' + (dayDriversDiff > 0 ? '+' : '') + dayDriversDiff + ')</span>' : '');
+    
+    // 야간
+    const nightTrips = stats['야간'] || 0;
+    const prevNightTrips = prevStats['야간'] || 0;
+    const nightTripsDiff = nightTrips - prevNightTrips;
+    document.getElementById('nightTrips').innerHTML = nightTrips.toLocaleString() + '일' + 
+        (nightTripsDiff !== 0 ? ' <span id="nightTripsDiff" style="color: ' + (nightTripsDiff > 0 ? '#28a745' : '#dc3545') + ';">(' + (nightTripsDiff > 0 ? '+' : '') + nightTripsDiff + ')</span>' : '');
+    
+    const nightDrivers = driverStats['야간'] || 0;
+    const prevNightDrivers = prevDriverStats['야간'] || 0;
+    const nightDriversDiff = nightDrivers - prevNightDrivers;
+    document.getElementById('nightDrivers').innerHTML = nightDrivers.toLocaleString() + '명' + 
+        (nightDriversDiff !== 0 ? ' <span id="nightDriversDiff" style="font-weight: normal; color: ' + (nightDriversDiff > 0 ? '#28a745' : '#dc3545') + ';">(' + (nightDriversDiff > 0 ? '+' : '') + nightDriversDiff + ')</span>' : '');
+    
+    // 일차
+    const dailyTrips = stats['일차'] || 0;
+    const prevDailyTrips = prevStats['일차'] || 0;
+    const dailyTripsDiff = dailyTrips - prevDailyTrips;
+    document.getElementById('dailyTrips').innerHTML = dailyTrips.toLocaleString() + '일' + 
+        (dailyTripsDiff !== 0 ? ' <span id="dailyTripsDiff" style="color: ' + (dailyTripsDiff > 0 ? '#28a745' : '#dc3545') + ';">(' + (dailyTripsDiff > 0 ? '+' : '') + dailyTripsDiff + ')</span>' : '');
+    
+    const dailyDrivers = driverStats['일차'] || 0;
+    const prevDailyDrivers = prevDriverStats['일차'] || 0;
+    const dailyDriversDiff = dailyDrivers - prevDailyDrivers;
+    document.getElementById('dailyDrivers').innerHTML = dailyDrivers.toLocaleString() + '명' + 
+        (dailyDriversDiff !== 0 ? ' <span id="dailyDriversDiff" style="font-weight: normal; color: ' + (dailyDriversDiff > 0 ? '#28a745' : '#dc3545') + ';">(' + (dailyDriversDiff > 0 ? '+' : '') + dailyDriversDiff + ')</span>' : '');
+    
+    // 교대
+    const shiftTrips = stats['교대'] || 0;
+    const prevShiftTrips = prevStats['교대'] || 0;
+    const shiftTripsDiff = shiftTrips - prevShiftTrips;
+    document.getElementById('shiftTrips').innerHTML = shiftTrips.toLocaleString() + '일' + 
+        (shiftTripsDiff !== 0 ? ' <span id="shiftTripsDiff" style="color: ' + (shiftTripsDiff > 0 ? '#28a745' : '#dc3545') + ';">(' + (shiftTripsDiff > 0 ? '+' : '') + shiftTripsDiff + ')</span>' : '');
+    
+    const shiftDrivers = driverStats['교대'] || 0;
+    const prevShiftDrivers = prevDriverStats['교대'] || 0;
+    const shiftDriversDiff = shiftDrivers - prevShiftDrivers;
+    document.getElementById('shiftDrivers').innerHTML = shiftDrivers.toLocaleString() + '명' + 
+        (shiftDriversDiff !== 0 ? ' <span id="shiftDriversDiff" style="font-weight: normal; color: ' + (shiftDriversDiff > 0 ? '#28a745' : '#dc3545') + ';">(' + (shiftDriversDiff > 0 ? '+' : '') + shiftDriversDiff + ')</span>' : '');
+    
+    // 리스
+    const leaseTrips = stats['리스'] || 0;
+    const prevLeaseTrips = prevStats['리스'] || 0;
+    const leaseTripsDiff = leaseTrips - prevLeaseTrips;
+    document.getElementById('leaseTrips').innerHTML = leaseTrips.toLocaleString() + '일' + 
+        (leaseTripsDiff !== 0 ? ' <span id="leaseTripsDiff" style="color: ' + (leaseTripsDiff > 0 ? '#28a745' : '#dc3545') + ';">(' + (leaseTripsDiff > 0 ? '+' : '') + leaseTripsDiff + ')</span>' : '');
+    
+    const leaseDrivers = driverStats['리스'] || 0;
+    const prevLeaseDrivers = prevDriverStats['리스'] || 0;
+    const leaseDriversDiff = leaseDrivers - prevLeaseDrivers;
+    document.getElementById('leaseDrivers').innerHTML = leaseDrivers.toLocaleString() + '명' + 
+        (leaseDriversDiff !== 0 ? ' <span id="leaseDriversDiff" style="font-weight: normal; color: ' + (leaseDriversDiff > 0 ? '#28a745' : '#dc3545') + ';">(' + (leaseDriversDiff > 0 ? '+' : '') + leaseDriversDiff + ')</span>' : '');
 }
 
 function updateIncomeStatus(month) {
@@ -251,8 +367,11 @@ function updateIncomeStatus(month) {
     const prevIncome = monthlyIncomes[prevMonth] || 0;
     const diff = income - prevIncome;
     const diffPercent = prevIncome > 0 ? ((diff / prevIncome) * 100).toFixed(2) : 0;
+    const diffColor = diff >= 0 ? '#28a745' : '#dc3545';
     document.getElementById('incomeDiffIcon').className = 'fas fa-' + (diff >= 0 ? 'arrow-up' : 'arrow-down') + ' me-1';
+    document.getElementById('incomeDiffIcon').style.color = diffColor;
     document.getElementById('incomeDiffText').innerText = `${diff >= 0 ? '+' : ''}${diff.toLocaleString()}원 (${diffPercent >= 0 ? '+' : ''}${diffPercent}%)`;
+    document.getElementById('incomeDiffText').style.color = diffColor;
 }
 
 function updateFuelStatus(month) {
@@ -265,8 +384,11 @@ function updateFuelStatus(month) {
     const prevFuel = monthlyFuelCosts[prevMonth] || 0;
     const diff = fuel - prevFuel;
     const diffPercent = prevFuel > 0 ? ((diff / prevFuel) * 100).toFixed(2) : 0;
+    const diffColor = diff >= 0 ? '#28a745' : '#dc3545';
     document.getElementById('fuelDiffIcon').className = 'fas fa-' + (diff >= 0 ? 'arrow-up' : 'arrow-down') + ' me-1';
+    document.getElementById('fuelDiffIcon').style.color = diffColor;
     document.getElementById('fuelDiffText').innerText = `${diff >= 0 ? '+' : ''}${diff.toLocaleString()}원 (${diffPercent >= 0 ? '+' : ''}${diffPercent}%)`;
+    document.getElementById('fuelDiffText').style.color = diffColor;
 }
 
 // 월별 수입금 카드 컨트롤
@@ -315,24 +437,42 @@ document.addEventListener('DOMContentLoaded', function() {
     updateFuelStatus(fuelMonth);
 });
 
-const datasets = categories.map(cat => ({
-    label: cat,
-    type: 'line',
-    data: months.map(m => dispatchStats[m] ? dispatchStats[m][cat] : 0),
-    fill: false,
-    borderColor: cat === '주간' ? '#007bff' : cat === '야간' ? '#28a745' : cat === '일차' ? '#ffc107' : '#dc3545',
-    tension: 0.01,
-    yAxisID: 'y'
-}));
+// 누적형 라인차트를 위한 데이터 준비
+const datasets = categories.map((cat, index) => {
+    // 현재까지의 누적 데이터 계산
+    const accumulatedData = months.map(m => {
+        let sum = 0;
+        for (let i = 0; i <= index; i++) {
+            const category = categories[i];
+            sum += driverCountsByCategory[m] ? (driverCountsByCategory[m][category] || 0) : 0;
+        }
+        return sum;
+    });
+    
+    return {
+        label: cat,
+        type: 'line',
+        data: accumulatedData,
+        fill: index === 0 ? true : '-1', // 첫 번째는 true, 나머지는 이전 데이터셋 위에 쌓기
+        backgroundColor: cat === '주간' ? 'rgba(255,159,64,0.4)' : 
+                         cat === '야간' ? 'rgba(54,162,235,0.4)' : 
+                         cat === '일차' ? 'rgba(153,102,255,0.4)' : 
+                         cat === '교대' ? 'rgba(75,192,192,0.4)' : 'rgba(255,99,132,0.4)',
+        borderColor: cat === '주간' ? '#ff9f40' : cat === '야간' ? '#36a2eb' : cat === '일차' ? '#9966ff' : cat === '교대' ? '#4bc0c0' : '#ff6384',
+        borderWidth: 2,
+        tension: 0.01,
+        yAxisID: 'y'
+    };
+});
 
 datasets.push({
-    label: '운전기사(명)',
+    label: '총 운전기사(명)',
     type: 'bar',
     data: months.map(m => driverCounts[m] || 0),
     backgroundColor: 'rgba(100,100,100,0.1)',
     borderColor: 'rgba(100,100,100,0.5)',
     borderWidth: 1,
-    yAxisID: 'y2'
+    yAxisID: 'y'
 });
 
 const ctx = document.getElementById('dispatchLineChart').getContext('2d');
@@ -349,14 +489,8 @@ new Chart(ctx, {
         scales: {
             y: {
                 beginAtZero: true,
-                ticks: { stepSize: 100 },
                 position: 'left',
-                title: { display: true, text: '운행수' }
-            },
-            y2: {
-                beginAtZero: true,
-                position: 'right',
-                grid: { drawOnChartArea: false },
+                ticks: { stepSize: 5 },
                 title: { display: true, text: '운전기사(명)' }
             }
         }
@@ -365,17 +499,49 @@ new Chart(ctx, {
 
 // 월별 수입금 라인차트 생성
 const incomeCtx = document.getElementById('incomeLineChart').getContext('2d');
+
+// 각 월별 누적 평균 계산 (각 월 시점까지의 평균값)
+const monthlyAvgData = [];
+let cumulativeSum = 0;
+for (let i = 0; i < incomeData.length; i++) {
+    cumulativeSum += incomeData[i];
+    const avg = cumulativeSum / (i + 1);
+    monthlyAvgData.push(avg);
+}
+
+// 월 전체 수입금의 평균 (1월부터 12월까지 모든 실입금 합의 평균)
+const totalAvg = incomeData.length > 0 ? incomeData.reduce((sum, val) => sum + val, 0) / incomeData.length : 0;
+const totalAvgData = months.map(() => totalAvg);
+
 new Chart(incomeCtx, {
     type: 'line',
     data: {
         labels: months,
         datasets: [{
-            label: '월별 실입금 합계',
+            label: '월별 수입금 합계',
             data: incomeData,
             borderColor: '#007bff',
             backgroundColor: 'rgba(0,123,255,0.1)',
             fill: true,
             tension: 0.01
+        }, {
+            label: '월별 수입금 누적 평균',
+            data: monthlyAvgData,
+            borderColor: '#28a745',
+            borderWidth: 1,
+            borderDash: [5, 5],
+            fill: false,
+            pointRadius: 2,
+            tension: 0
+        }, {
+            label: '월 전체 수입금 평균',
+            data: totalAvgData,
+            borderColor: '#dc3545',
+            borderWidth: 1,
+            borderDash: [5, 5],
+            fill: false,
+            pointRadius: 1,
+            tension: 0
         }]
     },
     options: {
@@ -386,7 +552,31 @@ new Chart(incomeCtx, {
         scales: {
             y: {
                 beginAtZero: true,
-                title: { display: true, text: '실입금(원)' }
+                title: { display: true, text: '수입금(만원)' },
+                ticks: {
+                    callback: function(value) {
+                        if (value >= 100000000) {
+                            // 억 단위
+                            const eok = Math.floor(value / 100000000);
+                            const cheonman = Math.floor((value % 100000000) / 10000000);
+                            if (cheonman === 0) {
+                                return eok + '억';
+                            } else {
+                                return eok + '억 ' + cheonman + '천';
+                            }
+                        } else if (value >= 10000000) {
+                            // 천만 단위
+                            const cheonman = Math.floor(value / 10000000);
+                            return cheonman + '천';
+                        } else if (value >= 10000) {
+                            // 만 단위
+                            const man = Math.floor(value / 10000);
+                            return man;
+                        } else {
+                            return value.toLocaleString();
+                        }
+                    }
+                }
             }
         }
     }

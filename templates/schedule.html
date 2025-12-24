@@ -297,7 +297,7 @@
 
         /* 기존 시트 탭 관련 스타일 제거 */
         .sheet-tabs {
-            margin-top: 20px;
+            margin-top: 0px;
         }
 
         .sheet-content { display: none; }
@@ -353,9 +353,10 @@
 
         /* 배차 현황 통계 테이블 컨테이너 스타일 */
         .stats-container {
-            margin: 20px auto;
+            margin-top: 20px auto;
+            margin-bottom: 20px auto;
             overflow-x: auto;
-            width: 1124px;
+            width: 100%;
             height: 400px;
             overflow-y: auto;
             border: 1px solid #ddd;
@@ -390,7 +391,7 @@
 
         /* 시트 컨텐츠 스타일 */
         .sheet-content {
-            padding: 20px;
+            padding: 0px;
             background-color: white;
             border-radius: 0 4px 4px 4px;
             display: none;
@@ -404,12 +405,12 @@
         .sheet-tab-buttons {
             display: flex;
             margin: 0 auto;
-            margin-bottom: 10px;
+            margin-bottom: 20px;
             flex-wrap: nowrap;
             overflow-x: hidden;
             white-space: nowrap;
             -webkit-overflow-scrolling: touch;
-            width: 95%;
+            width: 100%;
             justify-content: space-between;
         }
 
@@ -450,6 +451,7 @@
                                     <th>주간</th>
                                     <th>야간</th>
                                     <th>일차</th>
+                                    <th>교대</th>
                                     <th>리스</th>
                                 </tr>
                             </thead>
@@ -460,6 +462,7 @@
                                         {% set total_day = namespace(value=0) %}
                                         {% set total_night = namespace(value=0) %}
                                         {% set total_daily = namespace(value=0) %}
+                                        {% set total_shift = namespace(value=0) %}
                                         {% set total_lease = namespace(value=0) %}
                                         
                                         {% for sheet_name, sheet_data in dispatch_data.items() %}
@@ -471,6 +474,8 @@
                                                         {% set total_night.value = total_night.value + 1 %}
                                                     {% elif row['근무유형'] == '일차' %}
                                                         {% set total_daily.value = total_daily.value + 1 %}
+                                                    {% elif row['근무유형'] == '교대' %}
+                                                        {% set total_shift.value = total_shift.value + 1 %}
                                                     {% elif row['근무유형'] == '리스' %}
                                                         {% set total_lease.value = total_lease.value + 1 %}
                                                     {% endif %}
@@ -481,6 +486,7 @@
                                         <td {% if total_day.value > 0 %}style="color: #008000; font-weight: bold;"{% endif %}>{{ total_day.value }}</td>
                                         <td {% if total_night.value > 0 %}style="color: #008000; font-weight: bold;"{% endif %}>{{ total_night.value }}</td>
                                         <td {% if total_daily.value > 0 %}style="color: #008000; font-weight: bold;"{% endif %}>{{ total_daily.value }}</td>
+                                        <td {% if total_shift.value > 0 %}style="color: #008000; font-weight: bold;"{% endif %}>{{ total_shift.value }}</td>
                                         <td {% if total_lease.value > 0 %}style="color: #008000; font-weight: bold;"{% endif %}>{{ total_lease.value }}</td>
                                     </tr>
                                 {% endfor %}
@@ -489,6 +495,7 @@
                                     {% set total_day = namespace(value=0) %}
                                     {% set total_night = namespace(value=0) %}
                                     {% set total_daily = namespace(value=0) %}
+                                    {% set total_shift = namespace(value=0) %}
                                     {% set total_lease = namespace(value=0) %}
                                     
                                     {% for sheet_name, sheet_data in dispatch_data.items() %}
@@ -501,6 +508,8 @@
                                                         {% set total_night.value = total_night.value + 1 %}
                                                     {% elif row['근무유형'] == '일차' %}
                                                         {% set total_daily.value = total_daily.value + 1 %}
+                                                    {% elif row['근무유형'] == '교대' %}
+                                                        {% set total_shift.value = total_shift.value + 1 %}
                                                     {% elif row['근무유형'] == '리스' %}
                                                         {% set total_lease.value = total_lease.value + 1 %}
                                                     {% endif %}
@@ -512,6 +521,7 @@
                                     <td {% if total_day.value > 0 %}style="color: #008000; font-weight: bold;"{% endif %}>{{ total_day.value }}</td>
                                     <td {% if total_night.value > 0 %}style="color: #008000; font-weight: bold;"{% endif %}>{{ total_night.value }}</td>
                                     <td {% if total_daily.value > 0 %}style="color: #008000; font-weight: bold;"{% endif %}>{{ total_daily.value }}</td>
+                                    <td {% if total_shift.value > 0 %}style="color: #008000; font-weight: bold;"{% endif %}>{{ total_shift.value }}</td>
                                     <td {% if total_lease.value > 0 %}style="color: #008000; font-weight: bold;"{% endif %}>{{ total_lease.value }}</td>
                                 </tr>
                             </tbody>
@@ -528,7 +538,7 @@
                         {% endfor %}
                     </div>
                     <!-- 배차 통합 검색 필터 -->
-                    <div style="margin-bottom:12px;">
+                    <div style="margin-bottom:20px;">
                         <input type="text" id="scheduleUnifiedFilter" placeholder="차량번호, 차종, 근무유형, 운전기사 검색" style="width:100%;">
                     </div>
                     {% for sheet_name, data in dispatch_data.items() %}
@@ -601,6 +611,7 @@
                     '주간': 0,
                     '야간': 0,
                     '일차': 0,
+                    '교대': 0,
                     '리스': 0
                 };
 
@@ -630,9 +641,13 @@
                     statsRow.querySelector('td:nth-child(4)').style.color = dayStats['일차'] > 0 ? '#008000' : 'inherit';
                     statsRow.querySelector('td:nth-child(4)').style.fontWeight = dayStats['일차'] > 0 ? 'bold' : 'normal';
 
-                    statsRow.querySelector('td:nth-child(5)').textContent = dayStats['리스'];
-                    statsRow.querySelector('td:nth-child(5)').style.color = dayStats['리스'] > 0 ? '#008000' : 'inherit';
-                    statsRow.querySelector('td:nth-child(5)').style.fontWeight = dayStats['리스'] > 0 ? 'bold' : 'normal';
+                    statsRow.querySelector('td:nth-child(5)').textContent = dayStats['교대'];
+                    statsRow.querySelector('td:nth-child(5)').style.color = dayStats['교대'] > 0 ? '#008000' : 'inherit';
+                    statsRow.querySelector('td:nth-child(5)').style.fontWeight = dayStats['교대'] > 0 ? 'bold' : 'normal';
+
+                    statsRow.querySelector('td:nth-child(6)').textContent = dayStats['리스'];
+                    statsRow.querySelector('td:nth-child(6)').style.color = dayStats['리스'] > 0 ? '#008000' : 'inherit';
+                    statsRow.querySelector('td:nth-child(6)').style.fontWeight = dayStats['리스'] > 0 ? 'bold' : 'normal';
                 }
             }
 
@@ -648,6 +663,7 @@
                 '주간': 0,
                 '야간': 0,
                 '일차': 0,
+                '교대': 0,
                 '리스': 0
             };
 
@@ -657,7 +673,8 @@
                 totals['주간'] += parseInt(row.querySelector('td:nth-child(2)').textContent) || 0;
                 totals['야간'] += parseInt(row.querySelector('td:nth-child(3)').textContent) || 0;
                 totals['일차'] += parseInt(row.querySelector('td:nth-child(4)').textContent) || 0;
-                totals['리스'] += parseInt(row.querySelector('td:nth-child(5)').textContent) || 0;
+                totals['교대'] += parseInt(row.querySelector('td:nth-child(5)').textContent) || 0;
+                totals['리스'] += parseInt(row.querySelector('td:nth-child(6)').textContent) || 0;
             });
 
             // 합계 행 업데이트
@@ -673,9 +690,13 @@
             totalRow.querySelector('td:nth-child(4)').style.color = totals['일차'] > 0 ? '#008000' : 'inherit';
             totalRow.querySelector('td:nth-child(4)').style.fontWeight = totals['일차'] > 0 ? 'bold' : 'normal';
 
-            totalRow.querySelector('td:nth-child(5)').textContent = totals['리스'];
-            totalRow.querySelector('td:nth-child(5)').style.color = totals['리스'] > 0 ? '#008000' : 'inherit';
-            totalRow.querySelector('td:nth-child(5)').style.fontWeight = totals['리스'] > 0 ? 'bold' : 'normal';
+            totalRow.querySelector('td:nth-child(5)').textContent = totals['교대'];
+            totalRow.querySelector('td:nth-child(5)').style.color = totals['교대'] > 0 ? '#008000' : 'inherit';
+            totalRow.querySelector('td:nth-child(5)').style.fontWeight = totals['교대'] > 0 ? 'bold' : 'normal';
+
+            totalRow.querySelector('td:nth-child(6)').textContent = totals['리스'];
+            totalRow.querySelector('td:nth-child(6)').style.color = totals['리스'] > 0 ? '#008000' : 'inherit';
+            totalRow.querySelector('td:nth-child(6)').style.fontWeight = totals['리스'] > 0 ? 'bold' : 'normal';
         }
 
         // 페이지 로드 시 첫 번째 시트의 통계 계산 및 월 표시

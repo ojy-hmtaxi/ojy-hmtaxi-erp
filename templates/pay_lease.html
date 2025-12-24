@@ -141,7 +141,7 @@
         }
         .tab-content {
             display: none;
-            padding: 20px;
+            padding: 0px;
             background-color: white;
             border-radius: 0 4px 4px 4px;
         }
@@ -497,6 +497,12 @@
             const salaries = sortedBySalary.map(d => d.급여);
             const incomes = sortedBySalary.map(d => d.실입금);
 
+            // 평균 계산
+            const avgSalary = salaries.length > 0 ? salaries.reduce((sum, val) => sum + val, 0) / salaries.length : 0;
+            const avgIncome = incomes.length > 0 ? incomes.reduce((sum, val) => sum + val, 0) / incomes.length : 0;
+            const avgSalaryData = driverNames.map(() => avgSalary);
+            const avgIncomeData = driverNames.map(() => avgIncome);
+
             // 급여 순위 바 + 실입금액 선 그래프
             const salaryCtx = currentSheet.querySelector('#salaryChart').getContext('2d');
             if (salaryChartInstance) {
@@ -528,6 +534,30 @@
                             type: 'line',
                             pointRadius: 2,
                             tension: 0.01
+                        },
+                        {
+                            label: '드라이버 급여 평균',
+                            data: avgSalaryData,
+                            borderColor: '#dc3545',
+                            borderWidth: 1,
+                            borderDash: [5, 5],
+                            fill: false,
+                            pointRadius: 0,
+                            tension: 0,
+                            yAxisID: 'y',
+                            type: 'line'
+                        },
+                        {
+                            label: '실입금액 평균',
+                            data: avgIncomeData,
+                            borderColor: '#28a745',
+                            borderWidth: 1,
+                            borderDash: [5, 5],
+                            fill: false,
+                            pointRadius: 0,
+                            tension: 0,
+                            yAxisID: 'y',
+                            type: 'line'
                         }
                     ]
                 },
@@ -541,7 +571,12 @@
                                         return `${driverNames[idx]} / ${driverIds[idx]} / ${driverCars[idx]} / ${salaries[idx].toLocaleString()}원`;
                                     } else if (context.dataset.label === '실입금액') {
                                         return `${driverNames[idx]} / ${driverIds[idx]} / ${driverCars[idx]} / 실입금: ${incomes[idx].toLocaleString()}원`;
+                                    } else if (context.dataset.label === '드라이버 급여 평균') {
+                                        return `평균 급여: ${avgSalary.toLocaleString()}원`;
+                                    } else if (context.dataset.label === '실입금액 평균') {
+                                        return `평균 실입금: ${avgIncome.toLocaleString()}원`;
                                     }
+                                    return context.dataset.label + ': ' + context.parsed.y.toLocaleString() + '원';
                                 }
                             }
                         }
@@ -551,8 +586,32 @@
                             title: { display: true, text: '드라이버' }
                         },
                         y: {
-                            title: { display: true, text: '금액(원)' },
-                            beginAtZero: true
+                            title: { display: true, text: '금액(만원)' },
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    if (value >= 100000000) {
+                                        // 억 단위
+                                        const eok = Math.floor(value / 100000000);
+                                        const cheonman = Math.floor((value % 100000000) / 10000000);
+                                        if (cheonman === 0) {
+                                            return eok + '억';
+                                        } else {
+                                            return eok + '억 ' + cheonman + '천';
+                                        }
+                                    } else if (value >= 10000000) {
+                                        // 천만 단위
+                                        const cheonman = Math.floor(value / 10000000);
+                                        return cheonman + '천';
+                                    } else if (value >= 10000) {
+                                        // 만 단위
+                                        const man = Math.floor(value / 10000);
+                                        return man;
+                                    } else {
+                                        return value.toLocaleString();
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -576,7 +635,8 @@
                     이름: d.이름,
                     사번: d.사번,
                     차종: d.차종,
-                    실입금: d.실입금
+                    실입금: d.실입금,
+                    연료비: d.연료비
                 }));
                 return {
                     label: carType,
@@ -601,19 +661,67 @@
                             callbacks: {
                                 label: function(context) {
                                     const d = context.raw;
-                                    return `${d.이름} / ${d.사번} / ${d.차종} / ${d.실입금.toLocaleString()}원`;
+                                    return `${d.이름} / ${d.사번} / ${d.차종} / 실입금: ${d.실입금.toLocaleString()}원 / 연료비: ${d.연료비.toLocaleString()}원`;
                                 }
                             }
                         }
                     },
                     scales: {
                         x: {
-                            title: { display: true, text: '실입금(원)' },
-                            beginAtZero: true
+                            title: { display: true, text: '실입금(만원)' },
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    if (value >= 100000000) {
+                                        // 억 단위
+                                        const eok = Math.floor(value / 100000000);
+                                        const cheonman = Math.floor((value % 100000000) / 10000000);
+                                        if (cheonman === 0) {
+                                            return eok + '억';
+                                        } else {
+                                            return eok + '억 ' + cheonman + '천';
+                                        }
+                                    } else if (value >= 10000000) {
+                                        // 천만 단위
+                                        const cheonman = Math.floor(value / 10000000);
+                                        return cheonman + '천';
+                                    } else if (value >= 10000) {
+                                        // 만 단위
+                                        const man = Math.floor(value / 10000);
+                                        return man;
+                                    } else {
+                                        return value.toLocaleString();
+                                    }
+                                }
+                            }
                         },
                         y: {
-                            title: { display: true, text: '연료비(원)' },
-                            beginAtZero: true
+                            title: { display: true, text: '연료비(만원)' },
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    if (value >= 100000000) {
+                                        // 억 단위
+                                        const eok = Math.floor(value / 100000000);
+                                        const cheonman = Math.floor((value % 100000000) / 10000000);
+                                        if (cheonman === 0) {
+                                            return eok + '억';
+                                        } else {
+                                            return eok + '억 ' + cheonman + '천';
+                                        }
+                                    } else if (value >= 10000000) {
+                                        // 천만 단위
+                                        const cheonman = Math.floor(value / 10000000);
+                                        return cheonman + '천';
+                                    } else if (value >= 10000) {
+                                        // 만 단위
+                                        const man = Math.floor(value / 10000);
+                                        return man;
+                                    } else {
+                                        return value.toLocaleString();
+                                    }
+                                }
+                            }
                         }
                     }
                 }
