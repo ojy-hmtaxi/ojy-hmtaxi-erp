@@ -3,7 +3,7 @@
 {% from "right_sidebar.html" import right_sidebar %}
 
 {% block sidebar %}
-{{ sidebar() }}
+{{ sidebar(current_user) }}
 {% endblock %}
 
 {% block title %}급여 계산(리스){% endblock %}

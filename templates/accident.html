@@ -3,7 +3,7 @@
 {% from "right_sidebar.html" import right_sidebar %}
 
 {% block sidebar %}
-{{ sidebar() }}
+{{ sidebar(current_user) }}
 {% endblock %}
 
 {% block title %}사고 관리{% endblock %}

@@ -2,7 +2,7 @@
 {% from "sidebar.html" import sidebar %}
 
 {% block sidebar %}
-{{ sidebar() }}
+{{ sidebar(current_user) }}
 {% endblock %}
 
 {% block content %}

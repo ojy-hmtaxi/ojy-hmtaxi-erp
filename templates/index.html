@@ -3,7 +3,7 @@
 {% from "right_sidebar.html" import right_sidebar %}
 
 {% block sidebar %}
-{{ sidebar() }}
+{{ sidebar(current_user) }}
 {% endblock %}
 
 {% block title %}대시보드{% endblock %}
@@ -24,7 +24,7 @@
             <div class="stat-card">
                 <h5>최종수입금</h5>
                 <h2>{{ "{:,}".format(total_income|default(0)) }}원</h2>
-                <p><i class="fas fa-arrow-up me-1"></i>+{{ "{:,}".format(income_change|default(0)) }}원 ({{ income_percent|default('0') }}%)</p>
+                <p><i class="fas fa-arrow-up me-1"></i>+{{ "{:,}".format(income_change|default(0)) }}원 ({{ income_percent|default('0') }}%) 전월 대비</p>
             </div>
         </div>
         <div class="col-md-3">

@@ -42,11 +42,16 @@
     }
 
     .right-sidebar-toggle i {
-        transition: transform 0.3s ease;
+        transition: transform 0.3s ease, color 0.3s ease;
     }
 
     .right-sidebar.collapsed .right-sidebar-toggle i {
         transform: scaleX(-1);
+    }
+
+    /* 새 메시지가 있을 때 아이콘 초록색 */
+    .right-sidebar-toggle.has-new-messages i {
+        color: #28a745;
     }
 
     /* 사이드바 내용 스타일 */
@@ -120,10 +125,7 @@
             <div id="message-alert" style="color: #22bb33; font-size: 0.95em; margin: 8px 0 0 0;"></div>
             <div class="messages" id="messages-list">
                 {% for message in messages %}
-                <div class="message
-                    {% if current_user and current_user.name == message.author.name %}current-user{% endif %}
-                    {% if current_user and ('@' ~ current_user.name) in message.content %} mentioned{% endif %}
-                ">
+                <div class="message{% if current_user and current_user.name == message.author.name %} current-user{% endif %}{% if current_user and ('@' ~ current_user.name) in message.content %} mentioned{% endif %}" data-timestamp="{{ message.timestamp.isoformat() }}">
                     <div class="message-header">
                         <span class="author">{{ message.author.name }}</span>
                         <span class="timestamp">{{ message.timestamp.strftime('%Y-%m-%d %H:%M') }}</span>
@@ -150,13 +152,55 @@
 <script>
 function toggleRightSidebar() {
     const sidebar = document.getElementById('rightSidebar');
+    const isCollapsed = sidebar.classList.contains('collapsed');
     sidebar.classList.toggle('collapsed');
     
     // 사이드바 상태를 localStorage에 저장
     localStorage.setItem('rightSidebarCollapsed', sidebar.classList.contains('collapsed'));
+    
+    // 메시지 보드를 열었으면 현재 시간을 저장하고 새 메시지 알림 제거
+    if (isCollapsed) {
+        // 메시지 보드를 연 경우
+        const now = new Date().toISOString();
+        localStorage.setItem('lastMessageViewTime', now);
+        checkNewMessages();
+    }
 }
 
-// 페이지 로드 시 사이드바 상태 복원
+// 새 메시지 확인 함수
+function checkNewMessages() {
+    const toggleButton = document.querySelector('.right-sidebar-toggle');
+    if (!toggleButton) return;
+    
+    const lastViewTime = localStorage.getItem('lastMessageViewTime');
+    if (!lastViewTime) {
+        // 처음 방문한 경우 모든 메시지를 읽음 처리
+        const now = new Date().toISOString();
+        localStorage.setItem('lastMessageViewTime', now);
+        toggleButton.classList.remove('has-new-messages');
+        return;
+    }
+    
+    // 모든 메시지의 타임스탬프 확인
+    const messageElements = document.querySelectorAll('.message[data-timestamp]');
+    let hasNewMessages = false;
+    
+    messageElements.forEach(msg => {
+        const msgTimestamp = msg.getAttribute('data-timestamp');
+        if (msgTimestamp && new Date(msgTimestamp) > new Date(lastViewTime)) {
+            hasNewMessages = true;
+        }
+    });
+    
+    // 아이콘 색상 업데이트
+    if (hasNewMessages) {
+        toggleButton.classList.add('has-new-messages');
+    } else {
+        toggleButton.classList.remove('has-new-messages');
+    }
+}
+
+// 페이지 로드 시 사이드바 상태 복원 및 새 메시지 확인
 document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.getElementById('rightSidebar');
     const isCollapsed = localStorage.getItem('rightSidebarCollapsed') === 'true';
@@ -165,7 +209,13 @@ document.addEventListener('DOMContentLoaded', function() {
         sidebar.classList.add('collapsed');
     } else {
         sidebar.classList.remove('collapsed');
+        // 메시지 보드가 열려있으면 현재 시간 저장
+        const now = new Date().toISOString();
+        localStorage.setItem('lastMessageViewTime', now);
     }
+    
+    // 새 메시지 확인
+    checkNewMessages();
 });
 
 // 메시지 작성 AJAX 처리
