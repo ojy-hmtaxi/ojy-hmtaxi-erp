@@ -172,25 +172,30 @@ function checkNewMessages() {
     const toggleButton = document.querySelector('.right-sidebar-toggle');
     if (!toggleButton) return;
     
-    const lastViewTime = localStorage.getItem('lastMessageViewTime');
-    if (!lastViewTime) {
-        // 처음 방문한 경우 모든 메시지를 읽음 처리
-        const now = new Date().toISOString();
-        localStorage.setItem('lastMessageViewTime', now);
+    // 모든 메시지의 타임스탬프 확인
+    const messageElements = document.querySelectorAll('.message[data-timestamp]');
+    if (messageElements.length === 0) {
+        // 메시지가 없으면 알림 제거
         toggleButton.classList.remove('has-new-messages');
         return;
     }
     
-    // 모든 메시지의 타임스탬프 확인
-    const messageElements = document.querySelectorAll('.message[data-timestamp]');
+    const lastViewTime = localStorage.getItem('lastMessageViewTime');
     let hasNewMessages = false;
     
-    messageElements.forEach(msg => {
-        const msgTimestamp = msg.getAttribute('data-timestamp');
-        if (msgTimestamp && new Date(msgTimestamp) > new Date(lastViewTime)) {
-            hasNewMessages = true;
-        }
-    });
+    if (!lastViewTime) {
+        // 처음 방문한 경우: 메시지가 있으면 새 메시지로 간주
+        // (메시지 보드를 열기 전까지는 알림 유지)
+        hasNewMessages = true;
+    } else {
+        // 이전 방문 기록이 있는 경우: lastViewTime 이후의 메시지 확인
+        messageElements.forEach(msg => {
+            const msgTimestamp = msg.getAttribute('data-timestamp');
+            if (msgTimestamp && new Date(msgTimestamp) > new Date(lastViewTime)) {
+                hasNewMessages = true;
+            }
+        });
+    }
     
     // 아이콘 색상 업데이트
     if (hasNewMessages) {
@@ -209,13 +214,15 @@ document.addEventListener('DOMContentLoaded', function() {
         sidebar.classList.add('collapsed');
     } else {
         sidebar.classList.remove('collapsed');
-        // 메시지 보드가 열려있으면 현재 시간 저장
+        // 메시지 보드가 열려있으면 현재 시간 저장 (모든 메시지 읽음 처리)
         const now = new Date().toISOString();
         localStorage.setItem('lastMessageViewTime', now);
     }
     
-    // 새 메시지 확인
-    checkNewMessages();
+    // 새 메시지 확인 (약간의 지연을 주어 DOM이 완전히 렌더링된 후 실행)
+    setTimeout(function() {
+        checkNewMessages();
+    }, 100);
 });
 
 // 메시지 작성 AJAX 처리
