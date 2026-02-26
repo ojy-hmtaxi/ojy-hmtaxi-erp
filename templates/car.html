@@ -1,0 +1,543 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar %}
+{% from "right_sidebar.html" import right_sidebar %}
+
+{% block sidebar %}
+{{ sidebar(current_user) }}
+{% endblock %}
+
+{% block title %}차량 관리{% endblock %}
+
+{% block head %}
+<style>
+    .custom-container {
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        width: 100%;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    h1 {
+        color: #333;
+        text-align: center;
+    }
+    .form-group {
+        margin-bottom: 15px;
+    }
+    label {
+        display: block;
+        margin-bottom: 5px;
+        color: #555;
+    }
+    input[type="file"] {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+    }
+    button {
+        background-color: #4CAF50;
+        color: white;
+        padding: 10px 15px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        width: 100%;
+    }
+    button:hover {
+        background-color: #45a049;
+    }
+    .error {
+        color: red;
+        margin-bottom: 15px;
+    }
+    .car-tabs-wrap {
+        margin: 20px 0;
+        background: #f8f9fa;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .car-tabs-nav {
+        display: flex;
+        border-bottom: 2px solid #dee2e6;
+        background: #fff;
+    }
+    .car-tab-btn {
+        flex: 1;
+        padding: 12px 20px;
+        border: none;
+        background: transparent;
+        font-size: 1rem;
+        color: #6c757d;
+        cursor: pointer;
+        transition: color 0.2s, background 0.2s;
+    }
+    .car-tab-btn:hover {
+        color: #333;
+        background: #f1f3f5;
+    }
+    .car-tab-btn.active {
+        background-color: #4CAF50;
+        color: white;
+    }
+    .car-tab-panel {
+        display: none;
+        padding: 20px;
+    }
+    .car-tab-panel.active {
+        display: block;
+    }
+    .excel-upload {
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        border-radius: 0;
+    }
+    .excel-upload .upload-title {
+        display: none;
+    }
+    .upload-result {
+        margin-top: 10px;
+        padding: 10px;
+        background-color: #e8f5e9;
+        border-radius: 4px;
+        display: block;
+    }
+    .upload-result.show {
+        display: block;
+    }
+    .table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: auto;
+        font-size: 12px;
+    }
+    .table th, .table td {
+        padding: 12px 16px;
+        border: 1px solid #ddd;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+    .table th {
+        background-color: #f2f2f2;
+        font-weight: 600;
+    }
+    .table td.long-text {
+        max-width: 250px;
+        white-space: normal;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        word-break: break-all;
+    }
+    /* 테이블 호버 스타일 */
+    .table tbody tr:hover {
+        background-color: rgba(135, 206, 235, 0.3);
+    }
+    .table tbody tr:hover td {
+        background-color: rgba(135, 206, 235, 0.3);
+    }
+    /* 월별 정비일정 (schedule 스타일) */
+    .maintenance-schedule-wrap { margin-top: 24px; }
+    .maintenance-schedule-wrap h2 { margin-bottom: 12px; color: #333; }
+    .maintenance-sheet-tabs .sheet-tab-buttons {
+        display: flex;
+        margin: 0 auto;
+        margin-bottom: 10px;
+        flex-wrap: nowrap;
+        overflow-x: hidden;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        width: 100%;
+        gap: 6px;
+    }
+    .maintenance-sheet-tabs .sheet-tab-button {
+        flex: 1;
+        min-width: 0;
+        padding: 8px 6px;
+        background-color: #b0b0b0;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        color: #333;
+        text-decoration: none;
+        font-size: 14px;
+        text-align: center;
+    }
+    .maintenance-sheet-tabs .sheet-tab-button:hover { background-color: #999; color: #fff; }
+    .maintenance-sheet-tabs .sheet-tab-button.active {
+        background-color: #4CAF50;
+        color: white;
+    }
+    .maintenance-schedule-wrap .dispatch-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        background-color: #fff;
+        font-size: 13px;
+    }
+    .maintenance-schedule-wrap .dispatch-table th,
+    .maintenance-schedule-wrap .dispatch-table td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: center;
+        min-width: 36px;
+    }
+    .maintenance-schedule-wrap .dispatch-table th { background-color: #f0f0f0; font-weight: 600; }
+    .maintenance-schedule-wrap .dispatch-table th:nth-child(1),
+    .maintenance-schedule-wrap .dispatch-table td:nth-child(1) { min-width: 60px; }
+    .maintenance-schedule-wrap .dispatch-table th:nth-child(2),
+    .maintenance-schedule-wrap .dispatch-table td:nth-child(2) { min-width: 50px; }
+    .maintenance-schedule-wrap .dispatch-table th:nth-child(3),
+    .maintenance-schedule-wrap .dispatch-table td:nth-child(3) { min-width: 90px; }
+    .maintenance-schedule-wrap .schedule-container { overflow-x: auto; }
+    .maintenance-schedule-wrap .dispatch-table tbody tr:hover {
+        background-color: rgba(135, 206, 235, 0.3);
+    }
+    .maintenance-schedule-wrap .dispatch-table tbody tr:hover td {
+        background-color: rgba(135, 206, 235, 0.3);
+    }
+    /* 정비 마크 색상 */
+    .maintenance-schedule-wrap .mark-prevent { color: #0066cc; font-weight: bold; }
+    .maintenance-schedule-wrap .mark-general { color: #008000; font-weight: bold; }
+    .maintenance-schedule-wrap .mark-accident { color: #cc0000; font-weight: bold; }
+    .maintenance-schedule-wrap .mark-inspection { color: #e67e00; font-weight: bold; }
+    .maintenance-schedule-wrap .mark-next { color: #6633cc; font-weight: bold; }
+    /* 정비 현황 통계 */
+    .maintenance-stats-wrap { margin-bottom: 24px; }
+    .maintenance-stats-wrap h2 { margin-bottom: 10px; color: #333; }
+    .maintenance-stats-wrap .stats-container { overflow-x: auto; margin-bottom: 16px; }
+    .maintenance-stats-wrap .stats-tables-row { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+    .maintenance-stats-wrap .stats-table {
+        width: auto;
+        min-width: 320px;
+        border-collapse: collapse;
+        border: 1px solid #ddd;
+        font-size: 13px;
+    }
+    .maintenance-stats-wrap .stats-table th,
+    .maintenance-stats-wrap .stats-table td {
+        border: 1px solid #ddd;
+        padding: 8px 12px;
+        text-align: left;
+    }
+    .maintenance-stats-wrap .stats-table th { background-color: #f0f0f0; font-weight: 600; width: 140px; }
+    .maintenance-stats-wrap .stats-table td.num { text-align: right; }
+    .maintenance-stats-wrap .stats-table .stat-positive { color: #008000; font-weight: bold; }
+    .maintenance-stats-wrap .stats-table .mark-prevent { color: #0066cc; }
+    .maintenance-stats-wrap .stats-table .mark-general { color: #008000; }
+    .maintenance-stats-wrap .stats-table .mark-accident { color: #cc0000; }
+    .maintenance-stats-wrap .stats-table .mark-inspection { color: #e67e00; }
+    .maintenance-stats-wrap .stats-table .mark-next { color: #6633cc; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="custom-container">
+    <h1>차량 관리 (수리내역)</h1>
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+    <div class="car-tabs-wrap">
+        <div class="car-tabs-nav">
+            <button type="button" class="car-tab-btn active" data-tab="maintenance">차량정비</button>
+            <button type="button" class="car-tab-btn" data-tab="repair">차량수리</button>
+        </div>
+        <div class="car-tab-panel active" id="tabPanelMaintenance">
+            <div class="excel-upload">
+                <form method="POST" enctype="multipart/form-data" id="uploadFormMaintenance" class="upload-form">
+                    <div class="form-group">
+                        <label for="excel_file_maintenance">엑셀 파일 선택:</label>
+                        <input type="file" id="excel_file_maintenance" name="excel_file_maintenance" accept=".xlsx,.xls" required>
+                    </div>
+                    <button type="submit" id="uploadButtonMaintenance">차량정비 데이터 업데이트</button>
+                </form>
+                <div id="uploadResultMaintenance" class="upload-result">업로드된 파일이 이곳에 표시됩니다.</div>
+            </div>
+            {% if maintenance_available_months %}
+            <div class="maintenance-schedule-wrap">
+                {% if maintenance_stats %}
+                <div class="maintenance-stats-wrap">
+                    <h2>정비 현황 통계 <span style="color:#4CAF50;font-weight:normal;">- {{ maintenance_stats.month_label }}월</span></h2>
+                    <div class="stats-container">
+                        <div class="stats-tables-row">
+                            <table class="stats-table">
+                                <thead>
+                                    <tr>
+                                        <th>구분</th>
+                                        <th>수량</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>전체 정비 차량 수</td>
+                                        <td class="num {% if maintenance_stats.total_vehicles > 0 %}stat-positive{% endif %}">{{ maintenance_stats.total_vehicles }}</td>
+                                    </tr>
+                                    {% for 차종, cnt in maintenance_stats.by_차종 %}
+                                    <tr>
+                                        <td>차종 ({{ 차종 }})</td>
+                                        <td class="num {% if cnt > 0 %}stat-positive{% endif %}">{{ cnt }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                            <table class="stats-table">
+                                <thead>
+                                    <tr>
+                                        <th>구분</th>
+                                        <th>수량</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="mark-prevent">예방정비</span> (○)</td>
+                                        <td class="num {% if maintenance_stats.예방정비 > 0 %}stat-positive{% endif %}">{{ maintenance_stats.예방정비 }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="mark-general">일반정비</span> (△)</td>
+                                        <td class="num {% if maintenance_stats.일반정비 > 0 %}stat-positive{% endif %}">{{ maintenance_stats.일반정비 }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="mark-accident">사고수리</span> (□)</td>
+                                        <td class="num {% if maintenance_stats.사고수리 > 0 %}stat-positive{% endif %}">{{ maintenance_stats.사고수리 }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="mark-inspection">검사</span> (!)</td>
+                                        <td class="num {% if maintenance_stats.검사 > 0 %}stat-positive{% endif %}">{{ maintenance_stats.검사 }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="mark-next">명일정비</span> (m)</td>
+                                        <td class="num {% if maintenance_stats.명일정비 > 0 %}stat-positive{% endif %}">{{ maintenance_stats.명일정비 }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                <h2>월별 정비현황</h2>
+                <div class="maintenance-sheet-tabs">
+                    <div class="sheet-tab-buttons">
+                        {% for m in maintenance_available_months %}
+                        <a href="?month={{ m }}" class="sheet-tab-button {% if m == maintenance_selected_month %}active{% endif %}">{{ m.split('-')[1] }}월</a>
+                        {% endfor %}
+                    </div>
+                    <div style="margin-bottom:12px;">
+                        <input type="text" id="maintenanceFilter" placeholder="차번, 차종, 등록일자 또는 예방, 일반, 사고, 검사, 명일 검색" style="width:100%; padding:8px;">
+                    </div>
+                    {% if maintenance_table_data %}
+                    <div class="schedule-container">
+                        <table class="dispatch-table" id="maintenanceTable">
+                            <thead>
+                                <tr>
+                                    {% for h in maintenance_headers %}
+                                    <th>{{ h }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in maintenance_table_data %}
+                                <tr>
+                                    {% for h in maintenance_headers %}
+                                    <td data-value="{{ row[h] }}">
+                                        {% if h in ['차번', '차종', '등록일자'] %}
+                                        {{ row[h] }}
+                                        {% else %}
+                                        {% for char in (row[h]|default('')|string) %}
+                                        {% if char == '○' %}<span class="mark-prevent">○</span>{% elif char == '△' %}<span class="mark-general">△</span>{% elif char == '□' %}<span class="mark-accident">□</span>{% elif char == '!' %}<span class="mark-inspection">!</span>{% elif char|lower == 'm' %}<span class="mark-next">m</span>{% else %}<span>{{ char }}</span>{% endif %}
+                                        {% endfor %}
+                                        {% endif %}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        <div class="car-tab-panel" id="tabPanelRepair">
+            <div class="excel-upload">
+                <form method="POST" enctype="multipart/form-data" id="uploadFormRepair" class="upload-form">
+                    <div class="form-group">
+                        <label for="excel_file_repair">엑셀 파일 선택:</label>
+                        <input type="file" id="excel_file_repair" name="excel_file_repair" accept=".xlsx,.xls" required>
+                    </div>
+                    <button type="submit" id="uploadButtonRepair">차량수리 데이터 업데이트</button>
+                </form>
+                <div id="uploadResultRepair" class="upload-result">업로드된 파일이 이곳에 표시됩니다.</div>
+            </div>
+        </div>
+    </div>
+    {% if car_data and car_data.list and car_data.columns %}
+    <div class="search-filter mb-3">
+        <input type="text" id="searchInput" class="form-control" placeholder="검색">
+    </div>
+    <table class="table" id="carTable">
+        <thead>
+            <tr>
+                {% for col in car_data.columns %}
+                <th>{{ col }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in car_data.list %}
+            <tr>
+                {% for col in car_data.columns %}
+                {% set value = row[col] %}
+                {% if value in ['NaT', 'nan', 'None', None, ''] %}
+                    {% set value = '' %}
+                {% endif %}
+                <td>{{ value }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+<script>
+const searchInput = document.getElementById('searchInput');
+const table = document.getElementById('carTable');
+if (searchInput && table) {
+    searchInput.addEventListener('keyup', function() {
+        const search = searchInput.value.toLowerCase();
+        const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+        for (let i = 0; i < rows.length; i++) {
+            const cells = rows[i].getElementsByTagName('td');
+            let show = false;
+            for (let j = 0; j < cells.length; j++) {
+                if (cells[j].textContent.toLowerCase().includes(search)) {
+                    show = true;
+                    break;
+                }
+            }
+            rows[i].style.display = search === '' || show ? '' : 'none';
+        }
+    });
+}
+var maintenanceFilter = document.getElementById('maintenanceFilter');
+var maintenanceTable = document.getElementById('maintenanceTable');
+if (maintenanceFilter && maintenanceTable) {
+    var keywordToSymbol = { '예방': '○', '일반': '△', '사고': '□', '검사': '!', '명일': 'm' };
+    maintenanceFilter.addEventListener('keyup', function() {
+        var search = maintenanceFilter.value.trim();
+        var searchLower = search.toLowerCase();
+        var tbody = maintenanceTable.getElementsByTagName('tbody')[0];
+        if (!tbody) return;
+        var matchTerms = [];
+        if (search) {
+            matchTerms.push(search);
+            for (var kw in keywordToSymbol) {
+                if (searchLower.indexOf(kw) !== -1) matchTerms.push(keywordToSymbol[kw]);
+            }
+        }
+        var rows = tbody.getElementsByTagName('tr');
+        for (var i = 0; i < rows.length; i++) {
+            var cells = rows[i].getElementsByTagName('td');
+            var show = false;
+            if (matchTerms.length === 0) {
+                show = true;
+            } else {
+                for (var j = 0; j < cells.length; j++) {
+                    var cellText = cells[j].textContent;
+                    var cellLower = cellText.toLowerCase();
+                    for (var t = 0; t < matchTerms.length; t++) {
+                        var term = matchTerms[t];
+                        if (term.length === 1 && '○△□!m'.indexOf(term) !== -1) {
+                            if (cellText.indexOf(term) !== -1) { show = true; break; }
+                        } else if (cellLower.indexOf(term.toLowerCase()) !== -1) {
+                            show = true;
+                            break;
+                        }
+                    }
+                    if (show) break;
+                }
+            }
+            rows[i].style.display = show ? '' : 'none';
+        }
+    });
+}
+function setupUploadForm(formId, fileInputId, buttonId, resultId, storageKey, uploadType) {
+    const form = document.getElementById(formId);
+    const fileInput = document.getElementById(fileInputId);
+    const uploadButton = document.getElementById(buttonId);
+    const resultDiv = document.getElementById(resultId);
+    if (!form || !uploadButton || !resultDiv) return;
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        if (!fileInput.files.length) return;
+        const originalText = uploadButton.textContent;
+        uploadButton.textContent = '업로드 중...';
+        uploadButton.disabled = true;
+        const formData = new FormData(this);
+        fetch('', { method: 'POST', body: formData })
+            .then(response => {
+                if (response.ok) {
+                    const file = fileInput.files[0];
+                    const now = new Date();
+                    const dateStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+                    const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+                    const serverUrl = `${window.location.origin}/uploads/${encodeURIComponent(file.name)}`;
+                    const uploadMessage = `<span style="color:#007bff;font-weight:bold;">${file.name}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${dateStr} | ${timeStr} | 업로더: {{ current_user.name }})&nbsp;<a href="${serverUrl}" target="_blank" style="color:#28a745;text-decoration:underline;">[다운로드]</a>`;
+                    resultDiv.innerHTML = uploadMessage;
+                    resultDiv.classList.add('show');
+                    localStorage.setItem(storageKey, uploadMessage);
+                    setTimeout(() => { window.location.reload(); }, 1000);
+                }
+            })
+            .catch(err => console.error('Error:', err))
+            .finally(() => {
+                uploadButton.textContent = originalText;
+                uploadButton.disabled = false;
+            });
+    });
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            localStorage.removeItem(storageKey);
+            resultDiv.innerHTML = '';
+            resultDiv.classList.remove('show');
+        });
+    }
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+        resultDiv.innerHTML = saved;
+        resultDiv.classList.add('show');
+    }
+    fetch('/api/latest-upload?type=' + encodeURIComponent(uploadType))
+        .then(r => r.json())
+        .then(data => {
+            if (data.filename && !localStorage.getItem(storageKey)) {
+                const serverUrl = `${window.location.origin}/uploads/${encodeURIComponent(data.filename)}`;
+                const msg = `<span style="color:#007bff;font-weight:bold;">${data.filename}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${data.upload_time} | 업로더: ${data.uploader})&nbsp;<a href="${serverUrl}" target="_blank" style="color:#28a745;text-decoration:underline;">[다운로드]</a>`;
+                resultDiv.innerHTML = msg;
+                resultDiv.classList.add('show');
+            }
+        });
+}
+document.addEventListener('DOMContentLoaded', function() {
+    setupUploadForm('uploadFormRepair', 'excel_file_repair', 'uploadButtonRepair', 'uploadResultRepair', 'carUploadMessageRepair', 'car_repair');
+    setupUploadForm('uploadFormMaintenance', 'excel_file_maintenance', 'uploadButtonMaintenance', 'uploadResultMaintenance', 'carUploadMessageMaintenance', 'car_maintenance');
+    var tabBtns = document.querySelectorAll('.car-tab-btn');
+    var tabPanels = document.querySelectorAll('.car-tab-panel');
+    tabBtns.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var tab = this.getAttribute('data-tab');
+            tabBtns.forEach(function(b) { b.classList.remove('active'); });
+            tabPanels.forEach(function(p) { p.classList.remove('active'); });
+            this.classList.add('active');
+            var panel = document.getElementById('tabPanel' + (tab === 'repair' ? 'Repair' : 'Maintenance'));
+            if (panel) panel.classList.add('active');
+        });
+    });
+});
+</script>
+{{ right_sidebar(messages, current_user) }}
+{% endblock %}

@@ -264,27 +264,28 @@
         /* 공통 탭 버튼 컨테이너 스타일 */
         .sheet-tab-buttons {
             display: flex;
-            margin: 0 auto;  /* 중앙 정렬 */
+            margin: 0 auto;
             margin-bottom: 10px;
             flex-wrap: nowrap;
             overflow-x: hidden;
             white-space: nowrap;
             -webkit-overflow-scrolling: touch;
-            width: 95%;  /* 테이블과 동일한 너비 */
-            justify-content: space-between;
+            width: 100%;
+            gap: 6px;
         }
 
         /* 공통 탭 버튼 스타일 */
         .sheet-tab-button {
-            padding: 6px 0;
-            background-color: #b0b0b0;
-            border: none;
-            cursor: pointer;
-            margin-right: 2px;
-            border-radius: 4px;
-            font-size: 12px;
             flex: 1;
             min-width: 0;
+            padding: 8px 6px;
+            background-color: #b0b0b0;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #333;
+            text-decoration: none;
+            font-size: 14px;
             text-align: center;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -411,7 +412,7 @@
             white-space: nowrap;
             -webkit-overflow-scrolling: touch;
             width: 100%;
-            justify-content: space-between;
+            gap: 6px;
         }
 
         .top-nav {

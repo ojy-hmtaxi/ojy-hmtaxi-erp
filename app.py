@@ -10,6 +10,7 @@ from models import db, User, Message, UploadRecord
 from sqlalchemy.orm import joinedload
 import base64
 import calendar
+import re
 
 from dotenv import load_dotenv
 import pytz
@@ -1121,6 +1122,218 @@ def load_driver_data():
             return None
     return None
 
+
+def save_car_maintenance_events(events, year=None):
+    if year is None and events:
+        try:
+            year = int(events[0].get('date', '')[:4])
+        except (ValueError, TypeError):
+            year = datetime.now().year
+    filepath = os.path.join(app.config['DATA_FOLDER'], 'car_maintenance_data.json')
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump({'year': year, 'events': events}, f, ensure_ascii=False, indent=2)
+
+
+def load_car_maintenance_events():
+    filepath = os.path.join(app.config['DATA_FOLDER'], 'car_maintenance_data.json')
+    if os.path.exists(filepath):
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if content:
+                    data = json.loads(content)
+                    events = data.get('events', [])
+                    year = data.get('year')
+                    if year is None and events:
+                        try:
+                            year = int(events[0].get('date', '')[:4])
+                        except (ValueError, TypeError):
+                            year = datetime.now().year
+                    elif year is None:
+                        year = datetime.now().year
+                    return events, year
+                return [], datetime.now().year
+        except (json.JSONDecodeError, Exception):
+            return [], datetime.now().year
+    return [], datetime.now().year
+
+
+def _find_col_key(col_map, *candidates):
+    """컬럼명 후보 중 col_map에 존재하는 키 반환 (공백/언더스코어 정규화)."""
+    for c in candidates:
+        if col_map.get(c) is not None:
+            return col_map.get(c)
+    for key in col_map:
+        k = (key or '').strip().replace(' ', '_')
+        for c in candidates:
+            if (c or '').strip().replace(' ', '_') == k:
+                return key
+    return None
+
+
+def _maintenance_symbol(row, col_map):
+    """엑셀 행에서 정비 마킹 컬럼(예방정비○, 일반정비△, 사고수리□, 검사!, 명일 정비예정m) 확인 후 기호 반환."""
+    symbol_cols = [
+        ('예방정비', '○', ['예방정비']),
+        ('일반정비', '△', ['일반정비']),
+        ('사고수리', '□', ['사고수리']),
+        ('검사', '!', ['검사']),
+        ('명일_정비예정', 'm', ['명일_정비예정', '명일 정비예정']),
+    ]
+    for col_name, symbol, candidates in symbol_cols:
+        key = _find_col_key(col_map, *candidates)
+        if key is None:
+            continue
+        val = row.get(key)
+        if pd.isna(val):
+            continue
+        s = str(val).strip()
+        if not s:
+            continue
+        if symbol in s or (col_name == '검사' and '!' in s) or ('명일' in col_name and 'm' in s.lower()):
+            return symbol
+    return None
+
+
+def _norm_cell_str(val):
+    """엑셀 셀 값을 문자열로 정규화 (숫자 1801.0 -> '1801')."""
+    if pd.isna(val):
+        return ''
+    if isinstance(val, (int, float)):
+        try:
+            if isinstance(val, float) and val == int(val):
+                return str(int(val))
+            return str(int(val)) if isinstance(val, float) else str(val)
+        except (ValueError, TypeError):
+            return str(val).strip()
+    return str(val).strip()
+
+
+def parse_maintenance_excel(file_path):
+    """차량정비 엑셀 1월~12월 시트를 모두 파싱해 이벤트 리스트 반환. 엔진오일/미션오일/타이어_교체/타이어_펑크 컬럼은 사용하지 않음."""
+    fname = os.path.basename(file_path)
+    year_match = re.search(r'(\d{4})', fname)
+    year_from_file = int(year_match.group(1)) if year_match else datetime.now().year
+    month_sheets = [f'{i}월' for i in range(1, 13)]
+    xl = pd.ExcelFile(file_path)
+    events = []
+    for raw_sheet_name in xl.sheet_names:
+        sheet_name = (raw_sheet_name.strip() if isinstance(raw_sheet_name, str) else str(raw_sheet_name)).strip()
+        if sheet_name not in month_sheets:
+            continue
+        df = pd.read_excel(file_path, sheet_name=raw_sheet_name)
+        df.columns = [str(c).strip() for c in df.columns]
+        col_map = {c: c for c in df.columns}
+        required = ['정비일', '차번', '차종', '등록일자']
+        if not all(r in col_map for r in required):
+            continue
+        for _, row in df.iterrows():
+            try:
+                d = row.get('정비일')
+                if pd.isna(d):
+                    continue
+                if hasattr(d, 'strftime'):
+                    date_str = d.strftime('%Y-%m-%d')
+                else:
+                    date_str = str(pd.Timestamp(d))[:10]
+                if not date_str or len(date_str) < 10:
+                    continue
+                차번 = _norm_cell_str(row.get('차번'))
+                차종 = _norm_cell_str(row.get('차종'))
+                등록일자 = row.get('등록일자')
+                if pd.notna(등록일자) and hasattr(등록일자, 'strftime'):
+                    등록일자 = 등록일자.strftime('%Y-%m-%d')
+                else:
+                    등록일자 = _norm_cell_str(등록일자)
+                symbol = _maintenance_symbol(row.to_dict(), col_map)
+                if not symbol:
+                    continue
+                events.append({
+                    'date': date_str,
+                    '차번': 차번,
+                    '차종': 차종,
+                    '등록일자': 등록일자,
+                    'symbol': symbol
+                })
+            except Exception:
+                continue
+    if not events:
+        return None, None, '1월~12월 시트에서 정비 데이터를 찾을 수 없습니다.'
+    return events, year_from_file, None
+
+
+def build_maintenance_table(events, year_month):
+    """events에서 year_month(YYYY-MM) 해당 월만 필터해 차번/차종/등록일자 기준 1~31일 마킹 테이블 생성."""
+    if not events:
+        return ['차번', '차종', '등록일자'] + [str(i) for i in range(1, 32)], []
+    headers = ['차번', '차종', '등록일자'] + [str(i) for i in range(1, 32)]
+    ym = year_month
+    by_vehicle = {}
+    for e in events:
+        if not e.get('date', '').startswith(ym):
+            continue
+        try:
+            day = int(e['date'].split('-')[2])
+        except (IndexError, ValueError):
+            continue
+        if day < 1 or day > 31:
+            continue
+        key = (e.get('차번', ''), e.get('차종', ''), e.get('등록일자', ''))
+        if key not in by_vehicle:
+            by_vehicle[key] = {d: [] for d in range(1, 32)}
+        by_vehicle[key][day].append(e.get('symbol', ''))
+    rows = []
+    for (차번, 차종, 등록일자), days in sorted(by_vehicle.items()):
+        row = {'차번': 차번, '차종': 차종, '등록일자': 등록일자}
+        for d in range(1, 32):
+            row[str(d)] = ''.join(days[d]) if days[d] else ''
+        rows.append(row)
+    return headers, rows
+
+
+def build_maintenance_stats(events, year_month):
+    """해당 월(YYYY-MM) 정비 이벤트로 통계 생성: 전체 차량 수, 차종별 차량 수, 유형별 건수."""
+    if not events or not year_month:
+        return None
+    ym = year_month
+    vehicles = set()
+    vehicles_by_차종 = {}
+    count_예방정비 = count_일반정비 = count_사고수리 = count_검사 = count_명일정비 = 0
+    for e in events:
+        if not e.get('date', '').startswith(ym):
+            continue
+        key = (e.get('차번', ''), e.get('차종', ''), e.get('등록일자', ''))
+        vehicles.add(key)
+        차종 = e.get('차종', '').strip() or '-'
+        if 차종 not in vehicles_by_차종:
+            vehicles_by_차종[차종] = set()
+        vehicles_by_차종[차종].add(key)
+        s = e.get('symbol', '')
+        if s == '○':
+            count_예방정비 += 1
+        elif s == '△':
+            count_일반정비 += 1
+        elif s == '□':
+            count_사고수리 += 1
+        elif s == '!':
+            count_검사 += 1
+        elif s == 'm':
+            count_명일정비 += 1
+    by_차종 = [(차종, len(s)) for 차종, s in vehicles_by_차종.items()]
+    by_차종.sort(key=lambda x: -x[1])
+    month_label = ym.split('-')[1] if len(ym) >= 7 else ''
+    return {
+        'month_label': month_label,
+        'total_vehicles': len(vehicles),
+        'by_차종': by_차종,
+        '예방정비': count_예방정비,
+        '일반정비': count_일반정비,
+        '사고수리': count_사고수리,
+        '검사': count_검사,
+        '명일정비': count_명일정비,
+    }
+
+
 @app.route('/driver', methods=['GET', 'POST'])
 @login_required
 def driver():
@@ -1182,6 +1395,66 @@ def driver():
             return render_template('driver.html', error='허용되지 않은 파일 형식입니다.', driver_data=load_driver_data(), messages=messages, current_user=current_user)
     # GET 요청
     return render_template('driver.html', driver_data=load_driver_data(), messages=messages, current_user=current_user)
+
+@app.route('/car', methods=['GET', 'POST'])
+@login_required
+def car():
+    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
+    car_data = None
+    if request.method == 'POST':
+        upload_type = None
+        file = None
+        if 'excel_file_repair' in request.files and request.files['excel_file_repair'].filename:
+            file = request.files['excel_file_repair']
+            upload_type = 'car_repair'
+        elif 'excel_file_maintenance' in request.files and request.files['excel_file_maintenance'].filename:
+            file = request.files['excel_file_maintenance']
+            upload_type = 'car_maintenance'
+        if not file or not upload_type:
+            return render_template('car.html', error='파일이 선택되지 않았습니다.', car_data=car_data, messages=messages, current_user=current_user)
+        if not allowed_file(file.filename):
+            return render_template('car.html', error='허용되지 않은 파일 형식입니다.', car_data=car_data, messages=messages, current_user=current_user)
+        filename = file.filename.replace('/', '').replace('\\', '')
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(file_path)
+        try:
+            if upload_type == 'car_maintenance':
+                events, year_from_file, parse_err = parse_maintenance_excel(file_path)
+                if parse_err:
+                    return render_template('car.html', error=parse_err, car_data=car_data, messages=messages, current_user=current_user,
+                        maintenance_headers=[], maintenance_table_data=[], maintenance_available_months=[], maintenance_selected_month=None)
+                save_car_maintenance_events(events, year_from_file)
+            flask_url = url_for('uploaded_file', filename=os.path.basename(file_path), _external=True)
+            record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type=upload_type)
+            db.session.add(record)
+            db.session.commit()
+        except Exception as e:
+            return render_template('car.html', error=f'파일 처리 중 오류: {str(e)}', car_data=car_data, messages=messages, current_user=current_user,
+                maintenance_headers=[], maintenance_table_data=[], maintenance_available_months=[], maintenance_selected_month=None)
+    # GET 또는 POST 성공 후: 차량정비 월별 테이블용 데이터 (1월~12월 시트에 맞춰 12개 월 버튼 표시)
+    events, maintenance_year = load_car_maintenance_events()
+    maintenance_headers = []
+    maintenance_table_data = []
+    maintenance_available_months = []
+    maintenance_selected_month = None
+    if events:
+        maintenance_available_months = [f'{maintenance_year}-{m:02d}' for m in range(1, 13)]
+        # URL에 month가 있으면 사용, 없으면 데이터가 있는 월 중 가장 최근 월을 기본 선택
+        requested_month = request.args.get('month')
+        if requested_month and requested_month in maintenance_available_months:
+            maintenance_selected_month = requested_month
+        else:
+            dates_with_data = sorted(set(e.get('date', '')[:7] for e in events if e.get('date')), reverse=True)
+            maintenance_selected_month = dates_with_data[0] if dates_with_data else (maintenance_available_months[0] if maintenance_available_months else None)
+            if not maintenance_selected_month and maintenance_available_months:
+                maintenance_selected_month = maintenance_available_months[0]
+        if maintenance_selected_month and maintenance_selected_month in maintenance_available_months:
+            maintenance_headers, maintenance_table_data = build_maintenance_table(events, maintenance_selected_month)
+    maintenance_stats = build_maintenance_stats(events, maintenance_selected_month) if (events and maintenance_selected_month) else None
+    return render_template('car.html', car_data=car_data, messages=messages, current_user=current_user,
+        maintenance_headers=maintenance_headers, maintenance_table_data=maintenance_table_data,
+        maintenance_available_months=maintenance_available_months, maintenance_selected_month=maintenance_selected_month,
+        maintenance_stats=maintenance_stats)
 
 @app.route('/driver/profile/<driver_id>')
 @login_required

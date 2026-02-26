@@ -101,15 +101,30 @@
         }
         .tab-buttons {
             display: flex;
+            margin: 0 auto;
             margin-bottom: 10px;
+            flex-wrap: nowrap;
+            overflow-x: hidden;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+            width: 100%;
+            gap: 6px;
         }
         .tab-button {
-            padding: 10px 20px;
+            flex: 1;
+            min-width: 0;
+            padding: 8px 6px;
             background-color: #b0b0b0;
             border: none;
+            border-radius: 4px;
             cursor: pointer;
-            margin-right: 5px;
-            border-radius: 4px 4px 0 0;
+            color: #333;
+            font-size: 14px;
+            text-align: center;
+        }
+        .tab-button:hover {
+            background-color: #999;
+            color: #fff;
         }
         .tab-button.active {
             background-color: #4CAF50;
