@@ -140,6 +140,13 @@
     .table tbody tr:hover td {
         background-color: rgba(135, 206, 235, 0.3);
     }
+    /* 차량 데이터 테이블 영역 고정 - 검색 시 화면 흔들림 방지 */
+    .car-table-scroll-wrap {
+        min-height: 400px;
+        max-height: 600px;
+        overflow-y: auto;
+        overflow-x: auto;
+    }
     /* 월별 정비일정 (schedule 스타일) */
     .maintenance-schedule-wrap { margin-top: 24px; }
     .maintenance-schedule-wrap h2 { margin-bottom: 12px; color: #333; }
@@ -193,7 +200,12 @@
     .maintenance-schedule-wrap .dispatch-table td:nth-child(2) { min-width: 50px; }
     .maintenance-schedule-wrap .dispatch-table th:nth-child(3),
     .maintenance-schedule-wrap .dispatch-table td:nth-child(3) { min-width: 90px; }
-    .maintenance-schedule-wrap .schedule-container { overflow-x: auto; }
+    .maintenance-schedule-wrap .schedule-container {
+        overflow-x: auto;
+        min-height: 450px;
+        max-height: 600px;
+        overflow-y: auto;
+    }
     .maintenance-schedule-wrap .dispatch-table tbody tr:hover {
         background-color: rgba(135, 206, 235, 0.3);
     }
@@ -379,6 +391,7 @@
     <div class="search-filter mb-3">
         <input type="text" id="searchInput" class="form-control" placeholder="검색">
     </div>
+    <div class="car-table-scroll-wrap">
     <table class="table" id="carTable">
         <thead>
             <tr>
@@ -401,6 +414,7 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
     {% endif %}
 </div>
 <script>
@@ -423,48 +437,87 @@ if (searchInput && table) {
         }
     });
 }
-var maintenanceFilter = document.getElementById('maintenanceFilter');
-var maintenanceTable = document.getElementById('maintenanceTable');
-if (maintenanceFilter && maintenanceTable) {
+var symbolToClass = { '○': 'mark-prevent', '△': 'mark-general', '□': 'mark-accident', '!': 'mark-inspection', 'm': 'mark-next' };
+function renderSymbolsToHtml(str) {
+    if (!str) return '';
+    var html = '';
+    for (var i = 0; i < str.length; i++) {
+        var c = str[i];
+        var cls = symbolToClass[c];
+        if (cls) html += '<span class="' + cls + '">' + c + '</span>';
+        else html += '<span>' + c + '</span>';
+    }
+    return html;
+}
+function applyMaintenanceFilter() {
+    var maintenanceFilter = document.getElementById('maintenanceFilter');
+    var maintenanceTable = document.getElementById('maintenanceTable');
+    if (!maintenanceFilter || !maintenanceTable) return;
+    var tbody = maintenanceTable.getElementsByTagName('tbody')[0];
+    if (!tbody) return;
     var keywordToSymbol = { '예방': '○', '일반': '△', '사고': '□', '검사': '!', '명일': 'm' };
-    maintenanceFilter.addEventListener('keyup', function() {
-        var search = maintenanceFilter.value.trim();
-        var searchLower = search.toLowerCase();
-        var tbody = maintenanceTable.getElementsByTagName('tbody')[0];
-        if (!tbody) return;
-        var matchTerms = [];
-        if (search) {
-            matchTerms.push(search);
-            for (var kw in keywordToSymbol) {
-                if (searchLower.indexOf(kw) !== -1) matchTerms.push(keywordToSymbol[kw]);
+    var search = (maintenanceFilter.value || '').trim();
+    var searchLower = search.toLowerCase();
+    var matchTerms = [];
+    var allowedSymbols = [];
+    if (search) {
+        matchTerms.push(search);
+        for (var kw in keywordToSymbol) {
+            if (searchLower.indexOf(kw) !== -1) {
+                matchTerms.push(keywordToSymbol[kw]);
+                allowedSymbols.push(keywordToSymbol[kw]);
             }
         }
-        var rows = tbody.getElementsByTagName('tr');
-        for (var i = 0; i < rows.length; i++) {
-            var cells = rows[i].getElementsByTagName('td');
-            var show = false;
-            if (matchTerms.length === 0) {
-                show = true;
-            } else {
-                for (var j = 0; j < cells.length; j++) {
-                    var cellText = cells[j].textContent;
-                    var cellLower = cellText.toLowerCase();
-                    for (var t = 0; t < matchTerms.length; t++) {
-                        var term = matchTerms[t];
-                        if (term.length === 1 && '○△□!m'.indexOf(term) !== -1) {
-                            if (cellText.indexOf(term) !== -1) { show = true; break; }
-                        } else if (cellLower.indexOf(term.toLowerCase()) !== -1) {
+    }
+    var rows = tbody.getElementsByTagName('tr');
+    for (var i = 0; i < rows.length; i++) {
+        var cells = rows[i].getElementsByTagName('td');
+        var show = false;
+        if (matchTerms.length === 0) {
+            show = true;
+        } else {
+            for (var j = 0; j < cells.length; j++) {
+                var raw = (cells[j].textContent || '').trim();
+                var cellLower = raw.toLowerCase();
+                for (var t = 0; t < matchTerms.length; t++) {
+                    var term = matchTerms[t];
+                    if (term.length === 1 && '○△□!m'.indexOf(term) !== -1) {
+                        if (raw.indexOf(term) !== -1) { show = true; break; }
+                    } else {
+                        var termLower = (term + '').toLowerCase();
+                        if (termLower && cellLower.indexOf(termLower) !== -1) {
                             show = true;
                             break;
                         }
                     }
-                    if (show) break;
+                }
+                if (show) break;
+            }
+        }
+        rows[i].style.display = show ? '' : 'none';
+    }
+    for (var i = 0; i < rows.length; i++) {
+        var cells = rows[i].getElementsByTagName('td');
+        for (var j = 3; j < cells.length; j++) {
+            var raw = (cells[j].getAttribute('data-value') || '').trim();
+            var displayStr = raw;
+            if (allowedSymbols.length > 0) {
+                displayStr = '';
+                for (var k = 0; k < raw.length; k++) {
+                    if (allowedSymbols.indexOf(raw[k]) !== -1) displayStr += raw[k];
                 }
             }
-            rows[i].style.display = show ? '' : 'none';
+            cells[j].innerHTML = renderSymbolsToHtml(displayStr);
         }
-    });
+    }
 }
+document.addEventListener('DOMContentLoaded', function() {
+    var maintenanceFilter = document.getElementById('maintenanceFilter');
+    if (maintenanceFilter) {
+        maintenanceFilter.addEventListener('input', applyMaintenanceFilter);
+        maintenanceFilter.addEventListener('keyup', applyMaintenanceFilter);
+    }
+});
 function setupUploadForm(formId, fileInputId, buttonId, resultId, storageKey, uploadType) {
     const form = document.getElementById(formId);
     const fileInput = document.getElementById(fileInputId);

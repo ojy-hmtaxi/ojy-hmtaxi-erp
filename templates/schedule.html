@@ -376,11 +376,12 @@
             position: relative;
         }
 
-        /* 월간 배차현황 테이블 전용 컨테이너 스타일 */
+        /* 월간 배차현황 테이블 전용 컨테이너 스타일 - 검색 시 높이 고정으로 화면 흔들림 방지 */
         .schedule-container {
             margin-top: 20px auto;
             margin-bottom: 20px auto;
             overflow-x: auto;
+            min-height: 450px;
             max-height: 600px;
             overflow-y: auto;
             border: 1px solid #ddd;
@@ -540,7 +541,7 @@
                     </div>
                     <!-- 배차 통합 검색 필터 -->
                     <div style="margin-bottom:20px;">
-                        <input type="text" id="scheduleUnifiedFilter" placeholder="차량번호, 차종, 근무유형, 운전기사 검색" style="width:100%;">
+                        <input type="text" id="scheduleUnifiedFilter" placeholder="차량번호, 차종, 근무유형, 사번, 운전기사 검색" style="width:100%;">
                     </div>
                     {% for sheet_name, data in dispatch_data.items() %}
                     <div id="sheet-{{ sheet_name }}" class="sheet-content{% if loop.first %} active{% endif %}">
@@ -721,32 +722,44 @@
             }
         });
 
-        // 배차 통합 검색 필터 함수
+        // 배차 통합 검색 필터 함수 (차량번호, 차종, 근무유형, 사번, 운전기사)
         function filterScheduleTable(searchTerm) {
             const activeSheet = document.querySelector('.sheet-content.active');
             if (!activeSheet) return;
 
-            const table = activeSheet.querySelector('.dispatch-table tbody');
-            if (!table) return;
+            const dispatchTable = activeSheet.querySelector('.dispatch-table');
+            if (!dispatchTable) return;
 
-            const rows = table.querySelectorAll('tr');
-            const searchLower = searchTerm.toLowerCase();
+            const theadRow = dispatchTable.querySelector('thead tr');
+            const tbody = dispatchTable.querySelector('tbody');
+            if (!theadRow || !tbody) return;
 
-            rows.forEach(row => {
+            const headerCells = theadRow.querySelectorAll('th');
+            const searchCols = ['차량번호', '차종', '근무유형', '사번', '운전기사'];
+            const colIndices = [];
+            for (var i = 0; i < headerCells.length; i++) {
+                var h = (headerCells[i].textContent || '').trim();
+                if (searchCols.indexOf(h) !== -1) colIndices.push(i);
+            }
+
+            const rows = tbody.querySelectorAll('tr');
+            const searchLower = (searchTerm || '').trim().toLowerCase();
+
+            rows.forEach(function(row) {
                 const cells = row.querySelectorAll('td');
-                if (cells.length >= 4) {
-                    const 차량번호 = cells[0].textContent.toLowerCase();
-                    const 차종 = cells[1].textContent.toLowerCase();
-                    const 근무유형 = cells[2].textContent.toLowerCase();
-                    const 운전기사 = cells[3].textContent.toLowerCase();
-
-                    const matches = 차량번호.includes(searchLower) || 
-                                   차종.includes(searchLower) || 
-                                   근무유형.includes(searchLower) || 
-                                   운전기사.includes(searchLower);
-
-                    row.style.display = matches ? '' : 'none';
+                var matches = false;
+                if (searchLower === '') {
+                    matches = true;
+                } else {
+                    for (var c = 0; c < colIndices.length; c++) {
+                        var idx = colIndices[c];
+                        if (idx < cells.length && (cells[idx].textContent || '').toLowerCase().includes(searchLower)) {
+                            matches = true;
+                            break;
+                        }
+                    }
                 }
+                row.style.display = matches ? '' : 'none';
             });
         }
 
