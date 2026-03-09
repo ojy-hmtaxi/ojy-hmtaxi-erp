@@ -56,6 +56,10 @@
         .color-swatch.selected {
             border: 2px solid #1976d2;
         }
+        .color-swatch-hatch svg {
+            display: block;
+            border-radius: 4px;
+        }
         .color-mode-btn {
             flex: 1 1 0;
             padding: 4px 0;
@@ -217,7 +221,17 @@
             <div class="color-swatch" data-color="#6d4c41" style="background:#6d4c41;"></div>
             <div class="color-swatch" data-color="#757575" style="background:#757575;"></div>
             <div class="color-swatch" data-color="#ffffff" style="background:#ffffff; border:1px solid #bbb;"></div>
-            <div class="color-swatch" data-color="#ffb300" style="background:#ffb300;"></div>
+            
+            <!-- 대각선 해치 패턴 3색 (짙은 회색, 파란색, 빨간색) -->
+            <div class="color-swatch color-swatch-hatch" data-color="hatch-gray" title="해치(짙은 회색)" style="padding:0; overflow:hidden; background:#fff;">
+                <svg width="22" height="22" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg"><line x1="0" y1="0" x2="22" y2="22" stroke="#424242" stroke-width="1.2"/><line x1="4" y1="0" x2="22" y2="18" stroke="#424242" stroke-width="1.2"/><line x1="8" y1="0" x2="22" y2="14" stroke="#424242" stroke-width="1.2"/><line x1="12" y1="0" x2="22" y2="10" stroke="#424242" stroke-width="1.2"/><line x1="16" y1="0" x2="22" y2="6" stroke="#424242" stroke-width="1.2"/><line x1="20" y1="0" x2="22" y2="2" stroke="#424242" stroke-width="1.2"/><line x1="0" y1="4" x2="18" y2="22" stroke="#424242" stroke-width="1.2"/><line x1="0" y1="8" x2="14" y2="22" stroke="#424242" stroke-width="1.2"/><line x1="0" y1="12" x2="10" y2="22" stroke="#424242" stroke-width="1.2"/><line x1="0" y1="16" x2="6" y2="22" stroke="#424242" stroke-width="1.2"/><line x1="0" y1="20" x2="2" y2="22" stroke="#424242" stroke-width="1.2"/></svg>
+            </div>
+            <div class="color-swatch color-swatch-hatch" data-color="hatch-blue" title="해치(파란색)" style="padding:0; overflow:hidden; background:#fff;">
+                <svg width="22" height="22" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg"><line x1="0" y1="0" x2="22" y2="22" stroke="#1e88e5" stroke-width="1.2"/><line x1="4" y1="0" x2="22" y2="18" stroke="#1e88e5" stroke-width="1.2"/><line x1="8" y1="0" x2="22" y2="14" stroke="#1e88e5" stroke-width="1.2"/><line x1="12" y1="0" x2="22" y2="10" stroke="#1e88e5" stroke-width="1.2"/><line x1="16" y1="0" x2="22" y2="6" stroke="#1e88e5" stroke-width="1.2"/><line x1="20" y1="0" x2="22" y2="2" stroke="#1e88e5" stroke-width="1.2"/><line x1="0" y1="4" x2="18" y2="22" stroke="#1e88e5" stroke-width="1.2"/><line x1="0" y1="8" x2="14" y2="22" stroke="#1e88e5" stroke-width="1.2"/><line x1="0" y1="12" x2="10" y2="22" stroke="#1e88e5" stroke-width="1.2"/><line x1="0" y1="16" x2="6" y2="22" stroke="#1e88e5" stroke-width="1.2"/><line x1="0" y1="20" x2="2" y2="22" stroke="#1e88e5" stroke-width="1.2"/></svg>
+            </div>
+            <div class="color-swatch color-swatch-hatch" data-color="hatch-red" title="해치(빨간색)" style="padding:0; overflow:hidden; background:#fff;">
+                <svg width="22" height="22" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg"><line x1="0" y1="0" x2="22" y2="22" stroke="#e53935" stroke-width="1.2"/><line x1="4" y1="0" x2="22" y2="18" stroke="#e53935" stroke-width="1.2"/><line x1="8" y1="0" x2="22" y2="14" stroke="#e53935" stroke-width="1.2"/><line x1="12" y1="0" x2="22" y2="10" stroke="#e53935" stroke-width="1.2"/><line x1="16" y1="0" x2="22" y2="6" stroke="#e53935" stroke-width="1.2"/><line x1="20" y1="0" x2="22" y2="2" stroke="#e53935" stroke-width="1.2"/><line x1="0" y1="4" x2="18" y2="22" stroke="#e53935" stroke-width="1.2"/><line x1="0" y1="8" x2="14" y2="22" stroke="#e53935" stroke-width="1.2"/><line x1="0" y1="12" x2="10" y2="22" stroke="#e53935" stroke-width="1.2"/><line x1="0" y1="16" x2="6" y2="22" stroke="#e53935" stroke-width="1.2"/><line x1="0" y1="20" x2="2" y2="22" stroke="#e53935" stroke-width="1.2"/></svg>
+            </div>
         </div>
         <div id="color-mode-buttons" style="display: flex; gap: 6px; margin-bottom: 10px;">
             <button id="fill-mode-btn" class="color-mode-btn active" type="button">채우기</button>
@@ -298,8 +312,39 @@
     let mode = 'select';
     let line, isDown, origX, origY;
     let currentColor = '#000000';
+
+    // 대각선 해치 패턴 캔버스 캐시 (Fabric Pattern 소스용)
+    var hatchPatternCanvases = {};
+    function getHatchPatternCanvas(id) {
+        if (hatchPatternCanvases[id]) return hatchPatternCanvases[id];
+        var colors = { 'hatch-gray': '#424242', 'hatch-blue': '#1e88e5', 'hatch-red': '#e53935' };
+        var color = colors[id];
+        if (!color) return null;
+        var size = 48;
+        var spacing = 8;
+        var el = document.createElement('canvas');
+        el.width = size;
+        el.height = size;
+        var ctx = el.getContext('2d');
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        for (var i = -size; i <= size * 2; i += spacing) {
+            ctx.moveTo(i, -size);
+            ctx.lineTo(i + size, size + size);
+        }
+        ctx.stroke();
+        hatchPatternCanvases[id] = el;
+        return el;
+    }
+    function getFillValue() {
+        if (typeof currentColor !== 'string' || currentColor.indexOf('hatch-') !== 0) return currentColor;
+        var hatchCanvas = getHatchPatternCanvas(currentColor);
+        if (!hatchCanvas) return currentColor;
+        return new fabric.Pattern({ source: hatchCanvas, repeat: 'repeat' });
+    }
     let colorMode = 'fill'; // 'fill' 또는 'outline'
-    let currentStrokeWidth = 2;
+    let currentStrokeWidth = 1;
     let curveStep = 0;
     let curveStart = null, curveEnd = null, curveControl = null;
     let curvePreviewLine = null, curvePreviewCurve = null;
@@ -377,12 +422,12 @@
                 line.arrowType = document.getElementById('arrowhead-select').value;
         } else if (mode === 'rect') {
             line = new fabric.Rect({ left: origX, top: origY, width: 0, height: 0,
-                fill: colorMode === 'fill' ? currentColor : 'rgba(0,0,0,0)',
+                fill: colorMode === 'fill' ? getFillValue() : 'rgba(0,0,0,0)',
                     stroke: colorMode === 'outline' ? currentColor : '#000', strokeWidth: currentStrokeWidth });
             canvas.add(line);
         } else if (mode === 'circle') {
             line = new fabric.Circle({ left: origX, top: origY, radius: 1,
-                fill: colorMode === 'fill' ? currentColor : 'rgba(0,0,0,0)',
+                fill: colorMode === 'fill' ? getFillValue() : 'rgba(0,0,0,0)',
                     stroke: colorMode === 'outline' ? currentColor : '#000', strokeWidth: currentStrokeWidth });
             canvas.add(line);
             }

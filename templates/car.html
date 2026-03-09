@@ -6,14 +6,14 @@
 {{ sidebar(current_user) }}
 {% endblock %}
 
-{% block title %}차량 관리{% endblock %}
+{% block title %}차량 관리 (정비/수리내역){% endblock %}
 
 {% block head %}
 <style>
     .custom-container {
         background-color: white;
         padding: 20px;
-        border-radius: 8px;
+        border-radius: 0px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         width: 100%;
         max-width: 1200px;
@@ -35,7 +35,7 @@
         width: 100%;
         padding: 8px;
         border: 1px solid #ddd;
-        border-radius: 4px;
+        border-radius: 0px;
         box-sizing: border-box;
     }
     button {
@@ -43,7 +43,7 @@
         color: white;
         padding: 10px 15px;
         border: none;
-        border-radius: 4px;
+        border-radius: 0px;
         cursor: pointer;
         width: 100%;
     }
@@ -57,7 +57,7 @@
     .car-tabs-wrap {
         margin: 20px 0;
         background: #f8f9fa;
-        border-radius: 8px;
+        border-radius: 0px;
         overflow: hidden;
     }
     .car-tabs-nav {
@@ -103,7 +103,7 @@
         margin-top: 10px;
         padding: 10px;
         background-color: #e8f5e9;
-        border-radius: 4px;
+        border-radius: 0px;
         display: block;
     }
     .upload-result.show {
@@ -167,7 +167,7 @@
         padding: 8px 6px;
         background-color: #b0b0b0;
         border: none;
-        border-radius: 4px;
+        border-radius: 0px;
         cursor: pointer;
         color: #333;
         text-decoration: none;
@@ -249,10 +249,12 @@
 
 {% block content %}
 <div class="custom-container">
-    <h1>차량 관리 (수리내역)</h1>
+    <!-- <h1>차량 관리 (정비/수리내역)</h1> -->
+
     {% if error %}
     <div class="error">{{ error }}</div>
     {% endif %}
+    
     <div class="car-tabs-wrap">
         <div class="car-tabs-nav">
             <button type="button" class="car-tab-btn active" data-tab="maintenance">차량정비</button>
@@ -338,7 +340,7 @@
                         {% endfor %}
                     </div>
                     <div style="margin-bottom:12px;">
-                        <input type="text" id="maintenanceFilter" placeholder="차번, 차종, 등록일자 또는 예방, 일반, 사고, 검사, 명일 검색" style="width:100%; padding:8px;">
+                        <input type="text" id="maintenanceFilter" placeholder="차번, 차종, 등록일자 또는 예방, 일반, 사고, 검사, 명일 검색" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
                     </div>
                     {% if maintenance_table_data %}
                     <div class="schedule-container">
@@ -388,8 +390,8 @@
         </div>
     </div>
     {% if car_data and car_data.list and car_data.columns %}
-    <div class="search-filter mb-3">
-        <input type="text" id="searchInput" class="form-control" placeholder="검색">
+    <div style="margin-bottom:10px;">
+        <input type="text" id="searchInput" placeholder="검색" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
     </div>
     <div class="car-table-scroll-wrap">
     <table class="table" id="carTable">

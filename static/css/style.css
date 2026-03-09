@@ -7,7 +7,7 @@
 
 .message-board {
     background: white;
-    border-radius: 8px;
+    border-radius: 0px;
     padding-left: 0px;
     padding-right: 15px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -22,7 +22,7 @@
     height: 90px;
     padding: 8px;
     border: 1px solid #ddd;
-    border-radius: 4px;
+    border-radius: 0px;
     resize: none;
     margin-bottom: 10px;
 }
@@ -33,7 +33,7 @@
     border: none;
     width: 100%;
     padding: 8px 16px;
-    border-radius: 4px;
+    border-radius: 0px;
     cursor: pointer;
 }
 
@@ -41,14 +41,9 @@
     background-color: #0056b3;
 }
 
-.messages {
-    /* max-height: 400px; */
-    /* overflow-y: auto; */
-}
-
 .message {
     background: #f1f1f1;
-    border-radius: 4px;
+    border-radius: 0px;
     padding: 10px;
     margin-bottom: 10px;
 }
@@ -76,7 +71,7 @@
     border: none;
     width: 50px;
     padding: 4px 8px;
-    border-radius: 4px;
+    border-radius: 0px;
     cursor: pointer;
     font-size: 0.8em;
 }

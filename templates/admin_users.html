@@ -69,7 +69,8 @@
                                             <button type="button" class="btn btn-sm btn-outline-danger" 
                                                     data-user-id="{{ user.id }}"
                                                     data-username="{{ user.username }}"
-                                                    onclick="deleteUser(this.dataset.userId, this.dataset.username)">
+                                                    onclick="deleteUser(this.dataset.userId, this.dataset.username)"
+                                                    style="margin-left: 5px;">
                                                 <i class="fas fa-trash"></i> 삭제
                                             </button>
                                             {% endif %}
