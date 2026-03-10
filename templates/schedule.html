@@ -224,19 +224,33 @@
             border-bottom: 2px solid #ddd;
         }
 
-        /* 셀 내용에 따른 색상 스타일 */
-        .dispatch-table td[data-value="o"] {
-            color: #008000;  /* 초록 - 근무 */
+        /* 셀 내용에 따른 색상 스타일 (o=근무, x=결근, /=휴무, h=공휴일, r=예정일) */
+        .dispatch-table td[data-value="o"],
+        .dispatch-table td[data-value="O"] {
+            color: #008000;  /* 녹색 - 근무 */
             font-weight: bold;
         }
         
-        .dispatch-table td[data-value="x"] {
+        .dispatch-table td[data-value="x"],
+        .dispatch-table td[data-value="X"] {
             color: #ff0000;  /* 빨강 - 결근 */
             font-weight: bold;
         }
         
         .dispatch-table td[data-value="/"] {
             color: #ffa500;  /* 주황 - 휴무 */
+            font-weight: bold;
+        }
+        
+        .dispatch-table td[data-value="h"],
+        .dispatch-table td[data-value="H"] {
+            color: #8e24aa;  /* 보라 - 공휴일 */
+            font-weight: bold;
+        }
+        
+        .dispatch-table td[data-value="r"],
+        .dispatch-table td[data-value="R"] {
+            color: #00acc1;  /* 하늘색 - 예정일 */
             font-weight: bold;
         }
         

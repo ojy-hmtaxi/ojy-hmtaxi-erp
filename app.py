@@ -217,8 +217,8 @@ def calculate_salary():
                     cat = row.get('근무유형', '')
                     if cat in categories:
                         for day in range(1, 32):
-                            val = row.get(str(day), '')
-                            if val == 'o':
+                            val = str(row.get(str(day), '')).strip().lower()
+                            if val in ('o', '/', 'h'):  # 인정일수: 근무, 휴무, 공휴일
                                 cat_counts[cat] += 1
                         # 근무유형별 기사 집계
                         name = row.get('운전기사', '').strip()
@@ -278,6 +278,7 @@ def calculate_salary():
                             continue
                     
                     if not salary_data:
+                        empty_accident_stats = {m: {'at_fault': 0, 'at_fault_causes': {}, 'not_at_fault': 0, 'not_at_fault_causes': {}} for m in month_order}
                         return render_template('index.html', 
                                             error="엑셀 파일에 '실입금', '리스료', '연료비' 컬럼이 있는 시트가 없습니다.",
                                             total_income=total_income,
@@ -295,7 +296,8 @@ def calculate_salary():
                                             month_order=month_order,
                                             driver_counts=driver_counts,
                                             monthly_incomes=monthly_incomes,
-                                            monthly_fuel_costs=monthly_fuel_costs)
+                                            monthly_fuel_costs=monthly_fuel_costs,
+                                            accident_stats_by_month=empty_accident_stats)
                     
                     session['salary_data'] = salary_data
                     session['salary_calculated'] = True
@@ -346,6 +348,34 @@ def calculate_salary():
                                     unpaid_not_at_fault_estimate += int(str(a.get('피해견적', 0)).replace(',', ''))
                                 except:
                                     pass
+                            # 월별 사고 통계 (라인차트용) + 사고원인별 분포
+                            accident_stats_by_month = {m: {'at_fault': 0, 'at_fault_causes': {}, 'not_at_fault': 0, 'not_at_fault_causes': {}} for m in month_order}
+                            for a in at_fault:
+                                dt = a.get('사고일시', '')
+                                if dt and '/' in dt:
+                                    try:
+                                        mm = dt.strip().split('/')[0].zfill(2)
+                                        month_key = f'{mm}월'
+                                        if month_key in accident_stats_by_month:
+                                            accident_stats_by_month[month_key]['at_fault'] += 1
+                                            cause = (a.get('사고원인', '') or '').strip() or '기타'
+                                            accident_stats_by_month[month_key]['at_fault_causes'][cause] = accident_stats_by_month[month_key]['at_fault_causes'].get(cause, 0) + 1
+                                    except:
+                                        pass
+                            for a in not_at_fault:
+                                dt = a.get('사고일시', '')
+                                if dt and '/' in dt:
+                                    try:
+                                        mm = dt.strip().split('/')[0].zfill(2)
+                                        month_key = f'{mm}월'
+                                        if month_key in accident_stats_by_month:
+                                            accident_stats_by_month[month_key]['not_at_fault'] += 1
+                                            cause = (a.get('사고원인', '') or '').strip() or '기타'
+                                            accident_stats_by_month[month_key]['not_at_fault_causes'][cause] = accident_stats_by_month[month_key]['not_at_fault_causes'].get(cause, 0) + 1
+                                    except:
+                                        pass
+                    else:
+                        accident_stats_by_month = {m: {'at_fault': 0, 'at_fault_causes': {}, 'not_at_fault': 0, 'not_at_fault_causes': {}} for m in month_order}
                     
                     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
                     return render_template('index.html', 
@@ -376,9 +406,11 @@ def calculate_salary():
                                         month_order=month_order,
                                         driver_counts=driver_counts,
                                         monthly_incomes=monthly_incomes,
-                                        monthly_fuel_costs=monthly_fuel_costs)
+                                        monthly_fuel_costs=monthly_fuel_costs,
+                                        accident_stats_by_month=accident_stats_by_month)
                 except Exception as e:
-                    return render_template('index.html', 
+                    empty_accident_stats = {m: {'at_fault': 0, 'at_fault_causes': {}, 'not_at_fault': 0, 'not_at_fault_causes': {}} for m in month_order}
+                    return render_template('index.html',
                                         error=f"엑셀 파일 처리 중 오류가 발생했습니다: {str(e)}",
                                         total_income=total_income,
                                         monthly_avg_income=monthly_avg_income,
@@ -395,7 +427,8 @@ def calculate_salary():
                                         month_order=month_order,
                                         driver_counts=driver_counts,
                                         monthly_incomes=monthly_incomes,
-                                        monthly_fuel_costs=monthly_fuel_costs)
+                                        monthly_fuel_costs=monthly_fuel_costs,
+                                        accident_stats_by_month=empty_accident_stats)
     
     # GET 요청이거나 세션에 저장된 데이터가 있는 경우
     salary_data = session.get('salary_data', None)
@@ -448,6 +481,38 @@ def calculate_salary():
                 except:
                     pass
     
+    # 월별 사고 현황 통계 (라인차트용) + 사고원인별 분포
+    accident_stats_by_month = {}
+    for m in month_order:
+        accident_stats_by_month[m] = {'at_fault': 0, 'at_fault_causes': {}, 'not_at_fault': 0, 'not_at_fault_causes': {}}
+    if os.path.exists(accident_data_path):
+        with open(accident_data_path, 'r', encoding='utf-8') as f:
+            accident_data = json.load(f)
+            for a in accident_data.get('at_fault', []):
+                dt = a.get('사고일시', '')
+                if dt and '/' in dt:
+                    try:
+                        mm = dt.strip().split('/')[0].zfill(2)
+                        month_key = f'{mm}월'
+                        if month_key in accident_stats_by_month:
+                            accident_stats_by_month[month_key]['at_fault'] += 1
+                            cause = (a.get('사고원인', '') or '').strip() or '기타'
+                            accident_stats_by_month[month_key]['at_fault_causes'][cause] = accident_stats_by_month[month_key]['at_fault_causes'].get(cause, 0) + 1
+                    except:
+                        pass
+            for a in accident_data.get('not_at_fault', []):
+                dt = a.get('사고일시', '')
+                if dt and '/' in dt:
+                    try:
+                        mm = dt.strip().split('/')[0].zfill(2)
+                        month_key = f'{mm}월'
+                        if month_key in accident_stats_by_month:
+                            accident_stats_by_month[month_key]['not_at_fault'] += 1
+                            cause = (a.get('사고원인', '') or '').strip() or '기타'
+                            accident_stats_by_month[month_key]['not_at_fault_causes'][cause] = accident_stats_by_month[month_key]['not_at_fault_causes'].get(cause, 0) + 1
+                    except:
+                        pass
+    
     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
     return render_template('index.html',
                         salary_data=salary_data,
@@ -478,7 +543,8 @@ def calculate_salary():
                         driver_counts=driver_counts,
                         driver_counts_by_category=driver_counts_by_category,
                         monthly_incomes=monthly_incomes,
-                        monthly_fuel_costs=monthly_fuel_costs)
+                        monthly_fuel_costs=monthly_fuel_costs,
+                        accident_stats_by_month=accident_stats_by_month)
 
 @app.route('/schedule', methods=['GET', 'POST'])
 @login_required

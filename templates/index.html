@@ -16,6 +16,28 @@
     flex-direction: column;
     justify-content: center;
 }
+.dispatch-breakdown .dispatch-category-col {
+    border-left: 1px solid #dee2e6;
+}
+.dispatch-breakdown .dispatch-category-col:first-child {
+    border-left: none;
+}
+.dispatch-breakdown .dispatch-category-block {
+    padding: 8px 12px;
+}
+.dispatch-breakdown #dayDriversDiff,
+.dispatch-breakdown #dayTripsDiff,
+.dispatch-breakdown #nightDriversDiff,
+.dispatch-breakdown #nightTripsDiff,
+.dispatch-breakdown #dailyDriversDiff,
+.dispatch-breakdown #dailyTripsDiff,
+.dispatch-breakdown #shiftDriversDiff,
+.dispatch-breakdown #shiftTripsDiff,
+.dispatch-breakdown #leaseDriversDiff,
+.dispatch-breakdown #leaseTripsDiff {
+    font-size: 0.85em;
+    font-weight: normal;
+}
 </style>
 <div class="container-fluid" style="width: 95%;">
     <!-- 상단 통계 카드 -->
@@ -93,69 +115,50 @@
         </div>
         <div class="card-body">
             <div class="row" >
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <div class="d-flex justify-content-between align-items-center">
-                        <span>총 기사 수</span>
+                        <span>운전기사</span>
                         <strong id="totalDrivers">{{ "{:,}".format(total_drivers|default(0)) }}명<span id="totalDriversDiff"></span></strong>
                     </div>
                 </div>
+                <div class="col-md-2"></div>
                 <div class="col-md-3">
                     <div class="d-flex justify-content-between align-items-center">
-                        <span>총 운행일수</span>
+                        <span>운행일수</span>
                         <strong id="totalTrips">{{ "{:,}".format(total_trips|default(228)) }}일<span id="totalTripsDiff"></span></strong>
                     </div>
                 </div>
             </div>
-            <br>
-            <div class="row">
-                <div class="col-md-2">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span>주간</span>
-                        <strong id="dayDrivers">{{ "{:,}".format(day_drivers|default(0)) }}명<span id="dayDriversDiff"></span></strong>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center" style="font-size: 0.85em; color: #666; margin-top: 4px;">
-                        <span>운행일</span>
-                        <span id="dayTrips">{{ "{:,}".format(day_trips|default(57)) }}일<span id="dayTripsDiff"></span></span>
+            <hr class="my-3" style="border-color: #a5a5a5;">
+            <div class="row g-0 dispatch-breakdown">
+                <div class="col dispatch-category-col">
+                    <div class="dispatch-category-block">
+                        <div class="mb-2">주간 <strong id="dayDrivers">{{ "{:,}".format(day_drivers|default(0)) }}명</strong></div>
+                        <div class="text-muted small">운행일 <strong id="dayTrips">{{ "{:,}".format(day_trips|default(57)) }}일</strong></div>
                     </div>
                 </div>
-                <div class="col-md-2">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span>야간</span>
-                        <strong id="nightDrivers">{{ "{:,}".format(night_drivers|default(0)) }}명<span id="nightDriversDiff"></span></strong>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center" style="font-size: 0.85em; color: #666; margin-top: 4px;">
-                        <span>운행일</span>
-                        <span id="nightTrips">{{ "{:,}".format(night_trips|default(57)) }}일<span id="nightTripsDiff"></span></span>
+                <div class="col dispatch-category-col">
+                    <div class="dispatch-category-block">
+                        <div class="mb-2">야간 <strong id="nightDrivers">{{ "{:,}".format(night_drivers|default(0)) }}명</strong></div>
+                        <div class="text-muted small">운행일 <strong id="nightTrips">{{ "{:,}".format(night_trips|default(57)) }}일</strong></div>
                     </div>
                 </div>
-                <div class="col-md-2">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span>일차</span>
-                        <strong id="dailyDrivers">{{ "{:,}".format(daily_drivers|default(0)) }}명<span id="dailyDriversDiff"></span></strong>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center" style="font-size: 0.85em; color: #666; margin-top: 4px;">
-                        <span>운행일</span>
-                        <span id="dailyTrips">{{ "{:,}".format(daily_trips|default(114)) }}일<span id="dailyTripsDiff"></span></span>
+                <div class="col dispatch-category-col">
+                    <div class="dispatch-category-block">
+                        <div class="mb-2">일차 <strong id="dailyDrivers">{{ "{:,}".format(daily_drivers|default(0)) }}명</strong></div>
+                        <div class="text-muted small">운행일 <strong id="dailyTrips">{{ "{:,}".format(daily_trips|default(114)) }}일</strong></div>
                     </div>
                 </div>
-                <div class="col-md-2">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span>교대</span>
-                        <strong id="shiftDrivers">{{ "{:,}".format(shift_drivers|default(0)) }}명<span id="shiftDriversDiff"></span></strong>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center" style="font-size: 0.85em; color: #666; margin-top: 4px;">
-                        <span>운행일</span>
-                        <span id="shiftTrips">{{ "{:,}".format(shift_trips|default(0)) }}일<span id="shiftTripsDiff"></span></span>
+                <div class="col dispatch-category-col">
+                    <div class="dispatch-category-block">
+                        <div class="mb-2">교대 <strong id="shiftDrivers">{{ "{:,}".format(shift_drivers|default(0)) }}명</strong></div>
+                        <div class="text-muted small">운행일 <strong id="shiftTrips">{{ "{:,}".format(shift_trips|default(0)) }}일</strong></div>
                     </div>
                 </div>
-                <div class="col-md-2">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span>리스</span>
-                        <strong id="leaseDrivers">{{ "{:,}".format(lease_drivers|default(0)) }}명<span id="leaseDriversDiff"></span></strong>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center" style="font-size: 0.85em; color: #666; margin-top: 4px;">
-                        <span>운행일</span>
-                        <span id="leaseTrips">{{ "{:,}".format(lease_trips|default(0)) }}일<span id="leaseTripsDiff"></span></span>
+                <div class="col dispatch-category-col">
+                    <div class="dispatch-category-block">
+                        <div class="mb-2">리스 <strong id="leaseDrivers">{{ "{:,}".format(lease_drivers|default(0)) }}명</strong></div>
+                        <div class="text-muted small">운행일 <strong id="leaseTrips">{{ "{:,}".format(lease_trips|default(0)) }}일</strong></div>
                     </div>
                 </div>
             </div>
@@ -243,6 +246,16 @@
         </div>
         <div class="card-body">
             <canvas id="dispatchLineChart" height="100px"></canvas>
+        </div>
+    </div>
+
+    <!-- 월별 사고 현황 통계 라인차트 -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">월별 사고 현황 통계</h5>
+        </div>
+        <div class="card-body">
+            <canvas id="accidentLineChart" height="100px"></canvas>
         </div>
     </div>
 </div>
@@ -492,6 +505,90 @@ new Chart(ctx, {
                 position: 'left',
                 ticks: { stepSize: 5 },
                 title: { display: true, text: '운전기사(명)' }
+            }
+        }
+    }
+});
+
+// 월별 사고 현황 막대차트 (호버 시 사고원인 스택)
+const accidentStats = JSON.parse('{{ accident_stats_by_month|default("{}")|tojson|safe }}');
+const accidentAtFaultData = months.map(m => (accidentStats[m] || {}).at_fault || 0);
+const accidentNotAtFaultData = months.map(m => (accidentStats[m] || {}).not_at_fault || 0);
+const accidentCauseColors = ['#e53935', '#1e88e5', '#fdd835', '#43a047', '#8e24aa', '#fb8c00', '#00acc1', '#5e35b1', '#d81b60', '#00897b'];
+let accidentTooltipEl;
+function accidentTooltipHandler(context) {
+    const { chart, tooltip } = context;
+    if (tooltip.opacity === 0) {
+        if (accidentTooltipEl) accidentTooltipEl.style.opacity = 0;
+        return;
+    }
+    if (!accidentTooltipEl) {
+        accidentTooltipEl = document.createElement('div');
+        accidentTooltipEl.style.cssText = 'position:fixed;pointer-events:none;background:rgba(255,255,255,0.95);border:1px solid #ddd;border-radius:6px;padding:10px 14px;box-shadow:0 2px 8px rgba(0,0,0,0.15);font-size:12px;line-height:1.4;z-index:9999;max-width:240px;';
+        document.body.appendChild(accidentTooltipEl);
+    }
+    const dp = tooltip.dataPoints[0];
+    const month = months[dp.dataIndex];
+    const isAtFault = dp.datasetIndex === 0;
+    const typeKey = isAtFault ? 'at_fault' : 'not_at_fault';
+    const causesKey = isAtFault ? 'at_fault_causes' : 'not_at_fault_causes';
+    const total = (accidentStats[month] || {})[typeKey] || 0;
+    const causes = (accidentStats[month] || {})[causesKey] || {};
+    const label = isAtFault ? '가해사고' : '피해사고';
+    const entries = Object.entries(causes).sort((a, b) => b[1] - a[1]);
+    if (total === 0 || entries.length === 0) {
+        accidentTooltipEl.innerHTML = `<strong>${month} ${label}</strong><br>총 ${total}건`;
+    } else {
+        let stackHtml = '<div style="display:flex;height:16px;border-radius:4px;overflow:hidden;margin:6px 0;border:1px solid #eee;">';
+        entries.forEach(([cause, cnt], i) => {
+            const pct = (cnt / total * 100).toFixed(0);
+            const color = accidentCauseColors[i % accidentCauseColors.length];
+            stackHtml += `<div style="width:${pct}%;background:${color};" title="${cause} ${cnt}건"></div>`;
+        });
+        stackHtml += '</div>';
+        accidentTooltipEl.innerHTML = `<strong>${month} ${label}</strong> 총 ${total}건<br>${stackHtml}<div style="margin-top:4px;font-size:11px;">${entries.map(([cause, cnt], i) => {
+            const pct = (cnt / total * 100).toFixed(1);
+            return `<span style="display:inline-block;width:8px;height:8px;background:${accidentCauseColors[i % accidentCauseColors.length]};border-radius:2px;margin-right:4px;vertical-align:middle;"></span>${cause} ${cnt}건(${pct}%)`;
+        }).join('<br>')}</div>`;
+    }
+    const rect = chart.canvas.getBoundingClientRect();
+    accidentTooltipEl.style.left = (rect.left + (tooltip.x || 0) - accidentTooltipEl.offsetWidth / 2) + 'px';
+    accidentTooltipEl.style.top = (rect.top + (tooltip.y || 0) - accidentTooltipEl.offsetHeight - 12) + 'px';
+    accidentTooltipEl.style.opacity = 1;
+}
+const accidentCtx = document.getElementById('accidentLineChart').getContext('2d');
+new Chart(accidentCtx, {
+    type: 'bar',
+    data: {
+        labels: months,
+        datasets: [{
+            label: '가해사고',
+            data: accidentAtFaultData,
+            backgroundColor: 'rgba(220,53,69,0.7)',
+            borderColor: '#dc3545',
+            borderWidth: 1
+        }, {
+            label: '피해사고',
+            data: accidentNotAtFaultData,
+            backgroundColor: 'rgba(0,123,255,0.7)',
+            borderColor: '#007bff',
+            borderWidth: 1
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { position: 'top' },
+            tooltip: {
+                enabled: false,
+                external: accidentTooltipHandler
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: { stepSize: 1 },
+                title: { display: true, text: '사고 건수' }
             }
         }
     }
