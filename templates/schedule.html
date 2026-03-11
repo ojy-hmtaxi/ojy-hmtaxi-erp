@@ -62,13 +62,56 @@
         }
         .upload-result {
             margin-top: 10px;
-            padding: 10px;
-            background-color: #e8f5e9;
             border-radius: 0px;
             display: block;
         }
         .upload-result.show {
             display: block;
+        }
+        .upload-result-placeholder {
+            padding: 10px;
+            background-color: #e8f5e9;
+            color: #555;
+        }
+        .upload-result-wrap {
+            display: none;
+        }
+        .upload-result-wrap.visible {
+            display: block;
+        }
+        .upload-result-head {
+            padding: 10px 12px;
+            background-color: #e8f5e9;
+            border-radius: 0px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .upload-result-head .text {
+            flex: 1;
+        }
+        .upload-result-toggle {
+            flex-shrink: 0;
+            cursor: pointer;
+            padding: 2px 6px;
+            color: #2e7d32;
+            user-select: none;
+        }
+        .upload-result-toggle.open {
+            transform: rotate(180deg);
+        }
+        .upload-result-history {
+            display: none;
+            border-top: 1px solid rgba(0,0,0,0.08);
+        }
+        .upload-result-history.open {
+            display: block;
+        }
+        .upload-result-history-item {
+            padding: 10px 12px;
+            background-color: #c8e6c9;
+            border-top: 1px solid rgba(0,0,0,0.06);
         }
         .dispatch-table {
             width: 100%;
@@ -449,7 +492,10 @@
                     </div>
                     <button type="submit" id="uploadButton">배차 데이터 업데이트</button>
                 </form>
-                <div id="uploadResult" class="upload-result">업로드된 파일이 이곳에 표시됩니다.</div>
+                <div id="uploadResult" class="upload-result">
+                    <div class="upload-result-placeholder">업로드된 파일이 이곳에 표시됩니다.</div>
+                    <div id="uploadResultWrap" class="upload-result-wrap"></div>
+                </div>
             </div>
 
             {% if error %}
@@ -777,6 +823,45 @@
             });
         }
 
+        // 업로드 기록 렌더 (최대 2건, 드롭다운)
+const MAX_UPLOAD_HISTORY = 3;
+        function renderUploadHistory(containerId, wrapId, storageKey, items) {
+            const container = document.getElementById(containerId);
+            const wrap = document.getElementById(wrapId);
+            if (!container || !wrap) return;
+            if (!items || items.length === 0) {
+                container.querySelector('.upload-result-placeholder').style.display = 'block';
+                wrap.classList.remove('visible');
+                wrap.innerHTML = '';
+                return;
+            }
+            container.querySelector('.upload-result-placeholder').style.display = 'none';
+            wrap.classList.add('visible');
+            const headHtml = items[0];
+            const hasMore = items.length > 1;
+            const historyItems = items.slice(1);
+            wrap.innerHTML =
+                '<div class="upload-result-head">' +
+                '<span class="text">' + headHtml + '</span>' +
+                (hasMore ? '<span class="upload-result-toggle" title="과거 기록 보기">▼</span>' : '') +
+                '</div>' +
+                (hasMore ? '<div class="upload-result-history">' +
+                    historyItems.map(function(html) {
+                        return '<div class="upload-result-history-item">' + html + '</div>';
+                    }).join('') +
+                '</div>' : '');
+            if (hasMore) {
+                var toggle = wrap.querySelector('.upload-result-toggle');
+                var historyEl = wrap.querySelector('.upload-result-history');
+                if (toggle && historyEl) {
+                    toggle.addEventListener('click', function() {
+                        toggle.classList.toggle('open');
+                        historyEl.classList.toggle('open');
+                    });
+                }
+            }
+        }
+
         document.getElementById('uploadForm').addEventListener('submit', function(e) {
             e.preventDefault();
             
@@ -803,11 +888,18 @@
                     const serverUrl = `${window.location.origin}/uploads/${encodeURIComponent(file.name)}`;
                     const uploadMessage = `<span style=\"color:#007bff;font-weight:bold;\">${file.name}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${dateStr} | ${timeStr} | 업로더: {{ current_user.name }})&nbsp;<a href=\"${serverUrl}\" target=\"_blank\" style=\"color:#28a745;text-decoration:underline;\">[다운로드]</a>`;
                     const resultDiv = document.getElementById('uploadResult');
-                    resultDiv.innerHTML = uploadMessage;
                     resultDiv.classList.add('show');
-                    
-                    // 메시지를 localStorage에 저장
-                    localStorage.setItem('scheduleUploadMessage', uploadMessage);
+                    // 과거 기록 최대 2건 저장
+                    const HISTORY_KEY = 'scheduleUploadHistory';
+                    const MAX_HISTORY = 3;
+                    let history = [];
+                    try {
+                        history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+                    } catch (e) {}
+                    history.unshift(uploadMessage);
+                    history = history.slice(0, MAX_HISTORY);
+                    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+                    renderUploadHistory('uploadResult', 'uploadResultWrap', HISTORY_KEY, history);
                     
                     // 1초 후 페이지 자동 리프레시
                     setTimeout(() => {
@@ -823,22 +915,24 @@
             });
         });
 
-        // 페이지 로드 시 저장된 메시지 복원
+        // 페이지 로드 시 저장된 기록 복원 또는 API에서 최신 1건 로드
         document.addEventListener('DOMContentLoaded', function() {
-            const savedMessage = localStorage.getItem('scheduleUploadMessage');
-            if (savedMessage) {
-                const resultDiv = document.getElementById('uploadResult');
-                resultDiv.innerHTML = savedMessage;
-                resultDiv.classList.add('show');
+            const HISTORY_KEY = 'scheduleUploadHistory';
+            let history = [];
+            try {
+                history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+            } catch (e) {}
+            if (history.length > 0) {
+                document.getElementById('uploadResult').classList.add('show');
+                renderUploadHistory('uploadResult', 'uploadResultWrap', HISTORY_KEY, history);
+            } else {
+                loadLatestUpload();
             }
         });
 
-        // 새 파일이 선택되면 이전 메시지 삭제
+        // 새 파일 선택 시 표시만 초기화하지 않음 (과거 기록 유지)
         document.getElementById('excel_file').addEventListener('change', function() {
-            localStorage.removeItem('scheduleUploadMessage');
-            const resultDiv = document.getElementById('uploadResult');
-            resultDiv.innerHTML = '';
-            resultDiv.classList.remove('show');
+            // 선택 시 아무 동작 안 함. 업로드 후에만 기록 추가.
         });
 
         // 최신 업로드 정보 가져오기
@@ -856,21 +950,21 @@
                         const msg = `<span style=\"color:#007bff;font-weight:bold;\">${data.filename}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${data.upload_time} | 업로더: ${data.uploader})&nbsp;<a href=\"${serverUrl}\" target=\"_blank\" style=\"color:#28a745;text-decoration:underline;\">[다운로드]</a>`;
                         const resultDiv = document.getElementById('uploadResult');
                         if (resultDiv) {
-                            resultDiv.innerHTML = msg;
                             resultDiv.classList.add('show');
+                            const HISTORY_KEY = 'scheduleUploadHistory';
+                            let history = [msg];
+                            try {
+                                const existing = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+                                history = [msg].concat(existing).slice(0, MAX_UPLOAD_HISTORY);
+                            } catch (e) {}
+                            localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+                            renderUploadHistory('uploadResult', 'uploadResultWrap', HISTORY_KEY, history);
                         }
                     }
                 })
                 .catch(error => {
                     console.log('최신 업로드 정보를 가져오는데 실패했습니다:', error);
                 });
-        }
-
-        // 페이지 로드 완료 후 최신 업로드 정보 로드
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', loadLatestUpload);
-        } else {
-            loadLatestUpload();
         }
     </script>
 {% endblock %} 

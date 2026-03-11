@@ -101,13 +101,56 @@
     }
     .upload-result {
         margin-top: 10px;
-        padding: 10px;
-        background-color: #e8f5e9;
         border-radius: 0px;
         display: block;
     }
     .upload-result.show {
         display: block;
+    }
+    .upload-result-placeholder {
+        padding: 10px;
+        background-color: #e8f5e9;
+        color: #555;
+    }
+    .upload-result-wrap {
+        display: none;
+    }
+    .upload-result-wrap.visible {
+        display: block;
+    }
+    .upload-result-head {
+        padding: 10px 12px;
+        background-color: #e8f5e9;
+        border-radius: 0px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+    .upload-result-head .text {
+        flex: 1;
+    }
+    .upload-result-toggle {
+        flex-shrink: 0;
+        cursor: pointer;
+        padding: 2px 6px;
+        color: #2e7d32;
+        user-select: none;
+    }
+    .upload-result-toggle.open {
+        transform: rotate(180deg);
+    }
+    .upload-result-history {
+        display: none;
+        border-top: 1px solid rgba(0,0,0,0.08);
+    }
+    .upload-result-history.open {
+        display: block;
+    }
+    .upload-result-history-item {
+        padding: 10px 12px;
+        background-color: #c8e6c9;
+        border-top: 1px solid rgba(0,0,0,0.06);
     }
     .table {
         width: 100%;
@@ -269,7 +312,10 @@
                     </div>
                     <button type="submit" id="uploadButtonMaintenance">차량정비 데이터 업데이트</button>
                 </form>
-                <div id="uploadResultMaintenance" class="upload-result">업로드된 파일이 이곳에 표시됩니다.</div>
+                <div id="uploadResultMaintenance" class="upload-result">
+                    <div class="upload-result-placeholder">업로드된 파일이 이곳에 표시됩니다.</div>
+                    <div id="uploadResultMaintenanceWrap" class="upload-result-wrap"></div>
+                </div>
             </div>
             {% if maintenance_available_months %}
             <div class="maintenance-schedule-wrap">
@@ -385,7 +431,10 @@
                     </div>
                     <button type="submit" id="uploadButtonRepair">차량수리 데이터 업데이트</button>
                 </form>
-                <div id="uploadResultRepair" class="upload-result">업로드된 파일이 이곳에 표시됩니다.</div>
+                <div id="uploadResultRepair" class="upload-result">
+                    <div class="upload-result-placeholder">업로드된 파일이 이곳에 표시됩니다.</div>
+                    <div id="uploadResultRepairWrap" class="upload-result-wrap"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -520,7 +569,37 @@ document.addEventListener('DOMContentLoaded', function() {
         maintenanceFilter.addEventListener('keyup', applyMaintenanceFilter);
     }
 });
+var MAX_UPLOAD_HISTORY = 3;
+function renderUploadHistory(containerId, wrapId, storageKey, items) {
+    var container = document.getElementById(containerId);
+    var wrap = document.getElementById(wrapId);
+    if (!container || !wrap) return;
+    if (!items || items.length === 0) {
+        var ph = container.querySelector('.upload-result-placeholder');
+        if (ph) ph.style.display = 'block';
+        wrap.classList.remove('visible');
+        wrap.innerHTML = '';
+        return;
+    }
+    var ph = container.querySelector('.upload-result-placeholder');
+    if (ph) ph.style.display = 'none';
+    wrap.classList.add('visible');
+    var headHtml = items[0];
+    var hasMore = items.length > 1;
+    var historyItems = items.slice(1);
+    wrap.innerHTML = '<div class="upload-result-head"><span class="text">' + headHtml + '</span>' +
+        (hasMore ? '<span class="upload-result-toggle" title="과거 기록 보기">▼</span>' : '') + '</div>' +
+        (hasMore ? '<div class="upload-result-history">' + historyItems.map(function(html) { return '<div class="upload-result-history-item">' + html + '</div>'; }).join('') + '</div>' : '');
+    if (hasMore) {
+        var toggle = wrap.querySelector('.upload-result-toggle');
+        var historyEl = wrap.querySelector('.upload-result-history');
+        if (toggle && historyEl) {
+            toggle.addEventListener('click', function() { toggle.classList.toggle('open'); historyEl.classList.toggle('open'); });
+        }
+    }
+}
 function setupUploadForm(formId, fileInputId, buttonId, resultId, storageKey, uploadType) {
+    var wrapId = resultId + 'Wrap';
     const form = document.getElementById(formId);
     const fileInput = document.getElementById(fileInputId);
     const uploadButton = document.getElementById(buttonId);
@@ -540,11 +619,14 @@ function setupUploadForm(formId, fileInputId, buttonId, resultId, storageKey, up
                     const now = new Date();
                     const dateStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
                     const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-                    const serverUrl = `${window.location.origin}/uploads/${encodeURIComponent(file.name)}`;
-                    const uploadMessage = `<span style="color:#007bff;font-weight:bold;">${file.name}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${dateStr} | ${timeStr} | 업로더: {{ current_user.name }})&nbsp;<a href="${serverUrl}" target="_blank" style="color:#28a745;text-decoration:underline;">[다운로드]</a>`;
-                    resultDiv.innerHTML = uploadMessage;
+                    const serverUrl = window.location.origin + '/uploads/' + encodeURIComponent(file.name);
+                    const uploadMessage = '<span style="color:#007bff;font-weight:bold;">' + file.name + '</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ' + dateStr + ' | ' + timeStr + ' | 업로더: {{ current_user.name }})&nbsp;<a href="' + serverUrl + '" target="_blank" style="color:#28a745;text-decoration:underline;">[다운로드]</a>';
                     resultDiv.classList.add('show');
-                    localStorage.setItem(storageKey, uploadMessage);
+                    var history = [];
+                    try { history = JSON.parse(localStorage.getItem(storageKey) || '[]'); } catch (e) {}
+                    history.unshift(uploadMessage);
+                    history = history.slice(0, MAX_UPLOAD_HISTORY);
+                    localStorage.setItem(storageKey, JSON.stringify(history));
                     setTimeout(() => { window.location.reload(); }, 1000);
                 }
             })
@@ -555,27 +637,31 @@ function setupUploadForm(formId, fileInputId, buttonId, resultId, storageKey, up
             });
     });
     if (fileInput) {
-        fileInput.addEventListener('change', function() {
-            localStorage.removeItem(storageKey);
-            resultDiv.innerHTML = '';
-            resultDiv.classList.remove('show');
-        });
+        fileInput.addEventListener('change', function() {});
     }
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
-        resultDiv.innerHTML = saved;
+    var history = [];
+    try { history = JSON.parse(localStorage.getItem(storageKey) || '[]'); } catch (e) {}
+    if (history.length > 0) {
         resultDiv.classList.add('show');
+        renderUploadHistory(resultId, wrapId, storageKey, history);
+    } else {
+        fetch('/api/latest-upload?type=' + encodeURIComponent(uploadType))
+            .then(r => r.json())
+            .then(data => {
+                if (data.filename) {
+                    var serverUrl = window.location.origin + '/uploads/' + encodeURIComponent(data.filename);
+                    var msg = '<span style="color:#007bff;font-weight:bold;">' + data.filename + '</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ' + data.upload_time + ' | 업로더: ' + data.uploader + ')&nbsp;<a href="' + serverUrl + '" target="_blank" style="color:#28a745;text-decoration:underline;">[다운로드]</a>';
+                    resultDiv.classList.add('show');
+                    var history = [msg];
+                    try {
+                        var existing = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                        history = [msg].concat(existing).slice(0, MAX_UPLOAD_HISTORY);
+                    } catch (e) {}
+                    localStorage.setItem(storageKey, JSON.stringify(history));
+                    renderUploadHistory(resultId, wrapId, storageKey, history);
+                }
+            });
     }
-    fetch('/api/latest-upload?type=' + encodeURIComponent(uploadType))
-        .then(r => r.json())
-        .then(data => {
-            if (data.filename && !localStorage.getItem(storageKey)) {
-                const serverUrl = `${window.location.origin}/uploads/${encodeURIComponent(data.filename)}`;
-                const msg = `<span style="color:#007bff;font-weight:bold;">${data.filename}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${data.upload_time} | 업로더: ${data.uploader})&nbsp;<a href="${serverUrl}" target="_blank" style="color:#28a745;text-decoration:underline;">[다운로드]</a>`;
-                resultDiv.innerHTML = msg;
-                resultDiv.classList.add('show');
-            }
-        });
 }
 document.addEventListener('DOMContentLoaded', function() {
     setupUploadForm('uploadFormRepair', 'excel_file_repair', 'uploadButtonRepair', 'uploadResultRepair', 'carUploadMessageRepair', 'car_repair');

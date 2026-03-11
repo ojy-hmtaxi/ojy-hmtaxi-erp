@@ -514,7 +514,7 @@ new Chart(ctx, {
 const accidentStats = JSON.parse('{{ accident_stats_by_month|default("{}")|tojson|safe }}');
 const accidentAtFaultData = months.map(m => (accidentStats[m] || {}).at_fault || 0);
 const accidentNotAtFaultData = months.map(m => (accidentStats[m] || {}).not_at_fault || 0);
-const accidentCauseColors = ['#e53935', '#1e88e5', '#fdd835', '#43a047', '#8e24aa', '#fb8c00', '#00acc1', '#5e35b1', '#d81b60', '#00897b'];
+const accidentCauseColors = ['#e57373', '#64b5f6', '#ffd54f', '#66bb6a', '#ab47bc', '#ffb74d', '#4dd0e1', '#9575cd', '#f06292', '#4db6ac'];
 let accidentTooltipEl;
 function accidentTooltipHandler(context) {
     const { chart, tooltip } = context;
