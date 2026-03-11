@@ -71,7 +71,7 @@
         .upload-result-placeholder {
             padding: 10px;
             background-color: #e8f5e9;
-            color: #777777;
+            color: #555;
         }
         .upload-result-wrap {
             display: none;
@@ -87,11 +87,9 @@
             align-items: center;
             justify-content: space-between;
             gap: 8px;
-            color: #777777;
         }
         .upload-result-head .text {
             flex: 1;
-            color: #777777;
         }
         .upload-result-toggle {
             flex-shrink: 0;
@@ -114,7 +112,6 @@
             padding: 10px 12px;
             background-color: #c8e6c9;
             border-top: 1px solid rgba(0,0,0,0.06);
-            color: #777777;
         }
         .dispatch-table {
             width: 100%;
@@ -828,6 +825,11 @@
 
         // 업로드 기록 렌더 (최대 2건, 드롭다운)
 const MAX_UPLOAD_HISTORY = 3;
+        function formatPastRecord(html) {
+            var withoutLink = (html || '').replace(/\s*&nbsp;\s*<a\s[^>]*>\[다운로드\]<\/a>/gi, '');
+            withoutLink = withoutLink.replace(/#007bff/gi, '#777777');
+            return '<span style="color:#777777">' + withoutLink + '</span>';
+        }
         function renderUploadHistory(containerId, wrapId, storageKey, items) {
             const container = document.getElementById(containerId);
             const wrap = document.getElementById(wrapId);
@@ -850,7 +852,7 @@ const MAX_UPLOAD_HISTORY = 3;
                 '</div>' +
                 (hasMore ? '<div class="upload-result-history">' +
                     historyItems.map(function(html) {
-                        return '<div class="upload-result-history-item">' + html + '</div>';
+                        return '<div class="upload-result-history-item">' + formatPastRecord(html) + '</div>';
                     }).join('') +
                 '</div>' : '');
             if (hasMore) {
@@ -889,7 +891,7 @@ const MAX_UPLOAD_HISTORY = 3;
                                   String(now.getMinutes()).padStart(2, '0');
                     
                     const serverUrl = `${window.location.origin}/uploads/${encodeURIComponent(file.name)}`;
-                    const uploadMessage = `<span style=\"color:#777777;font-weight:bold;\">${file.name}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${dateStr} | ${timeStr} | 업로더: {{ current_user.name }})`;
+                    const uploadMessage = `<span style=\"color:#007bff;font-weight:bold;\">${file.name}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${dateStr} | ${timeStr} | 업로더: {{ current_user.name }})&nbsp;<a href=\"${serverUrl}\" target=\"_blank\" style=\"color:#28a745;text-decoration:underline;\">[다운로드]</a>`;
                     const resultDiv = document.getElementById('uploadResult');
                     resultDiv.classList.add('show');
                     // 과거 기록 최대 2건 저장
@@ -950,7 +952,7 @@ const MAX_UPLOAD_HISTORY = 3;
                 .then(data => {
                     if (data && data.filename) {
                         const serverUrl = `${window.location.origin}/uploads/${encodeURIComponent(data.filename)}`;
-                        const msg = `<span style=\"color:#777777;font-weight:bold;\">${data.filename}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${data.upload_time} | 업로더: ${data.uploader})`;
+                        const msg = `<span style=\"color:#007bff;font-weight:bold;\">${data.filename}</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ${data.upload_time} | 업로더: ${data.uploader})&nbsp;<a href=\"${serverUrl}\" target=\"_blank\" style=\"color:#28a745;text-decoration:underline;\">[다운로드]</a>`;
                         const resultDiv = document.getElementById('uploadResult');
                         if (resultDiv) {
                             resultDiv.classList.add('show');
