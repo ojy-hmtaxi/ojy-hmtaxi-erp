@@ -110,7 +110,7 @@
     .upload-result-placeholder {
         padding: 10px;
         background-color: #e8f5e9;
-        color: #555;
+        color: #777777;
     }
     .upload-result-wrap {
         display: none;
@@ -126,9 +126,11 @@
         align-items: center;
         justify-content: space-between;
         gap: 8px;
+        color: #777777;
     }
     .upload-result-head .text {
         flex: 1;
+        color: #777777;
     }
     .upload-result-toggle {
         flex-shrink: 0;
@@ -151,6 +153,7 @@
         padding: 10px 12px;
         background-color: #c8e6c9;
         border-top: 1px solid rgba(0,0,0,0.06);
+        color: #777777;
     }
     .table {
         width: 100%;
@@ -620,7 +623,7 @@ function setupUploadForm(formId, fileInputId, buttonId, resultId, storageKey, up
                     const dateStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
                     const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
                     const serverUrl = window.location.origin + '/uploads/' + encodeURIComponent(file.name);
-                    const uploadMessage = '<span style="color:#007bff;font-weight:bold;">' + file.name + '</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ' + dateStr + ' | ' + timeStr + ' | 업로더: {{ current_user.name }})&nbsp;<a href="' + serverUrl + '" target="_blank" style="color:#28a745;text-decoration:underline;">[다운로드]</a>';
+                    const uploadMessage = '<span style="color:#777777;font-weight:bold;">' + file.name + '</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ' + dateStr + ' | ' + timeStr + ' | 업로더: {{ current_user.name }})';
                     resultDiv.classList.add('show');
                     var history = [];
                     try { history = JSON.parse(localStorage.getItem(storageKey) || '[]'); } catch (e) {}
@@ -650,7 +653,7 @@ function setupUploadForm(formId, fileInputId, buttonId, resultId, storageKey, up
             .then(data => {
                 if (data.filename) {
                     var serverUrl = window.location.origin + '/uploads/' + encodeURIComponent(data.filename);
-                    var msg = '<span style="color:#007bff;font-weight:bold;">' + data.filename + '</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ' + data.upload_time + ' | 업로더: ' + data.uploader + ')&nbsp;<a href="' + serverUrl + '" target="_blank" style="color:#28a745;text-decoration:underline;">[다운로드]</a>';
+                    var msg = '<span style="color:#777777;font-weight:bold;">' + data.filename + '</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ' + data.upload_time + ' | 업로더: ' + data.uploader + ')';
                     resultDiv.classList.add('show');
                     var history = [msg];
                     try {
