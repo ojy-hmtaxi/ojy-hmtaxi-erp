@@ -292,7 +292,7 @@
                 <div id="at-fault" class="tab-content active">
                     <!-- 가해사고 통합 검색 필터 -->
                     <div style="margin-bottom:10px;">
-                        <input type="text" id="atFaultUnifiedFilter" placeholder="사고번호, 차번, 차종, 사번, 기사명, 처리여부(미결/종결) 검색" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
+                        <input type="text" id="atFaultUnifiedFilter" placeholder="쉼표(,) 구분 · 사고번호 / 차번 / 차종 / 사번 / 기사명 / 처리여부(미결/종결) · 차종은 정확히 일치 (K5 ≠ K5H)" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
                     </div>
                     <table class="table" id="atFaultTable">
                         <thead>
@@ -349,7 +349,7 @@
                 <div id="not-at-fault" class="tab-content">
                     <!-- 피해사고 통합 검색 필터 -->
                     <div style="margin-bottom:12px;">
-                        <input type="text" id="notAtFaultUnifiedFilter" placeholder="사고번호, 차번, 차종, 사번, 기사명, 처리여부(미결/종결) 검색" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
+                        <input type="text" id="notAtFaultUnifiedFilter" placeholder="쉼표(,) 구분 · 사고번호 / 차번 / 차종 / 사번 / 기사명 / 처리여부(미결/종결) · 차종은 정확히 일치 (K5 ≠ K5H)" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
                     </div>
                     <table class="table" id="notAtFaultTable">
                         <thead>
@@ -760,34 +760,73 @@
         // 과거 기록은 window.onload에서 복원함. 파일 선택 시에도 기록 유지.
         document.getElementById('excel_file').addEventListener('change', function() {});
 
-        // 사고 테이블 통합 필터링 함수 (가해사고)
-        function filterAtFaultTableUnified() {
-            var keyword = document.getElementById('atFaultUnifiedFilter').value.trim().toLowerCase();
-            var table = document.getElementById('atFaultTable');
-            var rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+        // 사고 테이블 통합 필터링 (표에 있는 차종명 → 차종 열 OR, 나머지 AND)
+        function filterAccidentTableUnified(tableEl, filterInputEl, colIndexes, 차종Idx) {
+            var tokens = document.getElementById(filterInputEl).value.split(',').map(function(s) { return s.trim().toLowerCase(); }).filter(function(s) { return s.length > 0; });
+            var rows = tableEl.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+            var 차종ValueSet = {};
+            if (차종Idx >= 0) {
+                for (var vi = 0; vi < rows.length; vi++) {
+                    var vcells = rows[vi].getElementsByTagName('td');
+                    if (vcells[차종Idx]) {
+                        var cv = (vcells[차종Idx].textContent || '').trim().toLowerCase();
+                        if (cv) 차종ValueSet[cv] = 1;
+                    }
+                }
+            }
+            var 차종OrTokens = [];
+            var andTokens = [];
+            for (var ti = 0; ti < tokens.length; ti++) {
+                if (차종ValueSet.hasOwnProperty(tokens[ti])) 차종OrTokens.push(tokens[ti]);
+                else andTokens.push(tokens[ti]);
+            }
+            var 차종OrSet = {};
+            for (var qi = 0; qi < 차종OrTokens.length; qi++) 차종OrSet[차종OrTokens[qi]] = 1;
+            function rowMatchesToken(cells, token, skipCar) {
+                for (var k = 0; k < colIndexes.length; k++) {
+                    var j = colIndexes[k];
+                    if (!cells[j]) continue;
+                    if (skipCar && j === 차종Idx) continue;
+                    var cellLower = (cells[j].textContent || '').trim().toLowerCase();
+                    if (j === 차종Idx) {
+                        if (cellLower === token) return true;
+                    } else {
+                        if (cellLower.indexOf(token) !== -1) return true;
+                    }
+                }
+                return false;
+            }
+            var skipCar = 차종OrTokens.length > 0;
             for (var i = 0; i < rows.length; i++) {
                 var cells = rows[i].getElementsByTagName('td');
-                var show = false;
-                for (var j of [0,2,3,4,5,14]) { // 사고번호, 차번, 차종, 사번, 기사명, 처리여부
-                    if (cells[j] && cells[j].textContent.toLowerCase().includes(keyword)) show = true;
+                var show = true;
+                if (tokens.length === 0) {
+                    show = true;
+                } else {
+                    var 차종OrPass = true;
+                    if (차종OrTokens.length > 0) {
+                        if (차종Idx < 0 || !cells[차종Idx]) 차종OrPass = false;
+                        else {
+                            var carCell = (cells[차종Idx].textContent || '').trim().toLowerCase();
+                            차종OrPass = 차종OrSet.hasOwnProperty(carCell);
+                        }
+                    }
+                    for (var at = 0; at < andTokens.length; at++) {
+                        if (!rowMatchesToken(cells, andTokens[at], skipCar)) {
+                            show = false;
+                            break;
+                        }
+                    }
+                    if (show) show = 차종OrPass;
                 }
-                rows[i].style.display = (keyword === '' || show) ? '' : 'none';
+                rows[i].style.display = show ? '' : 'none';
             }
         }
-        
-        // 사고 테이블 통합 필터링 함수 (피해사고)
+        function filterAtFaultTableUnified() {
+            filterAccidentTableUnified(document.getElementById('atFaultTable'), 'atFaultUnifiedFilter', [0, 2, 3, 4, 5, 14], 3);
+        }
         function filterNotAtFaultTableUnified() {
-            var keyword = document.getElementById('notAtFaultUnifiedFilter').value.trim().toLowerCase();
-            var table = document.getElementById('notAtFaultTable');
-            var rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
-            for (var i = 0; i < rows.length; i++) {
-                var cells = rows[i].getElementsByTagName('td');
-                var show = false;
-                for (var j of [0,2,3,4,5,15]) { // 사고번호, 차번, 차종, 사번, 기사명, 처리여부
-                    if (cells[j] && cells[j].textContent.toLowerCase().includes(keyword)) show = true;
-                }
-                rows[i].style.display = (keyword === '' || show) ? '' : 'none';
-            }
+            filterAccidentTableUnified(document.getElementById('notAtFaultTable'), 'notAtFaultUnifiedFilter', [0, 2, 3, 4, 5, 15], 3);
         }
         
         // 요소 존재 여부 확인 후 이벤트 리스너 추가

@@ -386,7 +386,7 @@
                         {% endfor %}
                     </div>
                     <div style="margin-bottom:12px;">
-                        <input type="text" id="maintenanceFilter" placeholder="차번, 차종, 등록일자 또는 예방, 일반, 사고, 검사, 명일 검색" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
+                        <input type="text" id="maintenanceFilter" placeholder="쉼표(,) 구분 · 차번 / 차종 / 정비유형 (예방, 일반, 사고, 검사, 명일) · 차종은 정확히 일치 (K5 ≠ K5H)" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
                     </div>
                     {% if maintenance_table_data %}
                     <div class="schedule-container">
@@ -440,7 +440,7 @@
     </div>
     {% if car_data and car_data.list and car_data.columns %}
     <div style="margin-bottom:10px;">
-        <input type="text" id="searchInput" placeholder="검색" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
+        <input type="text" id="searchInput" placeholder="쉼표(,) 구분 · 차번 / 차종 / 정비유형 (예방, 일반, 사고, 검사, 명일) · 차종은 정확히 일치 (K5 ≠ K5H)" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
     </div>
     <div class="car-table-scroll-wrap">
     <table class="table" id="carTable">
@@ -473,18 +473,69 @@ const searchInput = document.getElementById('searchInput');
 const table = document.getElementById('carTable');
 if (searchInput && table) {
     searchInput.addEventListener('keyup', function() {
-        const search = searchInput.value.toLowerCase();
+        var thead = table.getElementsByTagName('thead')[0];
+        var headerCells = thead ? thead.getElementsByTagName('th') : [];
+        var 차종Col = -1;
+        for (var h = 0; h < headerCells.length; h++) {
+            if ((headerCells[h].textContent || '').trim() === '차종') { 차종Col = h; break; }
+        }
+        var tokens = searchInput.value.split(',').map(function(s) { return s.trim().toLowerCase(); }).filter(function(s) { return s.length > 0; });
         const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
-        for (let i = 0; i < rows.length; i++) {
-            const cells = rows[i].getElementsByTagName('td');
-            let show = false;
-            for (let j = 0; j < cells.length; j++) {
-                if (cells[j].textContent.toLowerCase().includes(search)) {
-                    show = true;
-                    break;
+        var 차종ValueSet = {};
+        if (차종Col >= 0) {
+            for (var vi = 0; vi < rows.length; vi++) {
+                var vcells = rows[vi].getElementsByTagName('td');
+                if (vcells[차종Col]) {
+                    var cv = (vcells[차종Col].textContent || '').trim().toLowerCase();
+                    if (cv) 차종ValueSet[cv] = 1;
                 }
             }
-            rows[i].style.display = search === '' || show ? '' : 'none';
+        }
+        var 차종OrTokens = [];
+        var andTokens = [];
+        for (var ti = 0; ti < tokens.length; ti++) {
+            if (차종ValueSet.hasOwnProperty(tokens[ti])) 차종OrTokens.push(tokens[ti]);
+            else andTokens.push(tokens[ti]);
+        }
+        var 차종OrSet = {};
+        for (var qi = 0; qi < 차종OrTokens.length; qi++) 차종OrSet[차종OrTokens[qi]] = 1;
+        function rowMatchesToken(cells, token, skipCar) {
+            for (let j = 0; j < cells.length; j++) {
+                if (skipCar && j === 차종Col) continue;
+                var raw = (cells[j].textContent || '').trim();
+                var cellLower = raw.toLowerCase();
+                if (j === 차종Col) {
+                    if (cellLower === token) return true;
+                } else {
+                    if (cellLower.indexOf(token) !== -1) return true;
+                }
+            }
+            return false;
+        }
+        var skipCar = 차종OrTokens.length > 0;
+        for (let i = 0; i < rows.length; i++) {
+            const cells = rows[i].getElementsByTagName('td');
+            let show = true;
+            if (tokens.length === 0) {
+                show = true;
+            } else {
+                var 차종OrPass = true;
+                if (차종OrTokens.length > 0) {
+                    if (차종Col < 0 || !cells[차종Col]) 차종OrPass = false;
+                    else {
+                        var carCell = (cells[차종Col].textContent || '').trim().toLowerCase();
+                        차종OrPass = 차종OrSet.hasOwnProperty(carCell);
+                    }
+                }
+                for (var t = 0; t < andTokens.length; t++) {
+                    if (!rowMatchesToken(cells, andTokens[t], skipCar)) {
+                        show = false;
+                        break;
+                    }
+                }
+                if (show) show = 차종OrPass;
+            }
+            rows[i].style.display = show ? '' : 'none';
         }
     });
 }
@@ -506,44 +557,96 @@ function applyMaintenanceFilter() {
     if (!maintenanceFilter || !maintenanceTable) return;
     var tbody = maintenanceTable.getElementsByTagName('tbody')[0];
     if (!tbody) return;
+    var theadRow = maintenanceTable.querySelector('thead tr');
+    var headerCells = theadRow ? theadRow.querySelectorAll('th') : [];
+    var 차종Col = -1;
+    for (var hi = 0; hi < headerCells.length; hi++) {
+        if ((headerCells[hi].textContent || '').trim() === '차종') { 차종Col = hi; break; }
+    }
     var keywordToSymbol = { '예방': '○', '일반': '△', '사고': '□', '검사': '!', '명일': 'm' };
-    var search = (maintenanceFilter.value || '').trim();
-    var searchLower = search.toLowerCase();
-    var matchTerms = [];
+    var rawParts = (maintenanceFilter.value || '').split(',');
+    var tokens = [];
+    for (var pi = 0; pi < rawParts.length; pi++) {
+        var t = rawParts[pi].trim();
+        if (t) tokens.push(t);
+    }
+    var symbolTokens = [];
+    var textTokensLower = [];
+    for (var ui = 0; ui < tokens.length; ui++) {
+        if (keywordToSymbol[tokens[ui]]) symbolTokens.push(tokens[ui]);
+        else textTokensLower.push(tokens[ui].toLowerCase());
+    }
     var allowedSymbols = [];
-    if (search) {
-        matchTerms.push(search);
-        for (var kw in keywordToSymbol) {
-            if (searchLower.indexOf(kw) !== -1) {
-                matchTerms.push(keywordToSymbol[kw]);
-                allowedSymbols.push(keywordToSymbol[kw]);
+    for (var ai = 0; ai < symbolTokens.length; ai++) {
+        allowedSymbols.push(keywordToSymbol[symbolTokens[ai]]);
+    }
+    var rows = tbody.getElementsByTagName('tr');
+    var 차종ValueSet = {};
+    if (차종Col >= 0) {
+        for (var vi = 0; vi < rows.length; vi++) {
+            var vcells = rows[vi].getElementsByTagName('td');
+            if (vcells[차종Col]) {
+                var cv = (vcells[차종Col].textContent || '').trim().toLowerCase();
+                if (cv) 차종ValueSet[cv] = 1;
             }
         }
     }
-    var rows = tbody.getElementsByTagName('tr');
+    var 차종OrTokens = [];
+    var andTokens = [];
+    for (var ti = 0; ti < textTokensLower.length; ti++) {
+        if (차종ValueSet.hasOwnProperty(textTokensLower[ti])) 차종OrTokens.push(textTokensLower[ti]);
+        else andTokens.push(textTokensLower[ti]);
+    }
+    var 차종OrSet = {};
+    for (var qi = 0; qi < 차종OrTokens.length; qi++) 차종OrSet[차종OrTokens[qi]] = 1;
+    function rowSymbolOrPass(cells) {
+        if (symbolTokens.length === 0) return true;
+        for (var st = 0; st < symbolTokens.length; st++) {
+            var sym = keywordToSymbol[symbolTokens[st]];
+            for (var j = 3; j < cells.length; j++) {
+                var rawCell = (cells[j].getAttribute('data-value') || cells[j].textContent || '').trim();
+                if (rawCell.indexOf(sym) !== -1) return true;
+            }
+        }
+        return false;
+    }
+    function rowMatchesTextToken(cells, token, skipCar) {
+        var tokenLower = (token + '').toLowerCase();
+        for (var j = 0; j < cells.length; j++) {
+            if (skipCar && j === 차종Col) continue;
+            var raw = (cells[j].textContent || '').trim();
+            var cellLower = raw.toLowerCase();
+            if (j === 차종Col) {
+                if (cellLower === tokenLower) return true;
+            } else {
+                if (cellLower.indexOf(tokenLower) !== -1) return true;
+            }
+        }
+        return false;
+    }
+    var skipCar = 차종OrTokens.length > 0;
     for (var i = 0; i < rows.length; i++) {
         var cells = rows[i].getElementsByTagName('td');
-        var show = false;
-        if (matchTerms.length === 0) {
-            show = true;
-        } else {
-            for (var j = 0; j < cells.length; j++) {
-                var raw = (cells[j].textContent || '').trim();
-                var cellLower = raw.toLowerCase();
-                for (var t = 0; t < matchTerms.length; t++) {
-                    var term = matchTerms[t];
-                    if (term.length === 1 && '○△□!m'.indexOf(term) !== -1) {
-                        if (raw.indexOf(term) !== -1) { show = true; break; }
-                    } else {
-                        var termLower = (term + '').toLowerCase();
-                        if (termLower && cellLower.indexOf(termLower) !== -1) {
-                            show = true;
-                            break;
-                        }
+        var show = true;
+        if (tokens.length > 0) {
+            if (!rowSymbolOrPass(cells)) show = false;
+            var 차종OrPass = true;
+            if (차종OrTokens.length > 0) {
+                if (차종Col < 0 || !cells[차종Col]) 차종OrPass = false;
+                else {
+                    var carCell = (cells[차종Col].textContent || '').trim().toLowerCase();
+                    차종OrPass = 차종OrSet.hasOwnProperty(carCell);
+                }
+            }
+            if (show) {
+                for (var tj = 0; tj < andTokens.length; tj++) {
+                    if (!rowMatchesTextToken(cells, andTokens[tj], skipCar)) {
+                        show = false;
+                        break;
                     }
                 }
-                if (show) break;
             }
+            if (show) show = 차종OrPass;
         }
         rows[i].style.display = show ? '' : 'none';
     }

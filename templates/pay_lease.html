@@ -356,7 +356,7 @@
                     <div id="result-{{ sheet_name }}" class="tab-content active">
                         <!-- 급여 통합 검색 필터 (계산 결과 탭에서만 표시) -->
                         <div style="margin-bottom:10px;">
-                            <input type="text" id="payLeaseUnifiedFilter-sheet-{{ loop.index }}" class="payLeaseFilterInput" placeholder="사번, 이름, 차종 검색" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
+                            <input type="text" id="payLeaseUnifiedFilter-sheet-{{ loop.index }}" class="payLeaseFilterInput" placeholder="쉼표(,) 구분 · 사번 / 이름 / 차종 · 차종은 정확히 일치 (K5 ≠ K5H)" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
                         </div>
                         <table class="table" id="payLeaseTable_{{ sheet_name }}">
                             <thead>
@@ -507,7 +507,7 @@
             });
         });
 
-        // 급여 통합 검색 필터 함수
+        // 급여 통합 검색 (표에 있는 차종명 → 차종 OR, 사번·이름은 AND·부분 일치)
         function filterPayLeaseTable(searchTerm) {
             const activeSheet = document.querySelector('.tabs:not(.hide)');
             if (!activeSheet) return;
@@ -516,21 +516,57 @@
             if (!table) return;
 
             const rows = table.querySelectorAll('tr');
-            const searchLower = searchTerm.toLowerCase();
+            const tokens = (searchTerm || '').split(',').map(function(s) { return s.trim().toLowerCase(); }).filter(function(s) { return s.length > 0; });
+            const 차종Idx = 2;
+            var 차종ValueSet = {};
+            rows.forEach(function(row) {
+                const cells = row.querySelectorAll('td');
+                if (cells.length > 차종Idx) {
+                    var cv = (cells[차종Idx].textContent || '').trim().toLowerCase();
+                    if (cv) 차종ValueSet[cv] = 1;
+                }
+            });
+            var 차종OrTokens = [];
+            var andTokens = [];
+            for (var ti = 0; ti < tokens.length; ti++) {
+                if (차종ValueSet.hasOwnProperty(tokens[ti])) 차종OrTokens.push(tokens[ti]);
+                else andTokens.push(tokens[ti]);
+            }
+            var 차종OrSet = {};
+            for (var qi = 0; qi < 차종OrTokens.length; qi++) 차종OrSet[차종OrTokens[qi]] = 1;
+
+            function rowMatchesToken(cells, token, skipCar) {
+                const 사번 = (cells[0].textContent || '').trim().toLowerCase();
+                const 이름 = (cells[1].textContent || '').trim().toLowerCase();
+                const 차종 = (cells[2].textContent || '').trim().toLowerCase();
+                if (사번.indexOf(token) !== -1) return true;
+                if (이름.indexOf(token) !== -1) return true;
+                if (!skipCar && 차종 === token) return true;
+                return false;
+            }
 
             rows.forEach(row => {
                 const cells = row.querySelectorAll('td');
-                if (cells.length >= 3) {
-                    const 사번 = cells[0].textContent.toLowerCase();
-                    const 이름 = cells[1].textContent.toLowerCase();
-                    const 차종 = cells[2].textContent.toLowerCase();
-
-                    const matches = 사번.includes(searchLower) || 
-                                   이름.includes(searchLower) || 
-                                   차종.includes(searchLower);
-
-                    row.style.display = matches ? '' : 'none';
+                if (cells.length < 3) return;
+                var matches = true;
+                if (tokens.length === 0) {
+                    matches = true;
+                } else {
+                    var 차종OrPass = true;
+                    if (차종OrTokens.length > 0) {
+                        var carCell = (cells[차종Idx].textContent || '').trim().toLowerCase();
+                        차종OrPass = 차종OrSet.hasOwnProperty(carCell);
+                    }
+                    var skipCar = 차종OrTokens.length > 0;
+                    for (var t = 0; t < andTokens.length; t++) {
+                        if (!rowMatchesToken(cells, andTokens[t], skipCar)) {
+                            matches = false;
+                            break;
+                        }
+                    }
+                    if (matches) matches = 차종OrPass;
                 }
+                row.style.display = matches ? '' : 'none';
             });
         }
 

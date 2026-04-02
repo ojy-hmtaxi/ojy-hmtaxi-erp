@@ -176,7 +176,7 @@
     </div>
     {% if driver_data and driver_data.list and driver_data.columns %}
     <div style="margin-bottom:20px;">
-        <input type="text" id="searchInput" placeholder="사번 또는 이름 검색" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
+        <input type="text" id="searchInput" placeholder="쉼표(,)로 구분 · 사번 / 이름 각각 부분 일치" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
     </div>
     <table class="table" id="driverTable">
         <thead>
@@ -221,13 +221,72 @@ if (searchInput && table) {
     searchInput.addEventListener('keyup', filterTable);
 }
 function filterTable() {
-    const search = searchInput.value.toLowerCase();
+    const tokens = searchInput.value.split(',').map(function(s) { return s.trim().toLowerCase(); }).filter(function(s) { return s.length > 0; });
     const rows = table.getElementsByTagName('tr');
+    const thead = table.getElementsByTagName('thead')[0];
+    const ths = thead ? thead.getElementsByTagName('th') : [];
+    var colByName = {};
+    for (var h = 0; h < ths.length; h++) {
+        colByName[(ths[h].textContent || '').trim()] = h;
+    }
+    var 차종Idx = colByName['차종'] !== undefined ? colByName['차종'] : -1;
+    var colIndexes = [];
+    for (var h = 0; h < ths.length; h++) colIndexes.push(h);
+    var 차종ValueSet = {};
+    if (차종Idx >= 0) {
+        for (var i = 1; i < rows.length; i++) {
+            var vcells = rows[i].getElementsByTagName('td');
+            if (vcells[차종Idx]) {
+                var cv = (vcells[차종Idx].textContent || '').trim().toLowerCase();
+                if (cv) 차종ValueSet[cv] = 1;
+            }
+        }
+    }
+    var 차종OrTokens = [];
+    var andTokens = [];
+    for (var ti = 0; ti < tokens.length; ti++) {
+        if (차종ValueSet.hasOwnProperty(tokens[ti])) 차종OrTokens.push(tokens[ti]);
+        else andTokens.push(tokens[ti]);
+    }
+    var 차종OrSet = {};
+    for (var qi = 0; qi < 차종OrTokens.length; qi++) 차종OrSet[차종OrTokens[qi]] = 1;
+    function rowMatchesToken(cells, token, skipCar) {
+        for (var c = 0; c < colIndexes.length; c++) {
+            var j = colIndexes[c];
+            if (skipCar && j === 차종Idx) continue;
+            if (!cells[j]) continue;
+            var cellLower = (cells[j].textContent || '').trim().toLowerCase();
+            if (j === 차종Idx) {
+                if (cellLower === token) return true;
+            } else {
+                if (cellLower.indexOf(token) !== -1) return true;
+            }
+        }
+        return false;
+    }
+    var skipCar = 차종OrTokens.length > 0;
     for (let i = 1; i < rows.length; i++) {
         const cells = rows[i].getElementsByTagName('td');
-        const id = cells[0].textContent.toLowerCase();
-        const name = cells[1].textContent.toLowerCase();
-        let show = (id.includes(search) || name.includes(search));
+        let show = true;
+        if (tokens.length === 0) {
+            show = true;
+        } else {
+            var 차종OrPass = true;
+            if (차종OrTokens.length > 0) {
+                if (차종Idx < 0 || !cells[차종Idx]) 차종OrPass = false;
+                else {
+                    var carCell = (cells[차종Idx].textContent || '').trim().toLowerCase();
+                    차종OrPass = 차종OrSet.hasOwnProperty(carCell);
+                }
+            }
+            for (let t = 0; t < andTokens.length; t++) {
+                if (!rowMatchesToken(cells, andTokens[t], skipCar)) {
+                    show = false;
+                    break;
+                }
+            }
+            if (show) show = 차종OrPass;
+        }
         rows[i].style.display = show ? '' : 'none';
     }
 }

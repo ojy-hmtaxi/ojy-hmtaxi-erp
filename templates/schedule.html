@@ -601,7 +601,7 @@
                     </div>
                     <!-- 배차 통합 검색 필터 -->
                     <div style="margin-bottom:20px;">
-                        <input type="text" id="scheduleUnifiedFilter" placeholder="차량번호, 차종, 근무유형, 사번, 운전기사 검색" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
+                        <input type="text" id="scheduleUnifiedFilter" placeholder="쉼표(,) 구분 · 차량번호 / 차종 / 근무유형 / 사번 / 이름 · 차종은 정확히 일치 (K5 ≠ K5H)" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
                     </div>
                     {% for sheet_name, data in dispatch_data.items() %}
                     <div id="sheet-{{ sheet_name }}" class="sheet-content{% if loop.first %} active{% endif %}">
@@ -782,7 +782,7 @@
             }
         });
 
-        // 배차 통합 검색 필터 함수 (차량번호, 차종, 근무유형, 사번, 운전기사)
+        // 배차 통합 검색 필터 (근무유형 OR · 데이터에 존재하는 차종명 토큰은 차종 OR · 나머지 AND)
         function filterScheduleTable(searchTerm) {
             const activeSheet = document.querySelector('.sheet-content.active');
             if (!activeSheet) return;
@@ -797,27 +797,103 @@
             const headerCells = theadRow.querySelectorAll('th');
             const searchCols = ['차량번호', '차종', '근무유형', '사번', '운전기사'];
             const colIndices = [];
+            var 차종ColIndex = -1;
+            var 근무유형ColIndex = -1;
             for (var i = 0; i < headerCells.length; i++) {
                 var h = (headerCells[i].textContent || '').trim();
-                if (searchCols.indexOf(h) !== -1) colIndices.push(i);
+                if (searchCols.indexOf(h) !== -1) {
+                    colIndices.push(i);
+                    if (h === '차종') 차종ColIndex = i;
+                    if (h === '근무유형') 근무유형ColIndex = i;
+                }
             }
 
+            var tokens = (searchTerm || '').split(',').map(function(s) { return s.trim().toLowerCase(); }).filter(function(s) { return s.length > 0; });
             const rows = tbody.querySelectorAll('tr');
-            const searchLower = (searchTerm || '').trim().toLowerCase();
+
+            // 근무유형 키워드 → 근무유형 열에서 OR
+            // 테이블에 실제 존재하는 차종 값과 동일한 토큰 → 차종 열에서 OR (복수 차종)
+            // 그 외 토큰 → 차량번호·사번·운전기사 등 부분 일치 AND (차종·근무유형 열은 위에서 이미 쓴 경우 제외)
+            var KNOWN_SHIFTS = { '주간': 1, '야간': 1, '일차': 1, '교대': 1, '리스': 1 };
+            var shiftTokens = [];
+            var otherTokens = [];
+            for (var ti = 0; ti < tokens.length; ti++) {
+                if (KNOWN_SHIFTS.hasOwnProperty(tokens[ti])) shiftTokens.push(tokens[ti]);
+                else otherTokens.push(tokens[ti]);
+            }
+
+            var 차종ValueSet = {};
+            if (차종ColIndex >= 0) {
+                for (var ci = 0; ci < rows.length; ci++) {
+                    var ccells = rows[ci].querySelectorAll('td');
+                    if (차종ColIndex < ccells.length) {
+                        var cv = (ccells[차종ColIndex].textContent || '').trim().toLowerCase();
+                        if (cv) 차종ValueSet[cv] = 1;
+                    }
+                }
+            }
+            var 차종OrTokens = [];
+            var andTokens = [];
+            for (var oi = 0; oi < otherTokens.length; oi++) {
+                var ott = otherTokens[oi];
+                if (차종ValueSet.hasOwnProperty(ott)) 차종OrTokens.push(ott);
+                else andTokens.push(ott);
+            }
+            var 차종OrSet = {};
+            for (var qi = 0; qi < 차종OrTokens.length; qi++) 차종OrSet[차종OrTokens[qi]] = 1;
+
+            function rowMatchesToken(row, token, skipWorkTypeCol, skipCarTypeCol) {
+                const cells = row.querySelectorAll('td');
+                for (var c = 0; c < colIndices.length; c++) {
+                    var idx = colIndices[c];
+                    if (skipWorkTypeCol && idx === 근무유형ColIndex) continue;
+                    if (skipCarTypeCol && idx === 차종ColIndex) continue;
+                    if (idx >= cells.length) continue;
+                    var raw = (cells[idx].textContent || '').trim();
+                    var cellLower = raw.toLowerCase();
+                    if (idx === 차종ColIndex) {
+                        if (cellLower === token) return true;
+                    } else {
+                        if (cellLower.indexOf(token) !== -1) return true;
+                    }
+                }
+                return false;
+            }
 
             rows.forEach(function(row) {
-                const cells = row.querySelectorAll('td');
-                var matches = false;
-                if (searchLower === '') {
+                var matches = true;
+                if (tokens.length === 0) {
                     matches = true;
                 } else {
-                    for (var c = 0; c < colIndices.length; c++) {
-                        var idx = colIndices[c];
-                        if (idx < cells.length && (cells[idx].textContent || '').toLowerCase().includes(searchLower)) {
-                            matches = true;
+                    var shiftPass = true;
+                    if (shiftTokens.length > 0) {
+                        if (근무유형ColIndex < 0) {
+                            shiftPass = false;
+                        } else {
+                            var cellsWt = row.querySelectorAll('td');
+                            var w = (cellsWt[근무유형ColIndex] ? (cellsWt[근무유형ColIndex].textContent || '') : '').trim().toLowerCase();
+                            shiftPass = shiftTokens.indexOf(w) !== -1;
+                        }
+                    }
+                    var 차종OrPass = true;
+                    if (차종OrTokens.length > 0) {
+                        if (차종ColIndex < 0) {
+                            차종OrPass = false;
+                        } else {
+                            var cellsRow = row.querySelectorAll('td');
+                            var carCell = (cellsRow[차종ColIndex] ? (cellsRow[차종ColIndex].textContent || '') : '').trim().toLowerCase();
+                            차종OrPass = 차종OrSet.hasOwnProperty(carCell);
+                        }
+                    }
+                    var skipWT = shiftTokens.length > 0;
+                    var skipCar = 차종OrTokens.length > 0;
+                    for (var at = 0; at < andTokens.length; at++) {
+                        if (!rowMatchesToken(row, andTokens[at], skipWT, skipCar)) {
+                            matches = false;
                             break;
                         }
                     }
+                    if (matches) matches = shiftPass && 차종OrPass;
                 }
                 row.style.display = matches ? '' : 'none';
             });
