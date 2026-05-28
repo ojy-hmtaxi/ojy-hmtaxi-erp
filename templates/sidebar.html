@@ -24,6 +24,13 @@
         height: auto;
     }
 
+    .sidebar .app-ver {
+        font-size: 12px;
+        color: white;
+        margin-top: 0;
+        margin-bottom: 0;
+    }
+
     .sidebar .nav-link {
         color: #ffffff;
         padding: 12px 20px;
@@ -64,7 +71,7 @@
 <div class="sidebar">
     <div class="logo">
         <img src="{{ url_for('static', filename='logo/logo_HMtaxi.png') }}" alt="Hanmi Taxi">
-        <p>ERP System beta 0.1.1(2026.05.29)</p>
+        <p class="app-ver">ERP System<br>beta 0.1.1 (2026.05.29)</p>
     </div>
     <ul class="nav flex-column">
         <li class="nav-item">
