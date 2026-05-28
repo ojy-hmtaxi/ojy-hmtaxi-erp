@@ -49,9 +49,9 @@
         transform: scaleX(-1);
     }
 
-    /* 새 메시지가 있을 때 아이콘 초록색 */
+    /* 다른 유저 새 메시지 · 보드 미열람 시 아이콘 */
     .right-sidebar-toggle.has-new-messages i {
-        color: #28a745 !important;
+        color: #22bb33 !important;
     }
 
     /* 사이드바 내용 스타일 */
@@ -111,7 +111,7 @@
     }
 </style>
 
-<div class="right-sidebar collapsed" id="rightSidebar">
+<div class="right-sidebar collapsed" id="rightSidebar"{% if current_user and current_user.is_authenticated %} data-current-user-id="{{ current_user.id }}"{% endif %}>
     <button class="right-sidebar-toggle" onclick="toggleRightSidebar()">
         <i class='far fa-comment-dots'></i> 
     </button>
@@ -119,13 +119,13 @@
         <div class="message-board">
             <h3>메시지 보드</h3>
             <form action="{{ url_for('add_message') }}" method="POST" class="message-form" id="messageForm">
-                <textarea name="content" maxlength="60" placeholder="60자 이내로 메시지를 작성하세요" required></textarea>
+                <textarea name="content" maxlength="120" placeholder="120자 이내로 메시지를 작성하세요" required></textarea>
                 <button type="submit">작성</button>
             </form>
             <div id="message-alert" style="color: #22bb33; font-size: 0.95em; margin: 8px 0 0 0;"></div>
             <div class="messages" id="messages-list">
                 {% for message in messages %}
-                <div class="message{% if current_user and current_user.name == message.author.name %} current-user{% endif %}{% if current_user and ('@' ~ current_user.name) in message.content %} mentioned{% endif %}" data-timestamp="{{ message.timestamp.isoformat() }}">
+                <div class="message{% if current_user and current_user.name == message.author.name %} current-user{% endif %}{% if current_user and ('@' ~ current_user.name) in message.content %} mentioned{% endif %}" data-timestamp="{{ message.timestamp.isoformat() }}" data-user-id="{{ message.user_id }}">
                     <div class="message-header">
                         <span class="author">{{ message.author.name }}</span>
                         <span class="timestamp">{{ message.timestamp.strftime('%Y-%m-%d %H:%M') }}</span>
@@ -150,6 +150,23 @@
 </div>
 
 <script>
+function getCurrentUserId() {
+    var sidebar = document.getElementById('rightSidebar');
+    if (!sidebar) return null;
+    var raw = sidebar.getAttribute('data-current-user-id');
+    if (!raw) return null;
+    var id = parseInt(raw, 10);
+    return isNaN(id) ? null : id;
+}
+
+function isMessageFromOtherUser(msgEl) {
+    var currentUserId = getCurrentUserId();
+    if (!currentUserId) return true;
+    var uid = msgEl.getAttribute('data-user-id');
+    if (!uid) return true;
+    return parseInt(uid, 10) !== currentUserId;
+}
+
 function toggleRightSidebar() {
     const sidebar = document.getElementById('rightSidebar');
     const isCollapsed = sidebar.classList.contains('collapsed');
@@ -167,104 +184,64 @@ function toggleRightSidebar() {
     }
 }
 
-// 새 메시지 확인 함수
+// 다른 유저의 새 메시지 · 메시지 보드가 닫혀 있을 때만 아이콘 #22bb33
 function checkNewMessages() {
+    const sidebar = document.getElementById('rightSidebar');
     const toggleButton = document.querySelector('.right-sidebar-toggle');
-    if (!toggleButton) {
-        console.log('[메시지 알림] 토글 버튼을 찾을 수 없습니다.');
-        return;
-    }
-    
-    // 모든 메시지의 타임스탬프 확인
-    const messageElements = document.querySelectorAll('.message[data-timestamp]');
-    console.log('[메시지 알림] 발견된 메시지 수:', messageElements.length);
-    
-    if (messageElements.length === 0) {
-        // 메시지가 없으면 알림 제거
-        console.log('[메시지 알림] 메시지가 없어 알림 제거');
+    if (!toggleButton || !sidebar) return;
+
+    if (!sidebar.classList.contains('collapsed')) {
         toggleButton.classList.remove('has-new-messages');
         return;
     }
-    
+
+    const messageElements = document.querySelectorAll('.message[data-timestamp]');
+    if (messageElements.length === 0) {
+        toggleButton.classList.remove('has-new-messages');
+        return;
+    }
+
     const lastViewTime = localStorage.getItem('lastMessageViewTime');
-    console.log('[메시지 알림] 마지막 확인 시간:', lastViewTime);
-    
-    let hasNewMessages = false;
-    
+    let hasNewFromOthers = false;
+
     if (!lastViewTime) {
-        // 처음 방문한 경우: 메시지가 있으면 새 메시지로 간주
-        // (메시지 보드를 열기 전까지는 알림 유지)
-        console.log('[메시지 알림] 처음 방문 - 새 메시지 있음으로 표시');
-        hasNewMessages = true;
+        for (let i = 0; i < messageElements.length; i++) {
+            if (isMessageFromOtherUser(messageElements[i])) {
+                hasNewFromOthers = true;
+                break;
+            }
+        }
     } else {
-        // 이전 방문 기록이 있는 경우: lastViewTime 이후의 메시지 확인
         const lastViewDate = new Date(lastViewTime);
-        console.log('[메시지 알림] 마지막 확인 날짜 객체:', lastViewDate);
-        
         for (let i = 0; i < messageElements.length; i++) {
             const msg = messageElements[i];
+            if (!isMessageFromOtherUser(msg)) continue;
             const msgTimestamp = msg.getAttribute('data-timestamp');
-            if (msgTimestamp) {
-                const msgDate = new Date(msgTimestamp);
-                console.log('[메시지 알림] 메시지 시간:', msgTimestamp, '-> 날짜 객체:', msgDate);
-                console.log('[메시지 알림] 비교 결과:', msgDate.getTime(), '>', lastViewDate.getTime(), '=', msgDate.getTime() > lastViewDate.getTime());
-                
-                if (msgDate.getTime() > lastViewDate.getTime()) {
-                    console.log('[메시지 알림] 새 메시지 발견! (메시지 시간이 더 최근임)');
-                    hasNewMessages = true;
-                    break; // 새 메시지를 찾았으면 더 이상 확인할 필요 없음
-                }
+            if (msgTimestamp && new Date(msgTimestamp).getTime() > lastViewDate.getTime()) {
+                hasNewFromOthers = true;
+                break;
             }
         }
     }
-    
-    // 아이콘 색상 업데이트
-    console.log('[메시지 알림] 최종 hasNewMessages 값:', hasNewMessages);
-    if (hasNewMessages) {
-        console.log('[메시지 알림] 아이콘을 초록색으로 변경');
-        toggleButton.classList.add('has-new-messages');
-        console.log('[메시지 알림] 클래스 추가 확인:', toggleButton.classList.contains('has-new-messages'));
-    } else {
-        console.log('[메시지 알림] 알림 제거');
-        toggleButton.classList.remove('has-new-messages');
-    }
+
+    toggleButton.classList.toggle('has-new-messages', hasNewFromOthers);
 }
 
 // 페이지 로드 시 사이드바 상태 복원 및 새 메시지 확인
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('[메시지 알림] DOM 로드 완료');
     const sidebar = document.getElementById('rightSidebar');
     const savedCollapsedState = localStorage.getItem('rightSidebarCollapsed');
-    
-    // 기본값은 collapsed(true)로 설정 (메시지 보드는 기본적으로 닫혀있음)
-    // savedCollapsedState가 명시적으로 'false'인 경우에만 열림
     const isCollapsed = savedCollapsedState !== 'false';
-    
-    console.log('[메시지 알림] 저장된 사이드바 상태:', savedCollapsedState, '-> isCollapsed:', isCollapsed);
-    
+
     if (isCollapsed) {
         sidebar.classList.add('collapsed');
-        console.log('[메시지 알림] 메시지 보드가 닫혀있음 - 읽음 처리 안 함');
     } else {
         sidebar.classList.remove('collapsed');
-        // 메시지 보드가 실제로 열려있으면 현재 시간 저장 (모든 메시지 읽음 처리)
-        // 단, 이는 사용자가 이전에 메시지 보드를 열었던 경우에만
-        const now = new Date().toISOString();
-        localStorage.setItem('lastMessageViewTime', now);
-        console.log('[메시지 알림] 메시지 보드가 열려있어 읽음 처리:', now);
+        localStorage.setItem('lastMessageViewTime', new Date().toISOString());
     }
-    
-    // 새 메시지 확인 (약간의 지연을 주어 DOM이 완전히 렌더링된 후 실행)
-    setTimeout(function() {
-        console.log('[메시지 알림] 새 메시지 확인 시작');
-        checkNewMessages();
-    }, 300);
-    
-    // 추가로 1초 후에도 한 번 더 확인 (서버에서 메시지 로드가 늦을 경우 대비)
-    setTimeout(function() {
-        console.log('[메시지 알림] 재확인');
-        checkNewMessages();
-    }, 1000);
+
+    setTimeout(checkNewMessages, 300);
+    setTimeout(checkNewMessages, 1000);
 });
 
 // 메시지 작성 AJAX 처리
