@@ -46,6 +46,30 @@ def load_user(user_id):
 def inject_user():
     return dict(current_user=current_user)
 
+
+DISPATCH_HEADER_DISPLAY = {
+    '차량번호': '차번',
+    '차종': '차종',
+    '근무유형': '근무',
+    '사번': '사번',
+    '운전기사': '운전기사',
+    '인정일': '인정',
+    '인정일수': '인정',
+    '승무일': '승무',
+    '승무일수': '승무',
+    '근무일수': '승무',
+    '결근일': '결근',
+    '결근일수': '결근',
+    '휴가': '휴가',
+}
+
+
+@app.template_filter('dispatch_header')
+def dispatch_header_display(name):
+    """배차 표 thead용 짧은 헤더 라벨."""
+    return DISPATCH_HEADER_DISPLAY.get(str(name), str(name))
+
+
 # 로그인 라우트
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -205,32 +229,31 @@ def calculate_salary():
     month_order = ['01월', '02월', '03월', '04월', '05월', '06월', '07월', '08월', '09월', '10월', '11월', '12월']
     driver_counts = {}  # {월: 운전기사수}
     driver_counts_by_category = {}  # {월: {카테고리: 기사수}}
-    if os.path.exists(dispatch_data_path):
-        with open(dispatch_data_path, 'r', encoding='utf-8') as f:
-            dispatch_data = json.load(f)
-            for month in month_order:
-                month_data = dispatch_data.get(month, {}).get('data', [])
-                cat_counts = {cat: 0 for cat in categories}
-                drivers = set()
-                cat_drivers = {cat: set() for cat in categories}  # 각 카테고리별 기사 집합
-                for row in month_data:
-                    cat = row.get('근무유형', '')
-                    if cat in categories:
-                        for day in range(1, 32):
-                            val = str(row.get(str(day), '')).strip().lower()
-                            if val in ('o', '/', 'h'):  # 인정일수: 근무, 휴무, 공휴일
-                                cat_counts[cat] += 1
-                        # 근무유형별 기사 집계
-                        name = row.get('운전기사', '').strip()
-                        if name:
-                            cat_drivers[cat].add(name)
-                    # 전체 운전기사 집계
+    dispatch_data = load_dispatch_data()
+    if dispatch_data:
+        for month in month_order:
+            month_data = dispatch_data.get(month, {}).get('data', [])
+            cat_counts = {cat: 0 for cat in categories}
+            drivers = set()
+            cat_drivers = {cat: set() for cat in categories}  # 각 카테고리별 기사 집합
+            for row in month_data:
+                cat = row.get('근무유형', '')
+                if cat in categories:
+                    for day in range(1, 32):
+                        val = str(row.get(str(day), '')).strip()
+                        if _dispatch_val_matches(val, 'o') or val == '/' or _dispatch_val_matches(val, 'H'):
+                            cat_counts[cat] += 1
+                    # 근무유형별 기사 집계
                     name = row.get('운전기사', '').strip()
                     if name:
-                        drivers.add(name)
-                dispatch_stats[month] = cat_counts
-                driver_counts[month] = len(drivers)
-                driver_counts_by_category[month] = {cat: len(cat_drivers[cat]) for cat in categories}
+                        cat_drivers[cat].add(name)
+                # 전체 운전기사 집계
+                name = row.get('운전기사', '').strip()
+                if name:
+                    drivers.add(name)
+            dispatch_stats[month] = cat_counts
+            driver_counts[month] = len(drivers)
+            driver_counts_by_category[month] = {cat: len(cat_drivers[cat]) for cat in categories}
 
     if request.method == 'POST':
         if 'excel_file' in request.files:
@@ -580,12 +603,12 @@ def schedule():
                                 for col in df.columns:
                                     val = row[col]
                                     row_dict[str(col)] = str(val) if pd.notna(val) else ''
-                                processed_data.append(row_dict)
+                                processed_data.append(enrich_dispatch_record(row_dict))
                             
-                            dispatch_data[sheet] = {
+                            dispatch_data[sheet] = normalize_dispatch_sheet({
                                 'headers': [str(col) for col in df.columns],
-                                'data': processed_data
-                            }
+                                'data': processed_data,
+                            })
                         except:
                             continue
                     
@@ -838,10 +861,91 @@ for folder in [app.config['UPLOAD_FOLDER'], app.config['DATA_FOLDER']]:
 
 
 
+DISPATCH_HEADER_RENAME = {
+    '인정일수': '인정일',
+    '근무일수': '승무일',
+    '승무일수': '승무일',
+    '결근일수': '결근일',
+}
+DISPATCH_LEGACY_STAT_KEYS = ('인정일수', '근무일수', '승무일수', '결근일수')
+
+
+def _dispatch_val_matches(val, symbol):
+    """배차 일자 심볼 비교 (O/X/H는 대·소문자 모두 인정)."""
+    v = str(val).strip()
+    if symbol in ('o', 'x'):
+        return v.lower() == symbol
+    if symbol == 'H':
+        return v.upper() == 'H'
+    return v == symbol
+
+
+def compute_dispatch_row_stats(row):
+    """배차 엑셀 수식: 승무일=COUNTIF(o), 결근일=x, 휴가=/, 인정일=승무일+휴가+COUNTIF(H)."""
+    승무일 = 결근일 = 휴가 = h_count = 0
+    for day in range(1, 32):
+        val = str(row.get(str(day), '')).strip()
+        if _dispatch_val_matches(val, 'o'):
+            승무일 += 1
+        elif _dispatch_val_matches(val, 'x'):
+            결근일 += 1
+        elif val == '/':
+            휴가 += 1
+        elif _dispatch_val_matches(val, 'H'):
+            h_count += 1
+    인정일 = 승무일 + 휴가 + h_count
+    return {
+        '인정일': str(인정일),
+        '승무일': str(승무일),
+        '결근일': str(결근일),
+        '휴가': str(휴가),
+    }
+
+
+def enrich_dispatch_record(row):
+    stats = compute_dispatch_row_stats(row)
+    for old_key in DISPATCH_LEGACY_STAT_KEYS:
+        row.pop(old_key, None)
+    row.update(stats)
+    return row
+
+
+def normalize_dispatch_headers(headers):
+    renamed = [DISPATCH_HEADER_RENAME.get(str(h), str(h)) for h in headers]
+    if '휴가' not in renamed:
+        insert_at = None
+        for key in ('결근일', '승무일', '인정일'):
+            if key in renamed:
+                insert_at = renamed.index(key) + 1
+                break
+        if insert_at is not None:
+            renamed.insert(insert_at, '휴가')
+        else:
+            day_idx = next((i for i, h in enumerate(renamed) if str(h).isdigit()), len(renamed))
+            renamed.insert(day_idx, '휴가')
+    return renamed
+
+
+def normalize_dispatch_sheet(sheet_data):
+    headers = normalize_dispatch_headers(sheet_data.get('headers', []))
+    data = [enrich_dispatch_record(dict(row)) for row in sheet_data.get('data', [])]
+    return {'headers': headers, 'data': data}
+
+
+def normalize_dispatch_data(data):
+    if not data:
+        return data
+    return OrderedDict(
+        (sheet, normalize_dispatch_sheet(sheet_data))
+        for sheet, sheet_data in data.items()
+    )
+
+
 def save_dispatch_data(data):
     print("=== save_dispatch_data 함수 시작 ===")
     filepath = os.path.join(app.config['DATA_FOLDER'], 'dispatch_data.json')
     print(f"JSON 저장 경로: {filepath}")
+    data = normalize_dispatch_data(data)
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     print("JSON 파일 저장 완료")
@@ -855,7 +959,12 @@ def load_dispatch_data():
             with open(filepath, 'r', encoding='utf-8') as f:
                 content = f.read().strip()
                 if content:  # 파일이 비어있지 않은 경우에만 파싱
-                    return json.loads(content)
+                    raw = json.loads(content)
+                    if isinstance(raw, dict):
+                        return normalize_dispatch_data(
+                            OrderedDict(raw) if not isinstance(raw, OrderedDict) else raw
+                        )
+                    return raw
                 else:
                     print(f"dispatch_data.json 파일이 비어있습니다.")
                     return None
@@ -1559,16 +1668,12 @@ def driver_profile(driver_id):
                         work_type = record.get('근무유형', '')
                     vehicle_types.add(record.get('차종', ''))
                     
-                    # 승무일 수 계산 (일자별 'o' 카운트)
-                    work_days = 0
-                    for day in range(1, 32):
-                        day_str = str(day)
-                        if day_str in record and record[day_str] == 'o':
-                            work_days += 1
+                    stats = compute_dispatch_row_stats(record)
+                    work_days = int(stats['승무일'])
                     
                     if month_key not in monthly_stats:
-                        monthly_stats[month_key] = {'승무일수': 0}
-                    monthly_stats[month_key]['승무일수'] += work_days
+                        monthly_stats[month_key] = {'승무일': 0}
+                    monthly_stats[month_key]['승무일'] += work_days
         
         # 리스 데이터에서 급여 정보 집계
         for month_key in lease_data.keys():
@@ -1596,7 +1701,7 @@ def driver_profile(driver_id):
         
         for month in sorted_months:
             stats = monthly_stats[month]
-            work_days = stats.get('승무일수', 0)
+            work_days = stats.get('승무일', stats.get('승무일수', 0))
             income = stats.get('실입금', 0)
             fuel = stats.get('연료비', 0)
             salary = stats.get('급여', 0)
@@ -1633,7 +1738,7 @@ def driver_profile(driver_id):
                 <table class="profile-table" style="margin-top:10px;">
                     <tr style="background:#f8f8f8;font-weight:600;">
                         <td>월</td>
-                        <td>승무일수</td>
+                        <td>승무일</td>
                         <td>매출(실입금)</td>
                         <td>연료비</td>
                         <td>급여</td>
@@ -1665,7 +1770,7 @@ def driver_profile(driver_id):
                 datasets: [
                     {{
                         type: 'bar',
-                        label: '승무일수',
+                        label: '승무일',
                         data: workDays,
                         backgroundColor: 'rgba(76, 175, 80, 0.2)',
                         borderColor: 'rgba(76, 175, 80, 0.5)',
@@ -1721,7 +1826,7 @@ def driver_profile(driver_id):
                     }},
                     title: {{ 
                         display: true, 
-                        text: '월별 승무일수 및 매출/연료비/급여 추이'
+                        text: '월별 승무일 및 매출/연료비/급여 추이'
                     }}
                 }},
                 scales: {{
@@ -1731,7 +1836,7 @@ def driver_profile(driver_id):
                         beginAtZero: true,
                         title: {{
                             display: true,
-                            text: '승무일수'
+                            text: '승무일'
                         }}
                     }},
                     y1: {{

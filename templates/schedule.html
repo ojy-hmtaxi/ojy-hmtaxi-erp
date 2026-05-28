@@ -181,14 +181,14 @@
             background-color: rgba(135, 206, 235, 0.3);  /* 하늘색 투명도 30% */
         }
 
-        .dispatch-table th:nth-child(-n+8),
-        .dispatch-table td:nth-child(-n+8) {
+        .dispatch-table th:nth-child(-n+9),
+        .dispatch-table td:nth-child(-n+9) {
             position: sticky;
             z-index: 1;
             background-color: #fff;
         }
 
-        /* 차량번호부터 결근일수까지 컬럼 width 설정 */
+        /* 차량번호부터 휴가까지 컬럼 width 설정 */
         .dispatch-table th:nth-child(1),
         .dispatch-table td:nth-child(1) {
             width: 45px;
@@ -245,6 +245,13 @@
             left: 340px;
         }
 
+        .dispatch-table th:nth-child(9),
+        .dispatch-table td:nth-child(9) {
+            width: 45px;
+            min-width: 45px;
+            left: 385px;
+        }
+
         .dispatch-table thead tr th {
             position: sticky;
             top: 0;
@@ -252,13 +259,13 @@
             background-color: #f0f0f0;
         }
 
-        .dispatch-table thead tr th:nth-child(-n+8) {
+        .dispatch-table thead tr th:nth-child(-n+9) {
             z-index: 3;
             background-color: #f0f0f0;
         }
 
         /* 호버 시 고정 컬럼의 배경색도 하늘색으로 유지 */
-        .dispatch-table tbody tr:hover td:nth-child(-n+8) {
+        .dispatch-table tbody tr:hover td:nth-child(-n+9) {
             background-color: rgba(135, 206, 235, 0.3);  /* 하늘색 투명도 30% */
         }
 
@@ -267,7 +274,7 @@
             border-bottom: 2px solid #ddd;
         }
 
-        /* 셀 내용에 따른 색상 스타일 (o=근무, x=결근, /=휴무, h=공휴일, r=예정일) */
+        /* 셀 내용에 따른 색상 스타일 (o=근무, x=결근, /=휴가, H=공휴, r=예정일) */
         .dispatch-table td[data-value="o"],
         .dispatch-table td[data-value="O"] {
             color: #008000;  /* 녹색 - 근무 */
@@ -281,7 +288,7 @@
         }
         
         .dispatch-table td[data-value="/"] {
-            color: #ffa500;  /* 주황 - 휴무 */
+            color: #ffa500;  /* 주황 - 휴가 */
             font-weight: bold;
         }
         
@@ -529,7 +536,7 @@
                                         
                                         {% for sheet_name, sheet_data in dispatch_data.items() %}
                                             {% for row in sheet_data.data %}
-                                                {% if row[day|string] == 'o' %}
+                                                {% if row[day|string]|lower == 'o' %}
                                                     {% if row['근무유형'] == '주간' %}
                                                         {% set total_day.value = total_day.value + 1 %}
                                                     {% elif row['근무유형'] == '야간' %}
@@ -563,7 +570,7 @@
                                     {% for sheet_name, sheet_data in dispatch_data.items() %}
                                         {% for row in sheet_data.data %}
                                             {% for header in sheet_data.headers %}
-                                                {% if header not in ['차량번호', '차종', '근무유형', '운전기사'] and row[header] == 'o' %}
+                                                {% if header not in ['차량번호', '차종', '근무유형', '운전기사'] and row[header]|lower == 'o' %}
                                                     {% if row['근무유형'] == '주간' %}
                                                         {% set total_day.value = total_day.value + 1 %}
                                                     {% elif row['근무유형'] == '야간' %}
@@ -610,7 +617,7 @@
                                 <thead>
                                     <tr>
                                         {% for header in data.headers %}
-                                        <th>{{ header }}</th>
+                                        <th>{{ header|dispatch_header }}</th>
                                         {% endfor %}
                                     </tr>
                                 </thead>
@@ -681,9 +688,9 @@
                 const rows = currentTable.querySelectorAll('tbody tr');
                 rows.forEach(row => {
                     const workType = row.querySelector('td:nth-child(3)').textContent; // 근무유형
-                    const dayCell = row.querySelector(`td:nth-child(${day + 4})`); // 날짜 셀 (4는 기본 컬럼 수)
+                    const dayCell = row.querySelector(`td:nth-child(${day + 9})`); // 날짜 셀 (고정 9열: ~휴가)
                     
-                    if (dayCell && dayCell.textContent.trim() === 'o') {
+                    if (dayCell && dayCell.textContent.trim().toLowerCase() === 'o') {
                         dayStats[workType]++;
                     }
                 });
