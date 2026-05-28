@@ -159,6 +159,12 @@ function getCurrentUserId() {
     return isNaN(id) ? null : id;
 }
 
+/** 같은 PC에서 로그인 사용자가 바뀌어도 읽음 상태가 섞이지 않도록 사용자별 키 사용 */
+function messageStorageKey(name) {
+    var uid = getCurrentUserId();
+    return uid ? name + ':user:' + uid : name;
+}
+
 function isMessageFromOtherUser(msgEl) {
     var currentUserId = getCurrentUserId();
     if (!currentUserId) return true;
@@ -173,13 +179,11 @@ function toggleRightSidebar() {
     sidebar.classList.toggle('collapsed');
     
     // 사이드바 상태를 localStorage에 저장
-    localStorage.setItem('rightSidebarCollapsed', sidebar.classList.contains('collapsed'));
+    localStorage.setItem(messageStorageKey('rightSidebarCollapsed'), sidebar.classList.contains('collapsed'));
     
-    // 메시지 보드를 열었으면 현재 시간을 저장하고 새 메시지 알림 제거
+    // 메시지 보드를 열었으면 현재 사용자 기준 읽음 시각 저장
     if (isCollapsed) {
-        // 메시지 보드를 연 경우
-        const now = new Date().toISOString();
-        localStorage.setItem('lastMessageViewTime', now);
+        localStorage.setItem(messageStorageKey('lastMessageViewTime'), new Date().toISOString());
         checkNewMessages();
     }
 }
@@ -201,7 +205,7 @@ function checkNewMessages() {
         return;
     }
 
-    const lastViewTime = localStorage.getItem('lastMessageViewTime');
+    const lastViewTime = localStorage.getItem(messageStorageKey('lastMessageViewTime'));
     let hasNewFromOthers = false;
 
     if (!lastViewTime) {
@@ -230,14 +234,14 @@ function checkNewMessages() {
 // 페이지 로드 시 사이드바 상태 복원 및 새 메시지 확인
 document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.getElementById('rightSidebar');
-    const savedCollapsedState = localStorage.getItem('rightSidebarCollapsed');
+    const savedCollapsedState = localStorage.getItem(messageStorageKey('rightSidebarCollapsed'));
     const isCollapsed = savedCollapsedState !== 'false';
 
     if (isCollapsed) {
         sidebar.classList.add('collapsed');
     } else {
         sidebar.classList.remove('collapsed');
-        localStorage.setItem('lastMessageViewTime', new Date().toISOString());
+        localStorage.setItem(messageStorageKey('lastMessageViewTime'), new Date().toISOString());
     }
 
     setTimeout(checkNewMessages, 300);
