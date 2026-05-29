@@ -125,7 +125,7 @@
             <div id="message-alert" style="color: #22bb33; font-size: 0.95em; margin: 8px 0 0 0;"></div>
             <div class="messages" id="messages-list">
                 {% for message in messages %}
-                <div class="message{% if current_user and current_user.name == message.author.name %} current-user{% endif %}{% if current_user and ('@' ~ current_user.name) in message.content %} mentioned{% endif %}" data-timestamp="{{ message.timestamp.isoformat() }}" data-user-id="{{ message.user_id }}">
+                <div class="message{% if current_user and current_user.name == message.author.name %} current-user{% endif %}{% if current_user and ('@' ~ current_user.name) in message.content %} mentioned{% endif %}" data-message-id="{{ message.id }}" data-timestamp="{{ message.timestamp.isoformat() }}" data-user-id="{{ message.user_id }}">
                     <div class="message-header">
                         <span class="author">{{ message.author.name }}</span>
                         <span class="timestamp">{{ message.timestamp.strftime('%Y-%m-%d %H:%M') }}</span>
@@ -173,22 +173,45 @@ function isMessageFromOtherUser(msgEl) {
     return parseInt(uid, 10) !== currentUserId;
 }
 
+function getMessageId(msgEl) {
+    var raw = msgEl.getAttribute('data-message-id');
+    if (!raw) return 0;
+    var id = parseInt(raw, 10);
+    return isNaN(id) ? 0 : id;
+}
+
+function getLastSeenMessageId() {
+    var raw = localStorage.getItem(messageStorageKey('lastSeenMessageId'));
+    if (!raw) return 0;
+    var id = parseInt(raw, 10);
+    return isNaN(id) ? 0 : id;
+}
+
+/** 화면에 보이는 메시지 중 최대 ID까지 읽음 처리 (시각 비교 대신 ID 사용) */
+function markMessagesAsRead() {
+    var messageElements = document.querySelectorAll('.message[data-message-id]');
+    var maxId = getLastSeenMessageId();
+    for (var i = 0; i < messageElements.length; i++) {
+        var id = getMessageId(messageElements[i]);
+        if (id > maxId) maxId = id;
+    }
+    localStorage.setItem(messageStorageKey('lastSeenMessageId'), String(maxId));
+}
+
 function toggleRightSidebar() {
     const sidebar = document.getElementById('rightSidebar');
     const isCollapsed = sidebar.classList.contains('collapsed');
     sidebar.classList.toggle('collapsed');
     
-    // 사이드바 상태를 localStorage에 저장
     localStorage.setItem(messageStorageKey('rightSidebarCollapsed'), sidebar.classList.contains('collapsed'));
     
-    // 메시지 보드를 열었으면 현재 사용자 기준 읽음 시각 저장
     if (isCollapsed) {
-        localStorage.setItem(messageStorageKey('lastMessageViewTime'), new Date().toISOString());
+        markMessagesAsRead();
         checkNewMessages();
     }
 }
 
-// 다른 유저의 새 메시지 · 메시지 보드가 닫혀 있을 때만 아이콘 #22bb33
+// 다른 유저의 미확인 메시지(ID > lastSeen) · 보드 닫힘 시 아이콘 #22bb33
 function checkNewMessages() {
     const sidebar = document.getElementById('rightSidebar');
     const toggleButton = document.querySelector('.right-sidebar-toggle');
@@ -199,39 +222,27 @@ function checkNewMessages() {
         return;
     }
 
-    const messageElements = document.querySelectorAll('.message[data-timestamp]');
+    const messageElements = document.querySelectorAll('.message[data-message-id]');
     if (messageElements.length === 0) {
         toggleButton.classList.remove('has-new-messages');
         return;
     }
 
-    const lastViewTime = localStorage.getItem(messageStorageKey('lastMessageViewTime'));
+    const lastSeenId = getLastSeenMessageId();
     let hasNewFromOthers = false;
 
-    if (!lastViewTime) {
-        for (let i = 0; i < messageElements.length; i++) {
-            if (isMessageFromOtherUser(messageElements[i])) {
-                hasNewFromOthers = true;
-                break;
-            }
-        }
-    } else {
-        const lastViewDate = new Date(lastViewTime);
-        for (let i = 0; i < messageElements.length; i++) {
-            const msg = messageElements[i];
-            if (!isMessageFromOtherUser(msg)) continue;
-            const msgTimestamp = msg.getAttribute('data-timestamp');
-            if (msgTimestamp && new Date(msgTimestamp).getTime() > lastViewDate.getTime()) {
-                hasNewFromOthers = true;
-                break;
-            }
+    for (let i = 0; i < messageElements.length; i++) {
+        const msg = messageElements[i];
+        if (!isMessageFromOtherUser(msg)) continue;
+        if (getMessageId(msg) > lastSeenId) {
+            hasNewFromOthers = true;
+            break;
         }
     }
 
     toggleButton.classList.toggle('has-new-messages', hasNewFromOthers);
 }
 
-// 페이지 로드 시 사이드바 상태 복원 및 새 메시지 확인
 document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.getElementById('rightSidebar');
     const savedCollapsedState = localStorage.getItem(messageStorageKey('rightSidebarCollapsed'));
@@ -241,7 +252,7 @@ document.addEventListener('DOMContentLoaded', function() {
         sidebar.classList.add('collapsed');
     } else {
         sidebar.classList.remove('collapsed');
-        localStorage.setItem(messageStorageKey('lastMessageViewTime'), new Date().toISOString());
+        markMessagesAsRead();
     }
 
     setTimeout(checkNewMessages, 300);
