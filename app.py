@@ -854,15 +854,29 @@ def ensure_user_department_column():
         return
     cols = {c['name'] for c in insp.get_columns('users')}
     if 'department' not in cols:
-        with db.engine.begin() as conn:
-            conn.execute(text('ALTER TABLE users ADD COLUMN department VARCHAR(30)'))
+        try:
+            with db.engine.begin() as conn:
+                conn.execute(text('ALTER TABLE users ADD COLUMN department VARCHAR(30)'))
+        except Exception as e:
+            err = str(e).lower()
+            if 'duplicate column' not in err and 'already exists' not in err:
+                raise
 
 
-# 데이터베이스 생성
-def create_database():
+def init_app_database():
+    """테이블 생성 및 스키마 마이그레이션 (로컬·gunicorn/Cloudtype 공통)."""
     with app.app_context():
         db.create_all()
         ensure_user_department_column()
+
+
+# 데이터베이스 생성 (로컬 python app.py 실행용)
+def create_database():
+    init_app_database()
+
+
+# gunicorn은 __main__을 실행하지 않으므로 import 시 1회 초기화
+init_app_database()
 
 # 세션 유지 시간을 매우 길게 설정 (900일)
 app.permanent_session_lifetime = timedelta(days=900)
