@@ -103,18 +103,22 @@ def register():
         password = request.form.get('password')
         confirm_password = request.form.get('confirm_password')
         phone = request.form.get('phone')
+        department = request.form.get('department')
         position = request.form.get('position')
         
         if password != confirm_password:
-            return render_template('register.html', error='비밀번호가 일치하지 않습니다.')
+            return render_template('register.html', error='비밀번호가 일치하지 않습니다.', departments=USER_DEPARTMENTS)
             
         if User.query.filter_by(username=username).first():
-            return render_template('register.html', error='이미 존재하는 아이디입니다.')
+            return render_template('register.html', error='이미 존재하는 아이디입니다.', departments=USER_DEPARTMENTS)
             
         if User.query.filter_by(email=email).first():
-            return render_template('register.html', error='이미 존재하는 이메일입니다.')
+            return render_template('register.html', error='이미 존재하는 이메일입니다.', departments=USER_DEPARTMENTS)
+
+        if department not in USER_DEPARTMENTS:
+            return render_template('register.html', error='소속을 선택해주세요.', departments=USER_DEPARTMENTS)
             
-        user = User(username=username, email=email, name=name, phone=phone, position=position)
+        user = User(username=username, email=email, name=name, phone=phone, department=department, position=position)
         user.set_password(password)
         
         db.session.add(user)
@@ -123,7 +127,7 @@ def register():
         flash('회원가입이 완료되었습니다. 로그인해주세요.', 'success')
         return redirect(url_for('login'))
         
-    return render_template('register.html')
+    return render_template('register.html', departments=USER_DEPARTMENTS)
 
 # 로그아웃 라우트
 @app.route('/logout')
@@ -839,10 +843,26 @@ def delete_message(message_id):
         return {"success": True, "message": "메시지가 삭제되었습니다."}
     return {"success": False, "message": "삭제 권한이 없습니다."}
 
+USER_DEPARTMENTS = ('임원', '경리과', '기획부', '배차과', '업무부', '정비부')
+
+
+def ensure_user_department_column():
+    """기존 DB에 소속(department) 컬럼이 없으면 추가."""
+    from sqlalchemy import inspect, text
+    insp = inspect(db.engine)
+    if 'users' not in insp.get_table_names():
+        return
+    cols = {c['name'] for c in insp.get_columns('users')}
+    if 'department' not in cols:
+        with db.engine.begin() as conn:
+            conn.execute(text('ALTER TABLE users ADD COLUMN department VARCHAR(30)'))
+
+
 # 데이터베이스 생성
 def create_database():
     with app.app_context():
         db.create_all()
+        ensure_user_department_column()
 
 # 세션 유지 시간을 매우 길게 설정 (900일)
 app.permanent_session_lifetime = timedelta(days=900)
@@ -1885,17 +1905,42 @@ def driver_profile(driver_id):
         all_dates = at_dates + not_dates
         recent_date = max(all_dates) if all_dates else ''
         # 사고 리스트 테이블 생성 (사고일시 내림차순 정렬)
-        all_accidents = at_fault + not_at_fault
+        import html
         from datetime import datetime
+
         def parse_dt(x):
             try:
-                return datetime.strptime(x.get('사고일시',''), '%Y-%m-%d %H:%M')
-            except:
+                return datetime.strptime(x.get('사고일시', ''), '%Y-%m-%d %H:%M')
+            except Exception:
                 return datetime.min
-        all_accidents_sorted = sorted(all_accidents, key=parse_dt, reverse=True)
+
+        tagged_accidents = [(a, 'at_fault') for a in at_fault] + [(a, 'not_at_fault') for a in not_at_fault]
+        all_accidents_sorted = sorted(tagged_accidents, key=lambda item: parse_dt(item[0]), reverse=True)
         accident_rows = []
-        for a in all_accidents_sorted:
-            accident_rows.append(f"<tr><td>{a.get('사고번호','')}</td><td>{a.get('사고일시','')}</td><td>{a.get('차번','')}</td><td>{a.get('접보사항','')}</td><td>{a.get('처리여부','')}</td></tr>")
+        for a, acc_type in all_accidents_sorted:
+            accident_no = str(a.get('사고번호', '') or '').strip()
+            if accident_no:
+                print_url = url_for('accident_print', type=acc_type, accident_no=accident_no)
+                no_cell = (
+                    f'<a href="{html.escape(print_url)}" target="_blank" rel="noopener">'
+                    f'{html.escape(accident_no)}</a>'
+                )
+            else:
+                no_cell = ''
+            status = str(a.get('처리여부', '') or '').strip()
+            if status == '종결':
+                status_cell = f'<td class="accident-status-done">{html.escape(status)}</td>'
+            elif status == '미결':
+                status_cell = f'<td class="accident-status-pending">{html.escape(status)}</td>'
+            else:
+                status_cell = f'<td>{html.escape(status)}</td>'
+            accident_rows.append(
+                f'<tr><td>{no_cell}</td>'
+                f'<td>{html.escape(str(a.get("사고일시", "")))}</td>'
+                f'<td>{html.escape(str(a.get("차번", "")))}</td>'
+                f'<td>{html.escape(str(a.get("접보사항", "")))}</td>'
+                f'{status_cell}</tr>'
+            )
         accident_table = f'''
         <div style="margin-top:18px;">
             <b>사고 리스트</b>
@@ -1937,6 +1982,10 @@ def driver_profile(driver_id):
     .profile-table {{ width:100%; border-collapse:collapse; }}
     .profile-table td {{ padding:7px 10px; color:#333; font-size:1rem; border-bottom:1px solid #f2f2f2; }}
     .profile-table tr:last-child td {{ border-bottom:none; }}
+    .profile-table a {{ color:#1976d2; text-decoration:none; }}
+    .profile-table a:hover {{ text-decoration:underline; }}
+    .profile-table .accident-status-done {{ color:#008000; font-weight:600; }}
+    .profile-table .accident-status-pending {{ color:#ff0000; font-weight:600; }}
     .profile-table .label {{ color:#888; width:140px; font-weight:500; }}
     .profile-actions {{ position:absolute; top:40px; right:40px; }}
     .profile-actions button {{ margin-left:8px; padding:6px 18px; border-radius:5px; border:none; background:#eee; color:#333; font-weight:500; cursor:pointer; }}
@@ -1950,7 +1999,7 @@ def driver_profile(driver_id):
     <div class="profile-wrap">
         <div class="profile-header">
             <div class="profile-photo">
-                <span>👤</span>
+                <span>🧑🏼‍✈️</span>
             </div>
             <div class="profile-maininfo">
                 <h2>{driver_info.get('이름','')}</h2>
@@ -2217,29 +2266,35 @@ def profile():
         new_password = request.form.get('new_password')
         confirm_password = request.form.get('confirm_password')
         phone = request.form.get('phone')
+        department = request.form.get('department')
         position = request.form.get('position')
+        messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(30).all()
+        profile_ctx = dict(user=user, messages=messages, current_user=current_user, departments=USER_DEPARTMENTS)
+
+        if department not in USER_DEPARTMENTS:
+            flash('소속을 선택해주세요.', 'error')
+            return render_template('profile.html', **profile_ctx)
+
         # 이메일 중복 체크 (자신 제외)
         if email != user.email:
             existing_user = User.query.filter_by(email=email).first()
             if existing_user:
                 flash('이미 사용 중인 이메일입니다.', 'error')
-                messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(30).all()
-                return render_template('profile.html', user=user, messages=messages, current_user=current_user)
+                return render_template('profile.html', **profile_ctx)
         # 이메일과 이름 업데이트
         user.email = email
         user.name = name
         user.phone = phone
+        user.department = department
         user.position = position
         # 비밀번호 변경 요청이 있는 경우
         if current_password and new_password:
             if not user.check_password(current_password):
                 flash('현재 비밀번호가 올바르지 않습니다.', 'error')
-                messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(30).all()
-                return render_template('profile.html', user=user, messages=messages, current_user=current_user)
+                return render_template('profile.html', **profile_ctx)
             if new_password != confirm_password:
                 flash('새 비밀번호가 일치하지 않습니다.', 'error')
-                messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(30).all()
-                return render_template('profile.html', user=user, messages=messages, current_user=current_user)
+                return render_template('profile.html', **profile_ctx)
             user.set_password(new_password)
             flash('비밀번호가 변경되었습니다.', 'success')
         # 데이터베이스에 저장
@@ -2247,7 +2302,13 @@ def profile():
         flash('프로필이 업데이트되었습니다.', 'success')
         return redirect(url_for('profile'))
     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(30).all()
-    return render_template('profile.html', user=current_user, messages=messages, current_user=current_user)
+    return render_template(
+        'profile.html',
+        user=current_user,
+        messages=messages,
+        current_user=current_user,
+        departments=USER_DEPARTMENTS,
+    )
 
 @app.route('/admin/users')
 @login_required
@@ -2257,7 +2318,7 @@ def admin_users():
         return redirect(url_for('calculate_salary'))
     
     users = User.query.all()
-    return render_template('admin_users.html', users=users)
+    return render_template('admin_users.html', users=users, departments=USER_DEPARTMENTS)
 
 @app.route('/admin/users/<int:user_id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -2272,6 +2333,9 @@ def admin_edit_user(user_id):
         user.email = request.form.get('email')
         user.name = request.form.get('name')
         user.phone = request.form.get('phone')
+        department = request.form.get('department')
+        if department in USER_DEPARTMENTS:
+            user.department = department
         user.position = request.form.get('position')
         user.role = request.form.get('role')
         

@@ -43,6 +43,15 @@
                             <input type="text" class="form-control" id="phone" name="phone" required>
                         </div>
                         <div class="form-group mb-3">
+                            <label for="department">소속</label>
+                            <select class="form-control" id="department" name="department" required>
+                                <option value="" disabled selected>소속을 선택하세요</option>
+                                {% for dept in departments %}
+                                <option value="{{ dept }}">{{ dept }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group mb-3">
                             <label for="position">직급</label>
                             <input type="text" class="form-control" id="position" name="position">
                         </div>

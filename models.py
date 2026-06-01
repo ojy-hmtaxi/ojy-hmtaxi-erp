@@ -17,6 +17,7 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     messages = db.relationship('Message', backref='author', lazy=True)
     phone = db.Column(db.String(30))   # 연락처(전화번호)
+    department = db.Column(db.String(30))  # 소속
     position = db.Column(db.String(30)) # 직급
 
     def set_password(self, password):
