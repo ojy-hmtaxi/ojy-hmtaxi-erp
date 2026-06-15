@@ -757,7 +757,9 @@ def accident():
                     
                     for col in df.columns:
                         # 사고관리 날짜/시간 컬럼별 포맷 지정
-                        if col == '사고일시':
+                        if col == '사고번호':
+                            df[col] = df[col].apply(normalize_accident_no)
+                        elif col == '사고일시':
                             try:
                                 df[col] = pd.to_datetime(df[col], format='%m/%d %H:%M', errors='coerce').dt.strftime('%m/%d %H:%M').fillna('')
                             except:
@@ -873,9 +875,10 @@ def init_app_database():
 # 데이터베이스 생성 (로컬 python app.py 실행용)
 def create_database():
     init_app_database()
+    init_accident_migrations()
 
 
-# gunicorn은 __main__을 실행하지 않으므로 import 시 1회 초기화
+# gunicorn은 __main__을 실행하지 않으므로 import 시 DB 초기화
 init_app_database()
 
 # 세션 유지 시간을 매우 길게 설정 (900일)
@@ -1039,8 +1042,144 @@ def load_lease_data():
             return None
     return None
 
+ACCIDENT_DEFAULT_YEAR_PREFIX = '26'
+
+
+def normalize_accident_no(value, default_year_prefix=ACCIDENT_DEFAULT_YEAR_PREFIX):
+    """사고번호를 YY-G01 / YY-P01 형식으로 통일 (레거시 G01·P01 → 26-G01)."""
+    s = str(value or '').strip()
+    if not s or s.lower() in ('nan', 'none'):
+        return ''
+    m = re.match(r'^(\d{2})-([GP])(\d+)$', s, re.I)
+    if m:
+        return f'{m.group(1)}-{m.group(2).upper()}{m.group(3)}'
+    m = re.match(r'^([GP])(\d+)$', s, re.I)
+    if m:
+        return f'{default_year_prefix}-{m.group(1).upper()}{m.group(2)}'
+    return s
+
+
+def accident_map_key(accident_no):
+    """약도 json/png 파일명 (소문자). 예: 26-G01 → 26-g01"""
+    return normalize_accident_no(accident_no).lower()
+
+
+def normalize_accident_record(record):
+    if not record:
+        return record
+    if '사고번호' in record:
+        record['사고번호'] = normalize_accident_no(record.get('사고번호'))
+    return record
+
+
+def normalize_accident_data(data):
+    """at_fault / not_at_fault 목록의 사고번호 정규화."""
+    if not data:
+        return data
+    changed = False
+    for key in ('at_fault', 'not_at_fault'):
+        rows = data.get(key, [])
+        for row in rows:
+            old = str(row.get('사고번호', '') or '')
+            normalize_accident_record(row)
+            if str(row.get('사고번호', '') or '') != old:
+                changed = True
+    return changed
+
+
+def find_accident_by_no(accidents, accident_no):
+    target = normalize_accident_no(accident_no)
+    if not target:
+        return None
+    for row in accidents:
+        if normalize_accident_no(row.get('사고번호')) == target:
+            return row
+    return None
+
+
+def extract_accident_district(location):
+    """사고장소 문자열에서 구(區) 이름 추출."""
+    loc = str(location or '').strip()
+    if not loc:
+        return '기타'
+    m = re.search(r'([가-힣]+구)', loc)
+    return m.group(1) if m else '기타'
+
+
+def build_accident_chart_stats(at_fault_data, not_at_fault_data):
+    """사고 유형·사고장소(구)별 파이 차트용 집계."""
+    type_chart = {
+        'labels': ['가해사고', '피해사고'],
+        'values': [len(at_fault_data), len(not_at_fault_data)],
+    }
+    district_counts = {}
+    for accident in at_fault_data + not_at_fault_data:
+        gu = extract_accident_district(accident.get('사고장소', ''))
+        district_counts[gu] = district_counts.get(gu, 0) + 1
+    sorted_districts = sorted(district_counts.items(), key=lambda item: (-item[1], item[0]))
+    district_chart = {
+        'labels': [name for name, _ in sorted_districts],
+        'values': [count for _, count in sorted_districts],
+    }
+    return {'type_chart': type_chart, 'district_chart': district_chart}
+
+
+def get_maps_dirs():
+    dirs = [os.path.join(app.config['UPLOAD_FOLDER'], 'maps')]
+    if os.environ.get('CLOUDTYPE_ENV'):
+        dirs.append('/tmp/uploads/maps')
+    return dirs
+
+
+def migrate_legacy_map_files(default_year_prefix=ACCIDENT_DEFAULT_YEAR_PREFIX):
+    """g01.png → 26-g01.png 등 레거시 약도 파일명 마이그레이션."""
+    for maps_dir in get_maps_dirs():
+        if not os.path.isdir(maps_dir):
+            continue
+        for name in os.listdir(maps_dir):
+            m = re.match(r'^([gp])(\d+)\.(json|png)$', name, re.I)
+            if not m:
+                continue
+            new_name = f'{default_year_prefix}-{m.group(1).lower()}{m.group(2)}.{m.group(3)}'
+            if new_name == name:
+                continue
+            old_path = os.path.join(maps_dir, name)
+            new_path = os.path.join(maps_dir, new_name)
+            if os.path.exists(new_path):
+                continue
+            os.rename(old_path, new_path)
+            print(f'약도 파일명 변경: {name} → {new_name}')
+
+
+def migrate_accident_data_file():
+    filepath = os.path.join(app.config['DATA_FOLDER'], 'accident_data.json')
+    if not os.path.exists(filepath):
+        return
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+        if not content:
+            return
+        data = json.loads(content)
+    except Exception as e:
+        print(f'accident_data 마이그레이션 스킵: {e}')
+        return
+    if normalize_accident_data(data):
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        print('accident_data.json 사고번호 형식 마이그레이션 완료')
+
+
+def init_accident_migrations():
+    """사고번호·약도 파일 레거시 마이그레이션."""
+    with app.app_context():
+        migrate_legacy_map_files()
+        migrate_accident_data_file()
+
+
 def save_accident_data(data):
     print("=== save_accident_data 함수 시작 ===")
+    normalize_accident_data(data)
     # 요약 데이터 생성
     if data and ('at_fault' in data or 'not_at_fault' in data):
         at_fault_data = data.get('at_fault', [])
@@ -1138,6 +1277,8 @@ def save_accident_data(data):
         
         for vehicle in vehicle_stats.values():
             vehicle['damage_estimate'] = format_amount(vehicle['damage_estimate'])
+
+        chart_stats = build_accident_chart_stats(at_fault_data, not_at_fault_data)
         
         # 요약 데이터 추가
         data['summary'] = {
@@ -1151,7 +1292,9 @@ def save_accident_data(data):
             'not_at_fault_total_damage': format_amount(not_at_fault_total_damage),
             'not_at_fault_total_payment': format_amount(not_at_fault_total_payment),
             'driver_stats': list(driver_stats.values()),
-            'vehicle_stats': list(vehicle_stats.values())
+            'vehicle_stats': list(vehicle_stats.values()),
+            'type_chart': chart_stats['type_chart'],
+            'district_chart': chart_stats['district_chart'],
         }
     
     filepath = os.path.join(app.config['DATA_FOLDER'], 'accident_data.json')
@@ -1170,6 +1313,7 @@ def load_accident_data():
                 content = f.read().strip()
                 if content:  # 파일이 비어있지 않은 경우에만 파싱
                     data = json.loads(content)
+                    normalize_accident_data(data)
                 else:
                     print(f"accident_data.json 파일이 비어있습니다.")
                     return None
@@ -1277,6 +1421,8 @@ def load_accident_data():
             
             for vehicle in vehicle_stats.values():
                 vehicle['damage_estimate'] = format_amount(vehicle['damage_estimate'])
+
+            chart_stats = build_accident_chart_stats(at_fault_data, not_at_fault_data)
             
             # 요약 데이터 추가
             data['summary'] = {
@@ -1290,7 +1436,9 @@ def load_accident_data():
                 'not_at_fault_total_damage': format_amount(not_at_fault_total_damage),
                 'not_at_fault_total_payment': format_amount(not_at_fault_total_payment),
                 'driver_stats': list(driver_stats.values()),
-                'vehicle_stats': list(vehicle_stats.values())
+                'vehicle_stats': list(vehicle_stats.values()),
+                'type_chart': chart_stats['type_chart'],
+                'district_chart': chart_stats['district_chart'],
             }
         
         return data
@@ -2065,12 +2213,13 @@ def accident_print(type, accident_no):
     source_list_name = 'at_fault' if type == 'at_fault' else 'not_at_fault'
     template = 'accident_print_gahae.html' if type == 'at_fault' else 'accident_print_pihae.html'
 
-    accident_info = next((a for a in accident_data.get(source_list_name, []) if str(a.get('사고번호')) == str(accident_no)), None)
+    accident_info = find_accident_by_no(accident_data.get(source_list_name, []), accident_no)
     
     if not accident_info:
         return '해당 사고 정보를 찾을 수 없습니다.', 404
 
     context = accident_info.copy()
+    context['map_key'] = accident_map_key(context.get('사고번호'))
 
     driver_name = context.get('기사명')
     driver_info = {}
@@ -2097,7 +2246,7 @@ def save_map_image():
     print(f"👤 사용자: {current_user.username} (ID: {current_user.id})")
     
     data = request.get_json()
-    version = data.get('version')
+    version = accident_map_key(data.get('version'))
     image_data = data.get('image')
     
     print(f"📋 요청 데이터 - 버전: {version}")
@@ -2183,7 +2332,7 @@ def save_map_json():
     print(f"👤 사용자: {current_user.username} (ID: {current_user.id})")
     
     data = request.get_json()
-    version = data.get('version')
+    version = accident_map_key(data.get('version'))
     json_data = data.get('json')
     
     print(f"📋 요청 데이터 - 버전: {version}")
@@ -2229,7 +2378,11 @@ def load_map_json():
     print(f"📅 불러오기 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"👤 사용자: {current_user.username} (ID: {current_user.id})")
     
-    version = request.args.get('version')
+    version = request.args.get('version', '').strip()
+    if version.lower() == 'intro':
+        version = 'intro'
+    else:
+        version = accident_map_key(version) or version
     print(f"📋 요청 데이터 - 버전: {version}")
     
     if not version:
@@ -2426,6 +2579,9 @@ def latest_upload():
         })
     else:
         return jsonify({"message": "No upload record found"}), 404
+
+# gunicorn import 시 사고번호·약도 파일 마이그레이션
+init_accident_migrations()
 
 if __name__ == '__main__':
     print("=== Flask 앱 시작 ===")

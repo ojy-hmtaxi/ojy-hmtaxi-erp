@@ -205,6 +205,26 @@
             color: #555;
             margin-right: 10px;
         }
+        .accident-chart-row {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+        .accident-chart-box {
+            flex: 1 1 340px;
+            min-width: 300px;
+            max-width: calc(50% - 12px);
+        }
+        .accident-chart-box h4 {
+            margin: 0 0 12px 0;
+            font-size: 15px;
+            color: #333;
+            text-align: center;
+        }
+        .accident-chart-canvas-wrap {
+            position: relative;
+            height: 320px;
+        }
         /* 정렬 버튼 스타일 */
         .sort-btn {
             background: none;
@@ -444,6 +464,24 @@
                     </div>
 
                     <div class="summary-section">
+                        <h3>가해/피해사고 통계</h3>
+                        <div class="accident-chart-row">
+                            <div class="accident-chart-box">
+                                <h4>사고원인별 통계</h4>
+                                <div class="accident-chart-canvas-wrap">
+                                    <canvas id="accidentTypePieChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="accident-chart-box">
+                                <h4>사고장소(구)별 통계</h4>
+                                <div class="accident-chart-canvas-wrap">
+                                    <canvas id="accidentDistrictPieChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="summary-section">
                         <h3>기사별 통계</h3>
                         <table class="table" id="driver-table">
                             <thead>
@@ -559,7 +597,74 @@
             {% endif %}
         </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
+        const accidentTypeChartData = {{ accident_data.summary.type_chart|default({'labels': [], 'values': []})|tojson|safe }};
+        const accidentDistrictChartData = {{ accident_data.summary.district_chart|default({'labels': [], 'values': []})|tojson|safe }};
+        let accidentTypeChart = null;
+        let accidentDistrictChart = null;
+        let accidentChartsInitialized = false;
+
+        const accidentPieColors = [
+            '#4CAF50', '#2196F3', '#FF9800', '#E91E63', '#9C27B0',
+            '#00BCD4', '#FFC107', '#795548', '#607D8B', '#3F51B5',
+            '#8BC34A', '#FF5722', '#009688', '#CDDC39', '#673AB7'
+        ];
+
+        function buildPieChart(canvasId, chartData, existingChart) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas || typeof Chart === 'undefined') return existingChart;
+            const labels = chartData.labels || [];
+            const values = chartData.values || [];
+            if (!labels.length) return existingChart;
+            if (existingChart) {
+                existingChart.destroy();
+            }
+            const colors = labels.map((_, i) => accidentPieColors[i % accidentPieColors.length]);
+            return new Chart(canvas, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: colors,
+                        borderColor: '#fff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { boxWidth: 14, padding: 10, font: { size: 12 } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                                    const pct = total ? ((ctx.parsed / total) * 100).toFixed(1) : 0;
+                                    return ctx.label + ': ' + ctx.parsed + '건 (' + pct + '%)';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function initAccidentPieCharts() {
+            accidentTypeChart = buildPieChart('accidentTypePieChart', accidentTypeChartData, accidentTypeChart);
+            accidentDistrictChart = buildPieChart('accidentDistrictPieChart', accidentDistrictChartData, accidentDistrictChart);
+            accidentChartsInitialized = true;
+        }
+
+        function resizeAccidentPieCharts() {
+            if (accidentTypeChart) accidentTypeChart.resize();
+            if (accidentDistrictChart) accidentDistrictChart.resize();
+        }
+
         function openTab(evt, tabName) {
             var tabcontent = document.getElementsByClassName("tab-content");
             for (var i = 0; i < tabcontent.length; i++) {
@@ -573,6 +678,16 @@
 
             document.getElementById(tabName).classList.add("active");
             evt.currentTarget.classList.add("active");
+
+            if (tabName === 'summary') {
+                setTimeout(function() {
+                    if (!accidentChartsInitialized) {
+                        initAccidentPieCharts();
+                    } else {
+                        resizeAccidentPieCharts();
+                    }
+                }, 80);
+            }
         }
 
         // 테이블 정렬 함수
@@ -844,7 +959,7 @@
         });
 
         function openAccidentPrintWindow(type, accidentNo) {
-            let url = `/accident/print/${type}/${accidentNo}`;
+            let url = `/accident/print/${type}/${encodeURIComponent(accidentNo)}`;
             window.open(url, '_blank', 'width=900,height=1100');
         }
     </script>
