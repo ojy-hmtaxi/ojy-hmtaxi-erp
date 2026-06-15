@@ -249,13 +249,13 @@
         </div>
     </div>
 
-    <!-- 월별 사고 현황 통계 라인차트 -->
+    <!-- 월별 사고 현황 통계 막대차트 -->
     <div class="card">
         <div class="card-header">
             <h5 class="mb-0">월별 사고 현황 통계</h5>
         </div>
         <div class="card-body">
-            <canvas id="accidentLineChart" height="100px"></canvas>
+            <canvas id="accidentBarChart" height="100px"></canvas>
         </div>
     </div>
 </div>
@@ -556,7 +556,7 @@ function accidentTooltipHandler(context) {
     accidentTooltipEl.style.top = (rect.top + (tooltip.y || 0) - accidentTooltipEl.offsetHeight - 12) + 'px';
     accidentTooltipEl.style.opacity = 1;
 }
-const accidentCtx = document.getElementById('accidentLineChart').getContext('2d');
+const accidentCtx = document.getElementById('accidentBarChart').getContext('2d');
 new Chart(accidentCtx, {
     type: 'bar',
     data: {

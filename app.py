@@ -819,8 +819,20 @@ def accident():
         'upload_time': session.get('upload_time'),
         'uploader_name': session.get('uploader_name')
     }
+    month_order = ['01월', '02월', '03월', '04월', '05월', '06월', '07월', '08월', '09월', '10월', '11월', '12월']
+    at_fault_rows = accident_data.get('at_fault', []) if accident_data else []
+    not_at_fault_rows = accident_data.get('not_at_fault', []) if accident_data else []
+    accident_stats_by_month = build_accident_stats_by_month(at_fault_rows, not_at_fault_rows, month_order)
 
-    return render_template('accident.html', accident_data=accident_data, messages=messages, current_user=current_user, upload_info=upload_info)
+    return render_template(
+        'accident.html',
+        accident_data=accident_data,
+        messages=messages,
+        current_user=current_user,
+        upload_info=upload_info,
+        month_order=month_order,
+        accident_stats_by_month=accident_stats_by_month,
+    )
 
 @app.route('/add_message', methods=['POST'])
 @login_required
@@ -1122,6 +1134,41 @@ def build_accident_chart_stats(at_fault_data, not_at_fault_data):
         'values': [count for _, count in sorted_districts],
     }
     return {'type_chart': type_chart, 'district_chart': district_chart}
+
+
+def build_accident_stats_by_month(at_fault_data, not_at_fault_data, month_order=None):
+    """월별 사고 현황(가해/피해) 및 사고원인별 분포 집계."""
+    if month_order is None:
+        month_order = ['01월', '02월', '03월', '04월', '05월', '06월', '07월', '08월', '09월', '10월', '11월', '12월']
+    stats = {
+        m: {'at_fault': 0, 'at_fault_causes': {}, 'not_at_fault': 0, 'not_at_fault_causes': {}}
+        for m in month_order
+    }
+    for a in at_fault_data:
+        dt = a.get('사고일시', '')
+        if dt and '/' in dt:
+            try:
+                mm = dt.strip().split('/')[0].zfill(2)
+                month_key = f'{mm}월'
+                if month_key in stats:
+                    stats[month_key]['at_fault'] += 1
+                    cause = (a.get('사고원인', '') or '').strip() or '기타'
+                    stats[month_key]['at_fault_causes'][cause] = stats[month_key]['at_fault_causes'].get(cause, 0) + 1
+            except Exception:
+                pass
+    for a in not_at_fault_data:
+        dt = a.get('사고일시', '')
+        if dt and '/' in dt:
+            try:
+                mm = dt.strip().split('/')[0].zfill(2)
+                month_key = f'{mm}월'
+                if month_key in stats:
+                    stats[month_key]['not_at_fault'] += 1
+                    cause = (a.get('사고원인', '') or '').strip() or '기타'
+                    stats[month_key]['not_at_fault_causes'][cause] = stats[month_key]['not_at_fault_causes'].get(cause, 0) + 1
+            except Exception:
+                pass
+    return stats
 
 
 def get_maps_dirs():

@@ -205,25 +205,9 @@
             color: #555;
             margin-right: 10px;
         }
-        .accident-chart-row {
-            display: flex;
-            gap: 24px;
-            flex-wrap: wrap;
-        }
-        .accident-chart-box {
-            flex: 1 1 340px;
-            min-width: 300px;
-            max-width: calc(50% - 12px);
-        }
-        .accident-chart-box h4 {
-            margin: 0 0 12px 0;
-            font-size: 15px;
-            color: #333;
-            text-align: center;
-        }
-        .accident-chart-canvas-wrap {
+        .accident-monthly-chart-wrap {
             position: relative;
-            height: 320px;
+            height: 360px;
         }
         /* 정렬 버튼 스타일 */
         .sort-btn {
@@ -464,20 +448,9 @@
                     </div>
 
                     <div class="summary-section">
-                        <h3>가해/피해사고 통계</h3>
-                        <div class="accident-chart-row">
-                            <div class="accident-chart-box">
-                                <h4>사고원인별 통계</h4>
-                                <div class="accident-chart-canvas-wrap">
-                                    <canvas id="accidentTypePieChart"></canvas>
-                                </div>
-                            </div>
-                            <div class="accident-chart-box">
-                                <h4>사고장소(구)별 통계</h4>
-                                <div class="accident-chart-canvas-wrap">
-                                    <canvas id="accidentDistrictPieChart"></canvas>
-                                </div>
-                            </div>
+                        <h3>월별 사고 현황 통계</h3>
+                        <div class="accident-monthly-chart-wrap">
+                            <canvas id="accidentBarChart"></canvas>
                         </div>
                     </div>
 
@@ -599,70 +572,105 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        const accidentTypeChartData = {{ accident_data.summary.type_chart|default({'labels': [], 'values': []})|tojson|safe }};
-        const accidentDistrictChartData = {{ accident_data.summary.district_chart|default({'labels': [], 'values': []})|tojson|safe }};
-        let accidentTypeChart = null;
-        let accidentDistrictChart = null;
+        const accidentMonths = JSON.parse('{{ month_order|default("[]")|tojson|safe }}');
+        const accidentStats = JSON.parse('{{ accident_stats_by_month|default("{}")|tojson|safe }}');
+        let accidentMonthlyChart = null;
         let accidentChartsInitialized = false;
+        let accidentTooltipEl = null;
 
-        const accidentPieColors = [
-            '#4CAF50', '#2196F3', '#FF9800', '#E91E63', '#9C27B0',
-            '#00BCD4', '#FFC107', '#795548', '#607D8B', '#3F51B5',
-            '#8BC34A', '#FF5722', '#009688', '#CDDC39', '#673AB7'
-        ];
+        const accidentCauseColors = ['#e57373', '#64b5f6', '#ffd54f', '#66bb6a', '#ab47bc', '#ffb74d', '#4dd0e1', '#9575cd', '#f06292', '#4db6ac'];
 
-        function buildPieChart(canvasId, chartData, existingChart) {
-            const canvas = document.getElementById(canvasId);
-            if (!canvas || typeof Chart === 'undefined') return existingChart;
-            const labels = chartData.labels || [];
-            const values = chartData.values || [];
-            if (!labels.length) return existingChart;
-            if (existingChart) {
-                existingChart.destroy();
+        function accidentTooltipHandler(context) {
+            const { chart, tooltip } = context;
+            if (tooltip.opacity === 0) {
+                if (accidentTooltipEl) accidentTooltipEl.style.opacity = 0;
+                return;
             }
-            const colors = labels.map((_, i) => accidentPieColors[i % accidentPieColors.length]);
-            return new Chart(canvas, {
-                type: 'pie',
+            if (!accidentTooltipEl) {
+                accidentTooltipEl = document.createElement('div');
+                accidentTooltipEl.style.cssText = 'position:fixed;pointer-events:none;background:rgba(255,255,255,0.95);border:1px solid #ddd;border-radius:6px;padding:10px 14px;box-shadow:0 2px 8px rgba(0,0,0,0.15);font-size:12px;line-height:1.4;z-index:9999;max-width:240px;';
+                document.body.appendChild(accidentTooltipEl);
+            }
+            const dp = tooltip.dataPoints[0];
+            const month = accidentMonths[dp.dataIndex];
+            const isAtFault = dp.datasetIndex === 0;
+            const typeKey = isAtFault ? 'at_fault' : 'not_at_fault';
+            const causesKey = isAtFault ? 'at_fault_causes' : 'not_at_fault_causes';
+            const total = (accidentStats[month] || {})[typeKey] || 0;
+            const causes = (accidentStats[month] || {})[causesKey] || {};
+            const label = isAtFault ? '가해사고' : '피해사고';
+            const entries = Object.entries(causes).sort((a, b) => b[1] - a[1]);
+            if (total === 0 || entries.length === 0) {
+                accidentTooltipEl.innerHTML = `<strong>${month} ${label}</strong><br>총 ${total}건`;
+            } else {
+                let stackHtml = '<div style="display:flex;height:16px;border-radius:4px;overflow:hidden;margin:6px 0;border:1px solid #eee;">';
+                entries.forEach(([cause, cnt], i) => {
+                    const pct = (cnt / total * 100).toFixed(0);
+                    const color = accidentCauseColors[i % accidentCauseColors.length];
+                    stackHtml += `<div style="width:${pct}%;background:${color};" title="${cause} ${cnt}건"></div>`;
+                });
+                stackHtml += '</div>';
+                accidentTooltipEl.innerHTML = `<strong>${month} ${label}</strong> 총 ${total}건<br>${stackHtml}<div style="margin-top:4px;font-size:11px;">${entries.map(([cause, cnt], i) => {
+                    const pct = (cnt / total * 100).toFixed(1);
+                    return `<span style="display:inline-block;width:8px;height:8px;background:${accidentCauseColors[i % accidentCauseColors.length]};border-radius:2px;margin-right:4px;vertical-align:middle;"></span>${cause} ${cnt}건(${pct}%)`;
+                }).join('<br>')}</div>`;
+            }
+            const rect = chart.canvas.getBoundingClientRect();
+            accidentTooltipEl.style.left = (rect.left + (tooltip.x || 0) - accidentTooltipEl.offsetWidth / 2) + 'px';
+            accidentTooltipEl.style.top = (rect.top + (tooltip.y || 0) - accidentTooltipEl.offsetHeight - 12) + 'px';
+            accidentTooltipEl.style.opacity = 1;
+        }
+
+        function initAccidentMonthlyChart() {
+            const canvas = document.getElementById('accidentBarChart');
+            if (!canvas || typeof Chart === 'undefined') return;
+            if (accidentMonthlyChart) {
+                accidentMonthlyChart.destroy();
+            }
+            const accidentAtFaultData = accidentMonths.map(m => (accidentStats[m] || {}).at_fault || 0);
+            const accidentNotAtFaultData = accidentMonths.map(m => (accidentStats[m] || {}).not_at_fault || 0);
+            accidentMonthlyChart = new Chart(canvas.getContext('2d'), {
+                type: 'bar',
                 data: {
-                    labels: labels,
+                    labels: accidentMonths,
                     datasets: [{
-                        data: values,
-                        backgroundColor: colors,
-                        borderColor: '#fff',
-                        borderWidth: 2
+                        label: '가해사고',
+                        data: accidentAtFaultData,
+                        backgroundColor: 'rgba(220,53,69,0.7)',
+                        borderColor: '#dc3545',
+                        borderWidth: 1
+                    }, {
+                        label: '피해사고',
+                        data: accidentNotAtFaultData,
+                        backgroundColor: 'rgba(0,123,255,0.7)',
+                        borderColor: '#007bff',
+                        borderWidth: 1
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: { boxWidth: 14, padding: 10, font: { size: 12 } }
-                        },
+                        legend: { position: 'top' },
                         tooltip: {
-                            callbacks: {
-                                label: function(ctx) {
-                                    const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
-                                    const pct = total ? ((ctx.parsed / total) * 100).toFixed(1) : 0;
-                                    return ctx.label + ': ' + ctx.parsed + '건 (' + pct + '%)';
-                                }
-                            }
+                            enabled: false,
+                            external: accidentTooltipHandler
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1 },
+                            title: { display: true, text: '사고 건수' }
                         }
                     }
                 }
             });
-        }
-
-        function initAccidentPieCharts() {
-            accidentTypeChart = buildPieChart('accidentTypePieChart', accidentTypeChartData, accidentTypeChart);
-            accidentDistrictChart = buildPieChart('accidentDistrictPieChart', accidentDistrictChartData, accidentDistrictChart);
             accidentChartsInitialized = true;
         }
 
-        function resizeAccidentPieCharts() {
-            if (accidentTypeChart) accidentTypeChart.resize();
-            if (accidentDistrictChart) accidentDistrictChart.resize();
+        function resizeAccidentMonthlyChart() {
+            if (accidentMonthlyChart) accidentMonthlyChart.resize();
         }
 
         function openTab(evt, tabName) {
@@ -682,9 +690,9 @@
             if (tabName === 'summary') {
                 setTimeout(function() {
                     if (!accidentChartsInitialized) {
-                        initAccidentPieCharts();
+                        initAccidentMonthlyChart();
                     } else {
-                        resizeAccidentPieCharts();
+                        resizeAccidentMonthlyChart();
                     }
                 }, 80);
             }
