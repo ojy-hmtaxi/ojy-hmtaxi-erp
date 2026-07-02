@@ -1,0 +1,2080 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar %}
+{% from "right_sidebar.html" import right_sidebar %}
+
+{% block sidebar %}
+{{ sidebar(current_user) }}
+{% endblock %}
+
+{% block title %}수입금 관리{% endblock %}
+
+{% block head %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .custom-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 0px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; color: #555; }
+        input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 0px; box-sizing: border-box; }
+        input[type="number"] { max-width: 200px; }
+        button {
+            background-color: #4CAF50; color: white; padding: 10px 15px;
+            border: none; border-radius: 0px; cursor: pointer; width: 100%;
+        }
+        button:hover { background-color: #45a049; }
+        .error { color: red; margin-bottom: 15px; }
+        .success-msg {
+            margin-bottom: 15px; padding: 10px 12px;
+            background-color: #e8f5e9; color: #2e7d32;
+        }
+        .excel-upload {
+            margin: 20px 0; padding: 20px;
+            background-color: #f8f9fa; border-radius: 0px;
+        }
+        .upload-result { margin-top: 10px; border-radius: 0px; display: block; }
+        .upload-result-placeholder { padding: 10px; background-color: #e8f5e9; color: #555; }
+        .upload-result-wrap { display: none; }
+        .upload-result-wrap.visible { display: block; }
+        .upload-result-head {
+            padding: 10px 12px; background-color: #e8f5e9; border-radius: 0px;
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+        }
+        .upload-result-head .text { flex: 1; }
+        .upload-result-toggle { flex-shrink: 0; cursor: pointer; padding: 2px 6px; color: #2e7d32; user-select: none; }
+        .upload-result-toggle.open { transform: rotate(180deg); }
+        .upload-result-history { display: none; border-top: 1px solid rgba(0,0,0,0.08); }
+        .upload-result-history.open { display: block; }
+        .upload-result-history-item {
+            padding: 10px 12px; background-color: #c8e6c9;
+            border-top: 1px solid rgba(0,0,0,0.06);
+        }
+        .table {
+            width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px;
+        }
+        .table th, .table td {
+            padding: 12px 16px; border: 1px solid #ddd;
+            white-space: nowrap; vertical-align: middle;
+        }
+        .table th { background-color: #f2f2f2; font-weight: 600; position: relative; }
+        .sales-table-total-row td {
+            background-color: #e2f6e3 !important;
+            font-weight: 600;
+            color: #33691e;
+            border-top: 2px solid #7cb342;
+        }
+        .sort-icons { display: inline-block; margin-left: 5px; }
+        .sort-btn {
+            background: none; border: none; padding: 0 1px;
+            cursor: pointer; color: #666; font-size: 10px; width: auto;
+        }
+        .sort-btn.active { color: #4CAF50; }
+        .table tbody tr:nth-child(even) { background-color: #f9f9f9; }
+        .table tbody tr:hover, .table tbody tr:hover td {
+            background-color: rgba(135, 206, 235, 0.3);
+        }
+        .table td.match-ok { color: #2e7d32 !important; font-weight: 600; }
+        .table td.match-fail { color: #c62828 !important; font-weight: 600; }
+        .sales-table-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+        .sales-toolbar-left {
+            flex-shrink: 0;
+        }
+        .sales-edit-actions {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+        .sales-edit-btn {
+            width: auto;
+            padding: 5px 12px;
+            border: 1px solid #4CAF50;
+            background: #4CAF50;
+            color: #fff;
+            cursor: pointer;
+            font-size: 12px;
+            border-radius: 0;
+        }
+        .sales-edit-btn:hover:not(:disabled) { background: #43a047; border-color: #43a047; }
+        .sales-edit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .sales-edit-status {
+            font-size: 13px;
+            color: #555;
+            flex: 1;
+            min-width: 0;
+        }
+        .sales-edit-status.error { color: #c62828; }
+        .sales-edit-status.success { color: #2e7d32; }
+        .sales-cell-input {
+            width: 100%;
+            min-width: 72px;
+            padding: 4px 6px;
+            border: 1px solid #4CAF50;
+            box-sizing: border-box;
+            font-size: 13px;
+        }
+        .table tbody tr.sales-row-editing td {
+            background-color: #fffde7 !important;
+        }
+        .tabs { margin-top: 20px; }
+        .tab-buttons {
+            display: flex; margin: 0 auto 10px; flex-wrap: nowrap;
+            overflow-x: hidden; white-space: nowrap; width: 100%; gap: 6px;
+        }
+        .tab-button {
+            flex: 1; min-width: 0; padding: 8px 6px;
+            background-color: #b0b0b0; border: none; border-radius: 0px;
+            cursor: pointer; color: #333; font-size: 14px; text-align: center;
+        }
+        .tab-button:hover { background-color: #999; color: #fff; }
+        .tab-button.active { background-color: #4CAF50; color: white; }
+        .tab-content {
+            display: none; padding: 0px; background-color: white;
+            border-radius: 0 0px 0px 0px;
+        }
+        .tab-content.active { display: block; }
+        .sheet-tabs { margin-top: 20px; }
+        .sheet-tab-buttons {
+            display: flex; margin: 0 auto 10px; flex-wrap: nowrap;
+            overflow-x: hidden; white-space: nowrap; width: 100%; gap: 6px;
+        }
+        .sheet-tab-button {
+            flex: 1; min-width: 0; padding: 8px 6px;
+            background-color: #b0b0b0; border: none; border-radius: 0px;
+            cursor: pointer; color: #333; font-size: 14px; text-align: center;
+            overflow: hidden; text-overflow: ellipsis;
+        }
+        .sheet-tab-button:hover { background-color: #999; color: #fff; }
+        .sheet-tab-button.active { background-color: #4CAF50; color: white; }
+        .chart-container {
+            display: flex; flex-wrap: wrap; gap: 20px; margin-top: 20px;
+        }
+        .chart-filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 16px;
+            align-items: flex-end;
+            margin: 0 0 14px;
+            padding: 12px 14px;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+        }
+        .chart-wrapper-income-bar {
+            flex: 1 1 100%;
+        }
+        .chart-filter-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 140px;
+            flex: 1;
+        }
+        .chart-filter-item label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #444;
+            margin: 0;
+        }
+        .chart-filter-select {
+            width: 100%;
+            padding: 7px 8px;
+            border: 1px solid #ccc;
+            border-radius: 0;
+            background: #fff;
+            font-size: 13px;
+            box-sizing: border-box;
+            cursor: pointer;
+        }
+        .chart-filter-select:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+        .chart-wrapper-scatter {
+            flex: 1 1 100%;
+        }
+        .scatter-filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 20px;
+            align-items: flex-start;
+            margin: 0 0 14px;
+            padding: 12px 14px;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+        }
+        .scatter-filter-group {
+            flex: 1 1 220px;
+            min-width: 180px;
+        }
+        .scatter-filter-group-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #444;
+            margin-bottom: 8px;
+        }
+        .scatter-filter-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 12px;
+        }
+        .scatter-filter-check {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
+            color: #333;
+            cursor: pointer;
+            user-select: none;
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            background: #fff;
+        }
+        .scatter-filter-check input {
+            width: auto;
+            margin: 0;
+            cursor: pointer;
+        }
+        .scatter-filter-check:has(input:checked) {
+            border-color: #4CAF50;
+            background: #eef7ee;
+        }
+        .scatter-filter-actions {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+            flex-shrink: 0;
+        }
+        .scatter-filter-btn {
+            width: auto;
+            margin-top: 25px;
+            padding: 6px 12px;
+            font-size: 12px;
+            background: #fff;
+            color: #333;
+            border: 1px solid #ccc;
+            cursor: pointer;
+        }
+        .scatter-filter-btn:hover {
+            background: #f5f5f5;
+        }
+        .chart-wrapper {
+            flex: 1; min-width: 300px; background: white;
+            padding: 15px; border-radius: 0px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .summary-table {
+            width: 100%; border-collapse: collapse; margin-top: 20px;
+            background: white; border-radius: 0px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 12px;
+        }
+        .summary-table th, .summary-table td {
+            padding: 10px; text-align: center; border: 1px solid #ddd;
+        }
+        .summary-table th { background-color: #f0f0f0; }
+        .summary-table tbody tr:hover, .summary-table tbody tr:hover td {
+            background-color: rgba(135, 206, 235, 0.3);
+        }
+        .rank-badge {
+            display: inline-block; padding: 2px 6px; border-radius: 0px;
+            font-size: 12px; font-weight: bold; color: white;
+        }
+        .rank-1 { background-color: #FFD700; }
+        .rank-2 { background-color: #C0C0C0; }
+        .rank-3 { background-color: #CD7F32; }
+        .tabs.show { display: block; }
+        .tabs.hide { display: none; }
+        .fuel-price-row { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
+        .fuel-price-row .form-group { flex: 1; min-width: 160px; margin-bottom: 0; }
+        .day-range-filter {
+            margin: 0 0 14px;
+            padding: 14px 16px 10px;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+        }
+        .day-range-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #555;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .day-range-precise {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+        .day-range-precise label {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin: 0;
+            color: #333;
+        }
+        .day-num-input {
+            width: 52px !important;
+            max-width: 52px;
+            padding: 4px 6px !important;
+            text-align: center;
+            font-weight: 600;
+            border: 1px solid #ccc !important;
+        }
+        .day-range-sep { color: #888; }
+        .day-range-slider {
+            --thumb-size: 20px;
+            position: relative;
+            height: 54px;
+            margin: 0;
+            padding: 0;
+            overflow: visible;
+        }
+        .day-range-track {
+            position: absolute;
+            top: 28px;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: #ddd;
+            border-radius: 3px;
+            pointer-events: none;
+        }
+        .day-range-fill {
+            position: absolute;
+            top: 28px;
+            height: 6px;
+            background: #4CAF50;
+            border-radius: 3px;
+            pointer-events: none;
+            min-width: 0;
+        }
+        .day-handle-label {
+            position: absolute;
+            top: 0;
+            transform: translateX(-50%);
+            min-width: 28px;
+            padding: 2px 6px;
+            background: #4CAF50;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 700;
+            text-align: center;
+            border-radius: 4px;
+            pointer-events: none;
+            line-height: 1.2;
+            white-space: nowrap;
+            z-index: 8;
+        }
+        .day-range-input {
+            position: absolute;
+            top: 18px;
+            left: 0;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            border: none;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+            pointer-events: none;
+            height: 28px;
+        }
+        #dayRangeMin { z-index: 3; }
+        #dayRangeMax { z-index: 4; }
+        .day-range-input::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: var(--thumb-size);
+            height: var(--thumb-size);
+            border-radius: 50%;
+            background: #4CAF50;
+            border: 3px solid #fff;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.28);
+            cursor: grab;
+            pointer-events: auto;
+        }
+        .day-range-input:active::-webkit-slider-thumb { cursor: grabbing; }
+        .day-range-input::-moz-range-thumb {
+            width: var(--thumb-size);
+            height: var(--thumb-size);
+            border-radius: 50%;
+            background: #4CAF50;
+            border: 3px solid #fff;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.28);
+            cursor: grab;
+            pointer-events: auto;
+        }
+        .day-range-input::-webkit-slider-runnable-track,
+        .day-range-input::-moz-range-track {
+            background: transparent;
+            border: none;
+            height: 6px;
+        }
+        .day-range-ticks {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 22px;
+            margin: 0;
+            pointer-events: none;
+            z-index: 1;
+        }
+        .day-tick {
+            position: absolute;
+            top: 0;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            pointer-events: none;
+        }
+        .day-tick-mark {
+            display: block;
+            width: 2px;
+            height: 6px;
+            background: #ccc;
+            border-radius: 1px;
+        }
+        .day-tick.in-range .day-tick-mark { background: #81c784; }
+        .day-tick.labeled .day-tick-mark { height: 10px; background: #aaa; }
+        .day-tick.in-range.labeled .day-tick-mark { background: #4CAF50; }
+        .day-tick-num {
+            margin-top: 2px;
+            font-size: 10px;
+            color: #888;
+            line-height: 1;
+        }
+        .day-tick.in-range .day-tick-num { color: #2e7d32; font-weight: 600; }
+    </style>
+{% endblock %}
+
+{% block content %}
+    {{ right_sidebar(messages, current_user) }}
+    <div class="custom-container">
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+        {% if upload_summary %}
+        <div class="success-msg">
+            {{ upload_summary.file_count }}개 .dat 파일 업로드 완료
+            (전체 {{ upload_summary.total }}건 · 기사 매칭 {{ upload_summary.matched }}건)
+        </div>
+        {% endif %}
+
+        <div class="excel-upload">
+            <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                <div class="form-group">
+                    <label for="dat_files">미터기 .dat 파일 선택 (복수 선택 가능):</label>
+                    <input type="file" id="dat_files" name="dat_files" accept=".dat" multiple required>
+                </div>
+                <div class="fuel-price-row">
+                    <div class="form-group">
+                        <label for="fuel_price">연료 단가 (원/L, 연료비 계산용):</label>
+                        <input type="number" id="fuel_price" name="fuel_price" value="{{ fuel_price|default(1100) }}" min="0" step="1">
+                    </div>
+                </div>
+                <div class="form-group" style="margin-top: 12px;">
+                    <button type="submit" id="uploadButton">수입금 데이터 업로드 (일괄)</button>
+                </div>
+            </form>
+            <div id="uploadResult" class="upload-result">
+                <div class="upload-result-placeholder">업로드된 파일이 이곳에 표시됩니다.</div>
+                <div id="uploadResultWrap" class="upload-result-wrap"></div>
+            </div>
+        </div>
+
+        {% if sales_data %}
+        <div class="sheet-tabs">
+            <div class="sheet-tab-buttons">
+                {% for sheet_name in sales_data.keys() %}
+                <button class="sheet-tab-button {% if loop.first %}active{% endif %}" onclick="openSheetTab(event, '{{ sheet_name }}')">{{ sheet_name }}</button>
+                {% endfor %}
+            </div>
+            <div class="day-range-filter" id="dayRangeFilter">
+                <div class="day-range-header">
+                    <span>일자 범위</span>
+                    <div class="day-range-precise">
+                        <label>시작 <input type="number" id="dayRangeMinNum" class="day-num-input" min="1" max="31" value="1" step="1"> 일</label>
+                        <span class="day-range-sep">~</span>
+                        <label>종료 <input type="number" id="dayRangeMaxNum" class="day-num-input" min="1" max="31" value="31" step="1"> 일</label>
+                    </div>
+                </div>
+                <div class="day-range-slider" id="dayRangeSlider">
+                    <div class="day-range-track"></div>
+                    <div class="day-range-fill" id="dayRangeFill"></div>
+                    <div class="day-handle-label" id="dayRangeMinLabel">1</div>
+                    <div class="day-handle-label" id="dayRangeMaxLabel">31</div>
+                    <input type="range" class="day-range-input" id="dayRangeMin" min="1" max="31" value="1" step="1" aria-label="시작일">
+                    <input type="range" class="day-range-input" id="dayRangeMax" min="1" max="31" value="31" step="1" aria-label="종료일">
+                    <div class="day-range-ticks" id="dayRangeTicks"></div>
+                </div>
+            </div>
+            {% for sheet_name, data in sales_data.items() %}
+            <div id="{{ sheet_name }}" class="tabs {% if loop.first %}show{% else %}hide{% endif %}">
+                <div class="tab-buttons">
+                    <button class="tab-button active" onclick="openTab(event, 'result-{{ sheet_name }}')">수입 내역</button>
+                    <button class="tab-button" onclick="openTab(event, 'summary-{{ sheet_name }}')">통계 · 분석</button>
+                </div>
+                <div id="result-{{ sheet_name }}" class="tab-content active">
+                    <div style="margin-bottom:10px;">
+                        <input type="text" id="salesUnifiedFilter-sheet-{{ loop.index }}" class="salesFilterInput" placeholder="쉼표(,) 다중 조건 · 날짜 / 차번 / 차종 / 근무(주간·야간·일차·교대·리스) / 사번 / 운전기사 / 매칭(완료·미매칭) · 차량 모델명 정확히 구분 (K5 ≠ K5H)" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
+                    </div>
+                    <div class="sales-table-toolbar" data-month="{{ sheet_name }}">
+                        <div class="sales-toolbar-left">
+                            <button type="button" class="sales-edit-btn" data-action="save" disabled>저장</button>
+                        </div>
+                        <span class="sales-edit-status" id="salesEditStatus_{{ sheet_name }}"></span>
+                        <div class="sales-edit-actions">
+                            <button type="button" class="sales-edit-btn" data-action="edit">수정</button>
+                            <button type="button" class="sales-edit-btn" data-action="cancel" disabled>취소</button>
+                        </div>
+                    </div>
+                    <table class="table" id="salesTable_{{ sheet_name }}" data-month="{{ sheet_name }}">
+                        <thead>
+                            <tr>
+                                {% for col in ['날짜', '차번', '차종', '근무유형', '사번', '운전기사', '실입금', '건수', '영업시간', '연료비', '충전량', '운행거리', '매칭'] %}
+                                <th>
+                                    {% if col == '근무유형' %}근무{% else %}{{ col }}{% endif %}
+                                    {% if col != '매칭' %}
+                                    <span class="sort-icons">
+                                        <button type="button" class="sort-btn" onclick="sortTable('salesTable_{{ sheet_name }}', '{{ loop.index0 }}', 'asc')" title="오름차순">▲</button>
+                                        <button type="button" class="sort-btn" onclick="sortTable('salesTable_{{ sheet_name }}', '{{ loop.index0 }}', 'desc')" title="내림차순">▼</button>
+                                    </span>
+                                    {% endif %}
+                                </th>
+                                {% endfor %}
+                            </tr>
+                            <tr class="sales-table-total-row" id="salesTableTotal_{{ sheet_name }}">
+                                <td>0일</td>
+                                <td>0대</td>
+                                <td>0종</td>
+                                <td>0종</td>
+                                <td>0명</td>
+                                <td>0명</td>
+                                <td>0 원</td>
+                                <td>0 건</td>
+                                <td>0시간 00분</td>
+                                <td>0 원</td>
+                                <td>0.00</td>
+                                <td>0.00 km</td>
+                                <td></td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in data.data %}
+                            <tr data-day="{{ row.날짜[8:10] if row.날짜 and row.날짜|length >= 10 else '' }}" data-date="{{ row.날짜 }}" data-car="{{ row.차번 }}">
+                                <td>{{ row.날짜 }}</td>
+                                <td>{{ row.차번 }}</td>
+                                <td>{{ row.차종 }}</td>
+                                <td>{{ row.근무유형|default('') }}</td>
+                                <td>{{ row.사번|sales_emp_id }}</td>
+                                <td>{{ row.이름 }}</td>
+                                <td>{{ "{:,}".format(row.실입금|int) }}</td>
+                                <td>{{ "{:,}".format((row.건수|default(0))|int) }}</td>
+                                <td>{{ row|sales_work_minutes }}</td>
+                                <td>{{ "{:,}".format(row.연료비|int) }}</td>
+                                <td>{{ row.충전량|default(row.연료L|default('0')) }}</td>
+                                <td>{{ row.운행거리 }}</td>
+                                <td class="{% if row.매칭 == '완료' %}match-ok{% else %}match-fail{% endif %}">{{ row.매칭 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div id="summary-{{ sheet_name }}" class="tab-content">
+                    <div class="chart-container">
+                        <div class="chart-wrapper chart-wrapper-income-bar">
+                            <div class="chart-filter-bar">
+                                <div class="chart-filter-item">
+                                    <label for="chartFilterCarNo-{{ sheet_name }}">차번</label>
+                                    <select id="chartFilterCarNo-{{ sheet_name }}" class="chart-filter-select" data-field="차번">
+                                        <option value="">전체</option>
+                                    </select>
+                                </div>
+                                <div class="chart-filter-item">
+                                    <label for="chartFilterCarType-{{ sheet_name }}">차종</label>
+                                    <select id="chartFilterCarType-{{ sheet_name }}" class="chart-filter-select" data-field="차종">
+                                        <option value="">전체</option>
+                                    </select>
+                                </div>
+                                <div class="chart-filter-item">
+                                    <label for="chartFilterEmpNo-{{ sheet_name }}">사번</label>
+                                    <select id="chartFilterEmpNo-{{ sheet_name }}" class="chart-filter-select" data-field="사번">
+                                        <option value="">전체</option>
+                                    </select>
+                                </div>
+                                <div class="chart-filter-item">
+                                    <label for="chartFilterName-{{ sheet_name }}">운전기사</label>
+                                    <select id="chartFilterName-{{ sheet_name }}" class="chart-filter-select" data-field="이름">
+                                        <option value="">전체</option>
+                                    </select>
+                                </div>
+                                <div class="chart-filter-item">
+                                    <label for="chartFilterWorkType-{{ sheet_name }}">근무유형</label>
+                                    <select id="chartFilterWorkType-{{ sheet_name }}" class="chart-filter-select" data-field="근무유형">
+                                        <option value="">전체</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <canvas id="incomeBarChart-{{ sheet_name }}" class="chart-income-bar"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-wrapper chart-wrapper-scatter">
+                            <div class="scatter-filter-bar" id="scatterFilterBar-{{ sheet_name }}">
+                                <div class="scatter-filter-group">
+                                    <div class="scatter-filter-group-title">차종</div>
+                                    <div class="scatter-filter-options" data-scatter-field="차종"></div>
+                                </div>
+                                <div class="scatter-filter-group">
+                                    <div class="scatter-filter-group-title">근무</div>
+                                    <div class="scatter-filter-options" data-scatter-field="근무유형"></div>
+                                </div>
+                                <div class="scatter-filter-actions">
+                                    <button type="button" class="scatter-filter-btn" data-action="all">전체 선택</button>
+                                    <button type="button" class="scatter-filter-btn" data-action="none">전체 해제</button>
+                                </div>
+                            </div>
+                            <canvas id="scatterChart-{{ sheet_name }}" class="chart-scatter"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-wrapper">
+                            <canvas id="incomePieChart-{{ sheet_name }}" class="chart-income-pie"></canvas>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="fuelPieChart-{{ sheet_name }}" class="chart-fuel-pie"></canvas>
+                        </div>
+                    </div>
+                    <table class="summary-table">
+                        <thead>
+                            <tr>
+                                <th>순위</th>
+                                <th>날짜</th>
+                                <th>차번</th>
+                                <th>운전기사</th>
+                                <th>차종</th>
+                                <th>실입금</th>
+                                <th>영업시간</th>
+                                <th>연료비</th>
+                            </tr>
+                        </thead>
+                        <tbody id="summaryTableBody-{{ sheet_name }}" class="summary-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        const chartInstances = {};
+        var summaryDebounceTimer = null;
+        var cachedFilterCtx = { sheet: null, tokensKey: '', tokens: [], 차종Idx: 2, 차종OrSet: {}, andTokens: [], 차종OrTokens: [] };
+        var tableRowCache = { sheet: null, rows: [], days: [], searchOk: [], byDay: [] };
+        var lastDateRange = { min: 1, max: 31 };
+        var SUMMARY_DEBOUNCE_MS = 120;
+
+        function invalidateTableRowCache() {
+            tableRowCache.sheet = null;
+            tableRowCache.rows = [];
+            tableRowCache.days = [];
+            tableRowCache.searchOk = [];
+            tableRowCache.byDay = [];
+        }
+
+        function ensureTableRowCache(sheet) {
+            if (tableRowCache.sheet === sheet && tableRowCache.rows.length) return;
+            var tbody = sheet.querySelector('.table tbody');
+            if (!tbody) return;
+            var nodeList = tbody.querySelectorAll('tr');
+            var n = nodeList.length;
+            var rows = new Array(n);
+            var days = new Array(n);
+            var searchOk = new Array(n);
+            var byDay = new Array(32);
+            for (var d = 1; d <= 31; d++) byDay[d] = [];
+            for (var i = 0; i < n; i++) {
+                var row = nodeList[i];
+                rows[i] = row;
+                var day = parseInt(row.getAttribute('data-day'), 10);
+                if (isNaN(day)) {
+                    var firstCell = row.cells[0];
+                    day = getDayFromDate(firstCell ? firstCell.textContent : '');
+                }
+                days[i] = day;
+                searchOk[i] = true;
+                if (day >= 1 && day <= 31) byDay[day].push(i);
+            }
+            tableRowCache.sheet = sheet;
+            tableRowCache.rows = rows;
+            tableRowCache.days = days;
+            tableRowCache.searchOk = searchOk;
+            tableRowCache.byDay = byDay;
+            lastDateRange = getDayRangeValues();
+        }
+
+        function updateDayRangeVisualsLight(range) {
+            var minPx = dayCenterPx(range.min);
+            var maxPx = dayCenterPx(range.max);
+            var fill = document.getElementById('dayRangeFill');
+            var minLabel = document.getElementById('dayRangeMinLabel');
+            var maxLabel = document.getElementById('dayRangeMaxLabel');
+            var minEl = document.getElementById('dayRangeMin');
+            var maxEl = document.getElementById('dayRangeMax');
+
+            if (fill) {
+                fill.style.left = minPx + 'px';
+                fill.style.width = Math.max(0, maxPx - minPx) + 'px';
+            }
+            if (minLabel) {
+                minLabel.textContent = range.min;
+                minLabel.style.left = minPx + 'px';
+            }
+            if (maxLabel) {
+                maxLabel.textContent = range.max;
+                maxLabel.style.left = maxPx + 'px';
+            }
+            var minNum = document.getElementById('dayRangeMinNum');
+            var maxNum = document.getElementById('dayRangeMaxNum');
+            if (minNum && document.activeElement !== minNum) minNum.value = range.min;
+            if (maxNum && document.activeElement !== maxNum) maxNum.value = range.max;
+            if (minEl && document.activeElement === minEl) {
+                minEl.style.zIndex = '6';
+                if (maxEl) maxEl.style.zIndex = '4';
+            } else if (maxEl && document.activeElement === maxEl) {
+                maxEl.style.zIndex = '6';
+                if (minEl) minEl.style.zIndex = '3';
+            }
+        }
+
+        function openTab(evt, tabName) {
+            var currentSheet = evt.currentTarget.closest('.tabs');
+            var tabcontent = currentSheet.getElementsByClassName('tab-content');
+            for (var i = 0; i < tabcontent.length; i++) tabcontent[i].classList.remove('active');
+            var tabbuttons = currentSheet.getElementsByClassName('tab-button');
+            for (var i = 0; i < tabbuttons.length; i++) tabbuttons[i].classList.remove('active');
+            document.getElementById(tabName).classList.add('active');
+            evt.currentTarget.classList.add('active');
+            if (tabName.includes('summary')) updateSummaryTab(currentSheet);
+        }
+
+        function openSheetTab(evt, sheetName) {
+            var editingMonth = getActiveSalesEditMonth();
+            if (editingMonth && editingMonth !== sheetName) {
+                alert('[' + editingMonth + '] 탭에서 수정 중입니다. 저장 또는 취소 후 월 탭을 변경해 주세요.');
+                return;
+            }
+            var sheets = document.getElementsByClassName('tabs');
+            for (var i = 0; i < sheets.length; i++) sheets[i].classList.add('hide');
+            var sheetButtons = document.getElementsByClassName('sheet-tab-button');
+            for (var i = 0; i < sheetButtons.length; i++) sheetButtons[i].classList.remove('active');
+            document.getElementById(sheetName).classList.remove('hide');
+            evt.currentTarget.classList.add('active');
+            localStorage.setItem('lastSelectedSalesSheet', sheetName);
+            cachedFilterCtx.sheet = null;
+            invalidateTableRowCache();
+            applySalesFilters(true);
+        }
+
+        function getDayFromDate(dateStr) {
+            var parts = (dateStr || '').split('-');
+            if (parts.length >= 3) return parseInt(parts[2], 10) || 0;
+            var m = (dateStr || '').match(/-(\d{2})$/);
+            return m ? parseInt(m[1], 10) : 0;
+        }
+
+        var DAY_MIN = 1;
+        var DAY_MAX = 31;
+        var THUMB_PX = 20;
+
+        function clampDay(value) {
+            var n = parseInt(value, 10);
+            if (isNaN(n)) return DAY_MIN;
+            return Math.max(DAY_MIN, Math.min(DAY_MAX, n));
+        }
+
+        function getSliderWidth() {
+            var slider = document.getElementById('dayRangeSlider');
+            return slider ? slider.clientWidth : 0;
+        }
+
+        /** range thumb 중심 = 눈금 중심 (브라우저 native range와 동일 공식) */
+        function dayCenterPx(day) {
+            var W = getSliderWidth();
+            if (W <= 0) return THUMB_PX / 2;
+            var ratio = (clampDay(day) - DAY_MIN) / (DAY_MAX - DAY_MIN);
+            return ratio * (W - THUMB_PX) + THUMB_PX / 2;
+        }
+
+        function getDayRangeValues() {
+            var minEl = document.getElementById('dayRangeMin');
+            var maxEl = document.getElementById('dayRangeMax');
+            if (!minEl || !maxEl) return { min: DAY_MIN, max: DAY_MAX };
+            var min = clampDay(minEl.value);
+            var max = clampDay(maxEl.value);
+            if (min > max) {
+                if (document.activeElement === minEl || document.activeElement === document.getElementById('dayRangeMinNum')) {
+                    max = min;
+                    maxEl.value = min;
+                } else {
+                    min = max;
+                    minEl.value = max;
+                }
+            }
+            return { min: min, max: max };
+        }
+
+        function syncDayRangeInputs(range) {
+            var minEl = document.getElementById('dayRangeMin');
+            var maxEl = document.getElementById('dayRangeMax');
+            var minNum = document.getElementById('dayRangeMinNum');
+            var maxNum = document.getElementById('dayRangeMaxNum');
+            if (minEl) minEl.value = range.min;
+            if (maxEl) maxEl.value = range.max;
+            if (minNum && document.activeElement !== minNum) minNum.value = range.min;
+            if (maxNum && document.activeElement !== maxNum) maxNum.value = range.max;
+        }
+
+        function updateSliderZIndex() {
+            var minEl = document.getElementById('dayRangeMin');
+            var maxEl = document.getElementById('dayRangeMax');
+            if (!minEl || !maxEl) return;
+            var min = clampDay(minEl.value);
+            var max = clampDay(maxEl.value);
+            if (document.activeElement === minEl) {
+                minEl.style.zIndex = '6';
+                maxEl.style.zIndex = '4';
+            } else if (document.activeElement === maxEl) {
+                maxEl.style.zIndex = '6';
+                minEl.style.zIndex = '3';
+            } else if (max - min <= 3) {
+                minEl.style.zIndex = '5';
+                maxEl.style.zIndex = '6';
+            } else {
+                minEl.style.zIndex = '3';
+                maxEl.style.zIndex = '4';
+            }
+        }
+
+        function renderDayTicks() {
+            var container = document.getElementById('dayRangeTicks');
+            if (!container) return;
+            container.innerHTML = '';
+            for (var d = DAY_MIN; d <= DAY_MAX; d++) {
+                var tick = document.createElement('div');
+                tick.className = 'day-tick';
+                tick.dataset.day = d;
+                if (d === DAY_MIN || d === DAY_MAX || d % 5 === 0) tick.classList.add('labeled');
+                tick.style.left = dayCenterPx(d) + 'px';
+                if (tick.classList.contains('labeled')) {
+                    tick.innerHTML = '<span class="day-tick-mark"></span><span class="day-tick-num">' + d + '</span>';
+                } else {
+                    tick.innerHTML = '<span class="day-tick-mark"></span>';
+                }
+                container.appendChild(tick);
+            }
+        }
+
+        function updateTickHighlights(range) {
+            document.querySelectorAll('.day-tick').forEach(function(tick) {
+                var d = parseInt(tick.dataset.day, 10);
+                tick.classList.toggle('in-range', d >= range.min && d <= range.max);
+            });
+        }
+
+        function updateDayRangeVisuals(range) {
+            if (!range) range = getDayRangeValues();
+            syncDayRangeInputs(range);
+            updateSliderZIndex();
+
+            var minPx = dayCenterPx(range.min);
+            var maxPx = dayCenterPx(range.max);
+            var fill = document.getElementById('dayRangeFill');
+            var minLabel = document.getElementById('dayRangeMinLabel');
+            var maxLabel = document.getElementById('dayRangeMaxLabel');
+
+            if (fill) {
+                fill.style.left = minPx + 'px';
+                fill.style.width = Math.max(0, maxPx - minPx) + 'px';
+            }
+            if (minLabel) {
+                minLabel.textContent = range.min;
+                minLabel.style.left = minPx + 'px';
+            }
+            if (maxLabel) {
+                maxLabel.textContent = range.max;
+                maxLabel.style.left = maxPx + 'px';
+            }
+            updateTickHighlights(range);
+            return range;
+        }
+
+        function updateDayRangeUI(repositionTicks) {
+            var range = updateDayRangeVisuals();
+            if (repositionTicks) {
+                document.querySelectorAll('.day-tick').forEach(function(tick) {
+                    var d = parseInt(tick.dataset.day, 10);
+                    tick.style.left = dayCenterPx(d) + 'px';
+                });
+            }
+            return range;
+        }
+
+        function buildFilterContext(activeSheet, searchTerm) {
+            var table = activeSheet.querySelector('.table tbody');
+            var tokensKey = searchTerm || '';
+            if (cachedFilterCtx.sheet === activeSheet && cachedFilterCtx.tokensKey === tokensKey) {
+                return cachedFilterCtx;
+            }
+            var tokens = tokensKey.split(',').map(function(s) { return s.trim().toLowerCase(); }).filter(function(s) { return s.length > 0; });
+            var rows = table ? table.querySelectorAll('tr') : [];
+            var 차종Idx = 2;
+            var 차종ValueSet = {};
+            rows.forEach(function(row) {
+                var cells = row.querySelectorAll('td');
+                if (cells.length > 차종Idx) {
+                    var cv = (cells[차종Idx].textContent || '').trim().toLowerCase();
+                    if (cv) 차종ValueSet[cv] = 1;
+                }
+            });
+            var 차종OrTokens = [], andTokens = [];
+            tokens.forEach(function(t) {
+                if (차종ValueSet.hasOwnProperty(t)) 차종OrTokens.push(t);
+                else andTokens.push(t);
+            });
+            var 차종OrSet = {};
+            차종OrTokens.forEach(function(t) { 차종OrSet[t] = 1; });
+            cachedFilterCtx = {
+                sheet: activeSheet,
+                tokensKey: tokensKey,
+                tokens: tokens,
+                차종Idx: 차종Idx,
+                차종OrSet: 차종OrSet,
+                andTokens: andTokens,
+                차종OrTokens: 차종OrTokens
+            };
+            return cachedFilterCtx;
+        }
+
+        function applyTableFilter(range, ctx) {
+            ensureTableRowCache(ctx.sheet);
+            var rows = tableRowCache.rows;
+            var days = tableRowCache.days;
+            var searchOk = tableRowCache.searchOk;
+            var min = range.min;
+            var max = range.max;
+            var hasTokens = ctx.tokens.length > 0;
+
+            for (var i = 0, n = rows.length; i < n; i++) {
+                var match = true;
+                if (hasTokens) {
+                    match = rowMatchesSearch(rows[i].cells, ctx.tokens, ctx.차종Idx, ctx.차종OrSet, ctx.andTokens, ctx.차종OrTokens);
+                }
+                searchOk[i] = match;
+                rows[i].style.display = (match && days[i] >= min && days[i] <= max) ? '' : 'none';
+            }
+            lastDateRange = { min: min, max: max };
+            updateSalesTableTotals(ctx.sheet);
+        }
+
+        function updateSalesTableTotals(sheet) {
+            if (!sheet) return;
+            var totalRow = sheet.querySelector('.sales-table-total-row');
+            var tbody = sheet.querySelector('.table tbody');
+            if (!totalRow || !tbody) return;
+
+            var rows = Array.from(tbody.querySelectorAll('tr')).filter(function(row) {
+                return row.style.display !== 'none';
+            });
+
+            var dates = {};
+            var cars = {};
+            var types = {};
+            var workTypes = {};
+            var emps = {};
+            var names = {};
+            var income = 0;
+            var tripCount = 0;
+            var workMinutes = 0;
+            var fuel = 0;
+            var charge = 0;
+            var distance = 0;
+
+            rows.forEach(function(row) {
+                var cells = row.cells;
+                if (!cells || cells.length < 13) return;
+                var editValues = readSalesRowFieldValues(row);
+                var dateVal = cells[0].textContent.trim();
+                var carVal = cells[1].textContent.trim();
+                var typeVal = cells[2].textContent.trim();
+                var workTypeVal = cells[3].textContent.trim();
+                var empVal = cells[4].textContent.trim();
+                var nameVal = cells[5].textContent.trim();
+                if (dateVal) dates[dateVal] = 1;
+                if (carVal) cars[carVal] = 1;
+                if (typeVal) types[typeVal] = 1;
+                if (workTypeVal) workTypes[workTypeVal] = 1;
+                if (empVal) emps[empVal] = 1;
+                if (nameVal) names[nameVal] = 1;
+                income += editValues.실입금;
+                tripCount += editValues.건수;
+                workMinutes += editValues.영업시간;
+                fuel += editValues.연료비;
+                charge += editValues.충전량;
+                distance += parseFloat(cells[11].textContent.replace(/,/g, '')) || 0;
+            });
+
+            var totalCells = totalRow.cells;
+            totalCells[0].textContent = Object.keys(dates).length.toLocaleString() + '일';
+            totalCells[1].textContent = Object.keys(cars).length.toLocaleString() + '대';
+            totalCells[2].textContent = Object.keys(types).length.toLocaleString() + '종';
+            totalCells[3].textContent = Object.keys(workTypes).length.toLocaleString() + '종';
+            totalCells[4].textContent = Object.keys(emps).length.toLocaleString() + '명';
+            totalCells[5].textContent = Object.keys(names).length.toLocaleString() + '명';
+            totalCells[6].textContent = income.toLocaleString() + ' 원';
+            totalCells[7].textContent = tripCount.toLocaleString() + ' 건';
+            totalCells[8].textContent = formatWorkMinutesTotalLabel(workMinutes);
+            totalCells[9].textContent = fuel.toLocaleString() + ' 원';
+            totalCells[10].textContent = charge.toFixed(2);
+            totalCells[11].textContent = distance.toFixed(2) + ' km';
+            totalCells[12].textContent = '';
+        }
+
+        function scheduleSummaryUpdate(immediate) {
+            clearTimeout(summaryDebounceTimer);
+            if (immediate) {
+                var sheet = document.querySelector('.tabs:not(.hide)');
+                refreshSummaryIfActive(sheet);
+                return;
+            }
+            summaryDebounceTimer = setTimeout(function() {
+                var sheet = document.querySelector('.tabs:not(.hide)');
+                refreshSummaryIfActive(sheet);
+            }, SUMMARY_DEBOUNCE_MS);
+        }
+
+        function rowMatchesSearch(cells, tokens, 차종Idx, 차종OrSet, andTokens, 차종OrTokens) {
+            if (!tokens.length) return true;
+            var 차종OrPass = !차종OrTokens.length;
+            if (차종OrTokens.length) {
+                var carCell = (cells[차종Idx].textContent || '').trim().toLowerCase();
+                차종OrPass = 차종OrSet.hasOwnProperty(carCell);
+            }
+            var skipCar = 차종OrTokens.length > 0;
+            for (var t = 0; t < andTokens.length; t++) {
+                if (!rowMatchesToken(cells, andTokens[t], skipCar)) return false;
+            }
+            return 차종OrPass;
+        }
+
+        function rowMatchesToken(cells, token, skipCar) {
+            var colIdx = [0, 1, 2, 3, 4, 5, 12];
+            var 차종Idx = 2;
+            for (var ci = 0; ci < colIdx.length; ci++) {
+                var idx = colIdx[ci];
+                if (idx === 차종Idx && skipCar) continue;
+                var text = (cells[idx].textContent || '').trim().toLowerCase();
+                if (idx === 차종Idx && !skipCar && text === token) return true;
+                if (idx !== 차종Idx && text.indexOf(token) !== -1) return true;
+            }
+            return false;
+        }
+
+        function refreshSummaryIfActive(sheet) {
+            if (!sheet) return;
+            var summaryTab = sheet.querySelector('.tab-content[id^="summary-"]');
+            if (summaryTab && summaryTab.classList.contains('active')) {
+                updateSummaryTab(sheet);
+            }
+        }
+
+        function applySalesFilters(refreshChartsImmediate) {
+            var activeSheet = document.querySelector('.tabs:not(.hide)');
+            if (!activeSheet) return;
+            var table = activeSheet.querySelector('.table tbody');
+            if (!table) return;
+
+            var range = updateDayRangeVisuals();
+            var searchInput = activeSheet.querySelector('.salesFilterInput');
+            var searchTerm = searchInput ? searchInput.value : '';
+            var ctx = buildFilterContext(activeSheet, searchTerm);
+            applyTableFilter(range, ctx);
+            scheduleSummaryUpdate(refreshChartsImmediate === true);
+        }
+
+        function filterSalesTable() {
+            cachedFilterCtx.sheet = null;
+            invalidateTableRowCache();
+            applySalesFilters(true);
+        }
+
+        function updateSliderDuringDrag() {
+            var range = getDayRangeValues();
+            updateDayRangeVisualsLight(range);
+            updateTickHighlights(range);
+        }
+
+        function commitSliderRange() {
+            clearTimeout(summaryDebounceTimer);
+            applySalesFilters(true);
+        }
+
+        function parseWorkMinutesFromCell(text) {
+            text = String(text || '').trim();
+            var formatted = text.match(/^(\d+)\s*분/);
+            if (formatted) return parseInt(formatted[1], 10);
+            var hoursMins = text.match(/^(\d+)\s*시간\s*(\d+)\s*분$/);
+            if (hoursMins) {
+                return parseInt(hoursMins[1], 10) * 60 + parseInt(hoursMins[2], 10);
+            }
+            var plain = text.replace(/,/g, '').match(/^(\d+)$/);
+            if (plain) return parseInt(plain[1], 10);
+            return 0;
+        }
+
+        function salesEditValuesEqual(fieldKey, before, after) {
+            if (fieldKey === '충전량') {
+                return Math.abs(Number(before) - Number(after)) < 0.001;
+            }
+            return Number(before) === Number(after);
+        }
+
+        function formatWorkMinutesLabel(minutes) {
+            minutes = Math.max(0, parseInt(minutes, 10) || 0);
+            var hours = Math.floor(minutes / 60);
+            var mins = minutes % 60;
+            return minutes + '분 (' + hours + '시간' + String(mins).padStart(2, '0') + '분)';
+        }
+
+        function formatWorkMinutesTotalLabel(minutes) {
+            minutes = Math.max(0, parseInt(minutes, 10) || 0);
+            var hours = Math.floor(minutes / 60);
+            var mins = minutes % 60;
+            return hours + '시간 ' + String(mins).padStart(2, '0') + '분';
+        }
+
+        var SALES_EDIT_FIELDS = [
+            { key: '실입금', idx: 6, parse: function(text) { return parseInt(String(text).replace(/,/g, ''), 10) || 0; }, format: function(v) { return Number(v).toLocaleString(); } },
+            { key: '건수', idx: 7, parse: function(text) { return parseInt(String(text).replace(/,/g, ''), 10) || 0; }, format: function(v) { return Number(v).toLocaleString(); } },
+            { key: '영업시간', idx: 8, parse: parseWorkMinutesFromCell, format: formatWorkMinutesLabel },
+            { key: '연료비', idx: 9, parse: function(text) { return parseInt(String(text).replace(/,/g, ''), 10) || 0; }, format: function(v) { return Number(v).toLocaleString(); } },
+            { key: '충전량', idx: 10, parse: function(text) { return parseFloat(String(text).replace(/,/g, '')) || 0; }, format: function(v) { var n = parseFloat(v); return isNaN(n) ? '0' : String(Math.round(n * 100) / 100); } }
+        ];
+        var salesEditState = {};
+
+        function getSalesTableByMonth(month) {
+            return document.getElementById('salesTable_' + month);
+        }
+
+        function getSalesEditToolbar(month) {
+            return document.querySelector('.sales-table-toolbar[data-month="' + month + '"]');
+        }
+
+        function setSalesEditStatus(month, message, type) {
+            var el = document.getElementById('salesEditStatus_' + month);
+            if (!el) return;
+            el.textContent = message || '';
+            el.classList.remove('error', 'success');
+            if (type) el.classList.add(type);
+        }
+
+        function isAnySalesSheetEditing(excludeMonth) {
+            return Object.keys(salesEditState).some(function(month) {
+                return month !== excludeMonth && salesEditState[month] && salesEditState[month].editing;
+            });
+        }
+
+        function getActiveSalesEditMonth() {
+            var keys = Object.keys(salesEditState);
+            for (var i = 0; i < keys.length; i++) {
+                if (salesEditState[keys[i]] && salesEditState[keys[i]].editing) return keys[i];
+            }
+            return null;
+        }
+
+        function readSalesRowFieldValues(row) {
+            var cells = row.cells;
+            var values = {};
+            SALES_EDIT_FIELDS.forEach(function(field) {
+                var cell = cells[field.idx];
+                if (!cell) return;
+                var input = cell.querySelector('.sales-cell-input');
+                values[field.key] = field.parse(input ? input.value : cell.textContent);
+            });
+            return values;
+        }
+
+        function renderSalesEditableCell(row, field, rawValue) {
+            var cell = row.cells[field.idx];
+            if (!cell) return;
+            cell.innerHTML = '<input type="text" class="sales-cell-input" data-field="' + field.key + '" value="' + String(rawValue).replace(/"/g, '&quot;') + '">';
+        }
+
+        function renderSalesDisplayCell(row, field, rawValue) {
+            var cell = row.cells[field.idx];
+            if (!cell) return;
+            cell.textContent = field.format(rawValue);
+        }
+
+        function buildSalesRowSnapshot(table) {
+            var snapshot = {};
+            table.querySelectorAll('tbody tr').forEach(function(row) {
+                var date = row.getAttribute('data-date') || '';
+                var car = row.getAttribute('data-car') || '';
+                if (!date || !car) return;
+                snapshot[date + '|' + car] = readSalesRowFieldValues(row);
+            });
+            return snapshot;
+        }
+
+        function setSalesEditButtons(month, editing) {
+            var toolbar = getSalesEditToolbar(month);
+            if (!toolbar) return;
+            var editBtn = toolbar.querySelector('[data-action="edit"]');
+            var saveBtn = toolbar.querySelector('[data-action="save"]');
+            var cancelBtn = toolbar.querySelector('[data-action="cancel"]');
+            if (editBtn) editBtn.disabled = !!editing;
+            if (saveBtn) saveBtn.disabled = !editing;
+            if (cancelBtn) cancelBtn.disabled = !editing;
+        }
+
+        function enterSalesEditMode(month) {
+            if (getActiveSalesEditMonth() && getActiveSalesEditMonth() !== month) {
+                alert('다른 월 탭에서 수정 중입니다. 저장 또는 취소 후 다시 시도해 주세요.');
+                return;
+            }
+            var table = getSalesTableByMonth(month);
+            if (!table) return;
+
+            var snapshot = buildSalesRowSnapshot(table);
+            salesEditState[month] = { editing: true, snapshot: snapshot };
+            table.classList.add('sales-table-editing');
+
+            table.querySelectorAll('tbody tr').forEach(function(row) {
+                row.classList.add('sales-row-editing');
+                SALES_EDIT_FIELDS.forEach(function(field) {
+                    var values = readSalesRowFieldValues(row);
+                    renderSalesEditableCell(row, field, values[field.key]);
+                });
+            });
+
+            setSalesEditButtons(month, true);
+            setSalesEditStatus(month, '수정 모드 · 실입금 / 건수 / 영업시간 / 연료비 / 충전량을 편집할 수 있습니다.');
+        }
+
+        function exitSalesEditMode(month, restore) {
+            var table = getSalesTableByMonth(month);
+            if (!table) return;
+
+            var state = salesEditState[month];
+            table.classList.remove('sales-table-editing');
+            table.querySelectorAll('tbody tr').forEach(function(row) {
+                row.classList.remove('sales-row-editing');
+                var date = row.getAttribute('data-date') || '';
+                var car = row.getAttribute('data-car') || '';
+                var key = date + '|' + car;
+                var values = restore && state && state.snapshot ? state.snapshot[key] : readSalesRowFieldValues(row);
+                SALES_EDIT_FIELDS.forEach(function(field) {
+                    renderSalesDisplayCell(row, field, values[field.key]);
+                });
+            });
+
+            delete salesEditState[month];
+            setSalesEditButtons(month, false);
+            invalidateTableRowCache();
+            updateSalesTableTotals(table.closest('.tabs'));
+            scheduleSummaryUpdate(true);
+        }
+
+        function collectSalesUpdates(month) {
+            var table = getSalesTableByMonth(month);
+            var state = salesEditState[month];
+            if (!table || !state || !state.snapshot) return [];
+
+            var updates = [];
+            table.querySelectorAll('tbody tr').forEach(function(row) {
+                var date = row.getAttribute('data-date') || '';
+                var car = row.getAttribute('data-car') || '';
+                if (!date || !car) return;
+
+                var key = date + '|' + car;
+                var before = state.snapshot[key];
+                var after = readSalesRowFieldValues(row);
+                if (!before) return;
+
+                var changedFields = SALES_EDIT_FIELDS.filter(function(field) {
+                    return !salesEditValuesEqual(field.key, before[field.key], after[field.key]);
+                });
+                if (!changedFields.length) return;
+
+                var update = {
+                    month: month,
+                    날짜: date,
+                    차번: car
+                };
+                changedFields.forEach(function(field) {
+                    update[field.key] = String(after[field.key]);
+                });
+                updates.push(update);
+            });
+            return updates;
+        }
+
+        function saveSalesEditMode(month) {
+            var updates = collectSalesUpdates(month);
+            if (!updates.length) {
+                setSalesEditStatus(month, '변경된 항목이 없습니다.', 'error');
+                exitSalesEditMode(month, false);
+                return;
+            }
+
+            var toolbar = getSalesEditToolbar(month);
+            var saveBtn = toolbar ? toolbar.querySelector('[data-action="save"]') : null;
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.textContent = '저장 중...';
+            }
+            setSalesEditStatus(month, updates.length + '건 저장 중...');
+
+            fetch('/sales/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ updates: updates })
+            })
+                .then(function(response) {
+                    return response.json().then(function(data) {
+                        return { ok: response.ok, data: data };
+                    });
+                })
+                .then(function(result) {
+                    if (!result.ok || !result.data.success) {
+                        throw new Error((result.data && result.data.error) || '저장에 실패했습니다.');
+                    }
+                    exitSalesEditMode(month, false);
+                    setSalesEditStatus(month, result.data.updated + '건 저장되었습니다.', 'success');
+                })
+                .catch(function(err) {
+                    setSalesEditStatus(month, err.message || '저장에 실패했습니다.', 'error');
+                })
+                .finally(function() {
+                    if (saveBtn) {
+                        saveBtn.disabled = false;
+                        saveBtn.textContent = '저장';
+                    }
+                });
+        }
+
+        function cancelSalesEditMode(month) {
+            exitSalesEditMode(month, true);
+            setSalesEditStatus(month, '수정을 취소했습니다.');
+        }
+
+        function initSalesEditControls() {
+            document.querySelectorAll('.sales-table-toolbar').forEach(function(toolbar) {
+                var month = toolbar.getAttribute('data-month');
+                toolbar.querySelectorAll('.sales-edit-btn').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        var action = btn.getAttribute('data-action');
+                        if (action === 'edit') enterSalesEditMode(month);
+                        else if (action === 'save') saveSalesEditMode(month);
+                        else if (action === 'cancel') cancelSalesEditMode(month);
+                    });
+                });
+            });
+        }
+
+        function getSalesRowData(table) {
+            return Array.from(table.querySelectorAll('tbody tr')).filter(function(row) {
+                return row.style.display !== 'none';
+            }).map(function(row) {
+                var cells = row.querySelectorAll('td');
+                var editValues = readSalesRowFieldValues(row);
+                return {
+                    날짜: cells[0].textContent.trim(),
+                    차번: cells[1].textContent.trim(),
+                    차종: cells[2].textContent.trim(),
+                    근무유형: cells[3].textContent.trim(),
+                    사번: cells[4].textContent.trim(),
+                    이름: cells[5].textContent.trim(),
+                    실입금: editValues.실입금,
+                    건수: editValues.건수,
+                    영업시간: editValues.영업시간,
+                    연료비: editValues.연료비,
+                    충전량: editValues.충전량,
+                    운행거리: parseFloat(cells[11].textContent.replace(/,/g, '')) || 0,
+                    매칭: cells[12].textContent.trim()
+                };
+            });
+        }
+
+        var CHART_FILTER_FIELDS = ['차번', '사번', '이름', '차종', '근무유형'];
+
+        function chartFilterDisplayValue(value, field) {
+            var text = (value || '').trim();
+            if (!text) return '-';
+            if (field === '사번') {
+                text = text.replace(/\.0+$/, '');
+            }
+            return text;
+        }
+
+        function populateChartDropdowns(currentSheet, sourceData) {
+            var bar = currentSheet.querySelector('.chart-filter-bar');
+            if (!bar) return;
+            CHART_FILTER_FIELDS.forEach(function(field) {
+                var select = bar.querySelector('.chart-filter-select[data-field="' + field + '"]');
+                if (!select) return;
+                var current = select.value;
+                var valueSet = {};
+                sourceData.forEach(function(row) {
+                    valueSet[chartFilterDisplayValue(row[field], field)] = 1;
+                });
+                var values = Object.keys(valueSet).sort(function(a, b) {
+                    return a.localeCompare(b, 'ko');
+                });
+                select.innerHTML = '<option value="">전체</option>';
+                values.forEach(function(v) {
+                    var opt = document.createElement('option');
+                    opt.value = v;
+                    opt.textContent = v;
+                    select.appendChild(opt);
+                });
+                select.value = (current && valueSet[current]) ? current : '';
+            });
+        }
+
+        function getChartDropdownFilters(currentSheet) {
+            var filters = {};
+            var bar = currentSheet.querySelector('.chart-filter-bar');
+            if (!bar) return filters;
+            CHART_FILTER_FIELDS.forEach(function(field) {
+                var select = bar.querySelector('.chart-filter-select[data-field="' + field + '"]');
+                filters[field] = select ? select.value : '';
+            });
+            return filters;
+        }
+
+        function applyChartDropdownFilters(sourceData, filters) {
+            return sourceData.filter(function(row) {
+                for (var i = 0; i < CHART_FILTER_FIELDS.length; i++) {
+                    var field = CHART_FILTER_FIELDS[i];
+                    var selected = filters[field];
+                    if (selected && chartFilterDisplayValue(row[field], field) !== selected) return false;
+                }
+                return true;
+            });
+        }
+
+        function onChartFilterChange(currentSheet) {
+            var table = currentSheet.querySelector('.table tbody');
+            if (!table) return;
+            var baseData = getSalesRowData(table);
+            renderIncomeBarChart(currentSheet, applyChartDropdownFilters(baseData, getChartDropdownFilters(currentSheet)));
+        }
+
+        var SCATTER_COMBO_COLORS = [
+            'rgba(54,162,235,0.85)', 'rgba(255,99,132,0.85)', 'rgba(255,206,86,0.85)',
+            'rgba(75,192,192,0.85)', 'rgba(153,102,255,0.85)', 'rgba(255,159,64,0.85)',
+            'rgba(46,125,50,0.85)', 'rgba(126,87,194,0.85)', 'rgba(0,131,143,0.85)',
+            'rgba(198,40,40,0.85)', 'rgba(21,101,192,0.85)', 'rgba(109,76,65,0.85)'
+        ];
+
+        function scatterDisplayValue(field, value) {
+            var text = (value || '').trim();
+            if (field === '차종') return text || '기타';
+            if (field === '근무유형') return text || '-';
+            return text || '-';
+        }
+
+        function getScatterCheckboxSelection(container) {
+            var selected = {};
+            var hasAny = false;
+            if (!container) return { selected: selected, hasAny: false };
+            container.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+                if (cb.checked) {
+                    selected[cb.value] = true;
+                    hasAny = true;
+                }
+            });
+            return { selected: selected, hasAny: hasAny };
+        }
+
+        function scatterRowMatches(row, carSel, workSel) {
+            var car = scatterDisplayValue('차종', row.차종);
+            var work = scatterDisplayValue('근무유형', row.근무유형);
+            if (!carSel.selected[car] || !workSel.selected[work]) return false;
+            return true;
+        }
+
+        function populateScatterFilterCheckboxes(currentSheet, salesData) {
+            var bar = currentSheet.querySelector('.scatter-filter-bar');
+            if (!bar) return;
+
+            ['차종', '근무유형'].forEach(function(field) {
+                var container = bar.querySelector('.scatter-filter-options[data-scatter-field="' + field + '"]');
+                if (!container) return;
+
+                var prevChecked = {};
+                container.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+                    prevChecked[cb.value] = cb.checked;
+                });
+
+                var valueSet = {};
+                salesData.forEach(function(row) {
+                    valueSet[scatterDisplayValue(field, row[field])] = 1;
+                });
+                var values = Object.keys(valueSet).sort(function(a, b) {
+                    return a.localeCompare(b, 'ko');
+                });
+
+                container.innerHTML = '';
+                values.forEach(function(val) {
+                    var label = document.createElement('label');
+                    label.className = 'scatter-filter-check';
+                    var input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.value = val;
+                    input.checked = Object.prototype.hasOwnProperty.call(prevChecked, val)
+                        ? prevChecked[val]
+                        : true;
+                    var span = document.createElement('span');
+                    span.textContent = val;
+                    label.appendChild(input);
+                    label.appendChild(span);
+                    container.appendChild(label);
+                });
+            });
+        }
+
+        function buildScatterDatasets(salesData, currentSheet) {
+            var bar = currentSheet.querySelector('.scatter-filter-bar');
+            var carSel = getScatterCheckboxSelection(
+                bar ? bar.querySelector('.scatter-filter-options[data-scatter-field="차종"]') : null
+            );
+            var workSel = getScatterCheckboxSelection(
+                bar ? bar.querySelector('.scatter-filter-options[data-scatter-field="근무유형"]') : null
+            );
+            if (!carSel.hasAny || !workSel.hasAny) return [];
+
+            var groups = {};
+            salesData.forEach(function(d) {
+                if (!scatterRowMatches(d, carSel, workSel)) return;
+                var car = scatterDisplayValue('차종', d.차종);
+                var work = scatterDisplayValue('근무유형', d.근무유형);
+                var key = car + '\0' + work;
+                if (!groups[key]) groups[key] = { car: car, work: work, points: [] };
+                groups[key].points.push({
+                    x: d.실입금,
+                    y: d.연료비,
+                    label: (d.이름 || d.차번) + ' · ' + car + ' · ' + work
+                });
+            });
+
+            return Object.keys(groups).sort(function(a, b) {
+                return a.localeCompare(b, 'ko');
+            }).map(function(key, idx) {
+                var group = groups[key];
+                return {
+                    label: group.car + ' · ' + group.work,
+                    data: group.points,
+                    backgroundColor: SCATTER_COMBO_COLORS[idx % SCATTER_COMBO_COLORS.length],
+                    pointRadius: 5
+                };
+            });
+        }
+
+        function renderScatterChart(currentSheet, salesData) {
+            var sheetId = currentSheet.id;
+            var scatterDatasets = buildScatterDatasets(salesData, currentSheet);
+            var scatterKey = sheetId + '-scatter';
+            var scatterChart = chartInstances[scatterKey];
+            if (scatterChart) {
+                scatterChart.data.datasets = scatterDatasets;
+                scatterChart.update('none');
+            } else {
+                var scatterCtx = currentSheet.querySelector('.chart-scatter');
+                if (!scatterCtx) return;
+                chartInstances[scatterKey] = new Chart(scatterCtx.getContext('2d'), {
+                    type: 'scatter',
+                    data: { datasets: scatterDatasets },
+                    options: {
+                        animation: false,
+                        plugins: {
+                            title: { display: true, text: '실입금 vs 연료비 (차종 · 근무별)' },
+                            legend: { display: true, position: 'bottom' },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(ctx) {
+                                        var p = ctx.raw;
+                                        return (p.label || '') + ' · 실입금: ' + p.x.toLocaleString() + '원 · 연료비: ' + p.y.toLocaleString() + '원';
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { title: { display: true, text: '실입금(원)' } },
+                            y: { title: { display: true, text: '연료비(원)' } }
+                        }
+                    }
+                });
+            }
+        }
+
+        function onScatterFilterChange(currentSheet) {
+            var table = currentSheet.querySelector('.table tbody');
+            if (!table) return;
+            renderScatterChart(currentSheet, getSalesRowData(table));
+        }
+
+        function renderIncomeBarChart(currentSheet, barChartData) {
+            var sheetId = currentSheet.id;
+            var labels = barChartData.map(function(d) {
+                return (d.이름 || d.차번) + '\n' + d.날짜.slice(5);
+            });
+            var incomes = barChartData.map(function(d) { return d.실입금; });
+            var workMinutes = barChartData.map(function(d) { return d.영업시간; });
+            var avgIncome = incomes.length ? incomes.reduce(function(a, b) { return a + b; }, 0) / incomes.length : 0;
+            var avgLine = labels.map(function() { return avgIncome; });
+
+            var barKey = sheetId + '-bar';
+            var barChart = chartInstances[barKey];
+            if (barChart) {
+                barChart.data.labels = labels;
+                barChart.data.datasets[0].data = incomes;
+                barChart.data.datasets[1].data = workMinutes;
+                barChart.data.datasets[2].data = avgLine;
+                barChart.update('none');
+            } else {
+                var barCtx = currentSheet.querySelector('.chart-income-bar').getContext('2d');
+                chartInstances[barKey] = new Chart(barCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: '실입금',
+                                data: incomes,
+                                backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                                borderColor: 'rgba(54, 162, 235, 1)',
+                                borderWidth: 1,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: '영업시간',
+                                data: workMinutes,
+                                borderColor: 'rgba(255, 99, 132, 1)',
+                                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                                borderWidth: 2,
+                                fill: false,
+                                yAxisID: 'y1',
+                                type: 'line',
+                                pointRadius: 2,
+                                tension: 0.1
+                            },
+                            {
+                                label: '실입금 평균',
+                                data: avgLine,
+                                borderColor: '#28a745',
+                                borderWidth: 1,
+                                borderDash: [5, 5],
+                                fill: false,
+                                pointRadius: 0,
+                                yAxisID: 'y',
+                                type: 'line'
+                            }
+                        ]
+                    },
+                    options: {
+                        animation: false,
+                        plugins: {
+                            title: { display: true, text: '실입금 · 영업시간 (차량/기사별)' }
+                        },
+                        scales: {
+                            y: { beginAtZero: true, position: 'left', title: { display: true, text: '실입금(원)' } },
+                            y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '영업시간(분)' } }
+                        }
+                    }
+                });
+            }
+        }
+
+        function destroyChart(key) {
+            if (chartInstances[key]) {
+                chartInstances[key].destroy();
+                chartInstances[key] = null;
+            }
+        }
+
+        function updateSummaryTab(currentSheet) {
+            var table = currentSheet.querySelector('.table tbody');
+            if (!table) return;
+            var salesData = getSalesRowData(table);
+            populateChartDropdowns(currentSheet, salesData);
+            renderIncomeBarChart(currentSheet, applyChartDropdownFilters(salesData, getChartDropdownFilters(currentSheet)));
+            populateScatterFilterCheckboxes(currentSheet, salesData);
+            renderScatterChart(currentSheet, salesData);
+            var sheetId = currentSheet.id;
+
+            function pieByType(field) {
+                var map = {};
+                salesData.forEach(function(d) {
+                    var type = (d.차종 || '기타').toString();
+                    if (!map[type]) map[type] = { sum: 0, count: 0 };
+                    map[type].sum += Number(d[field]) || 0;
+                    map[type].count += 1;
+                });
+                return {
+                    labels: Object.keys(map),
+                    data: Object.keys(map).map(function(t) {
+                        var info = map[t];
+                        return info.count ? Math.round(info.sum / info.count) : 0;
+                    })
+                };
+            }
+
+            var incomePie = pieByType('실입금');
+            var incomePieKey = sheetId + '-income-pie';
+            var incomePieChart = chartInstances[incomePieKey];
+            if (incomePieChart) {
+                incomePieChart.data.labels = incomePie.labels;
+                incomePieChart.data.datasets[0].data = incomePie.data;
+                incomePieChart.update('none');
+            } else {
+                chartInstances[incomePieKey] = new Chart(currentSheet.querySelector('.chart-income-pie').getContext('2d'), {
+                    type: 'pie',
+                    data: {
+                        labels: incomePie.labels,
+                        datasets: [{ data: incomePie.data, backgroundColor: ['#ffe082','#ffcc80','#ffab91','#ffd54f','#ffb74d','#ff8a65'] }]
+                    },
+                    options: { animation: false, plugins: { title: { display: true, text: '실입금 분포 (차종별 평균)' } } }
+                });
+            }
+
+            var fuelPie = pieByType('연료비');
+            var fuelPieKey = sheetId + '-fuel-pie';
+            var fuelPieChart = chartInstances[fuelPieKey];
+            if (fuelPieChart) {
+                fuelPieChart.data.labels = fuelPie.labels;
+                fuelPieChart.data.datasets[0].data = fuelPie.data;
+                fuelPieChart.update('none');
+            } else {
+                chartInstances[fuelPieKey] = new Chart(currentSheet.querySelector('.chart-fuel-pie').getContext('2d'), {
+                    type: 'pie',
+                    data: {
+                        labels: fuelPie.labels,
+                        datasets: [{ data: fuelPie.data, backgroundColor: ['#b39ddb','#80deea','#90caf9','#ce93d8','#4fc3f7','#4dd0e1'] }]
+                    },
+                    options: { animation: false, plugins: { title: { display: true, text: '연료비 분포 (차종별 평균)' } } }
+                });
+            }
+
+            var sorted = salesData.slice().sort(function(a, b) { return b.실입금 - a.실입금; });
+            var tableBody = currentSheet.querySelector('.summary-table-body');
+            var frag = document.createDocumentFragment();
+            sorted.forEach(function(row, index) {
+                var tr = document.createElement('tr');
+                var rankBadge = index < 3 ? '<span class="rank-badge rank-' + (index + 1) + '">' + (index + 1) + '위</span>' : (index + 1) + '위';
+                tr.innerHTML = '<td>' + rankBadge + '</td><td>' + row.날짜 + '</td><td>' + row.차번 + '</td><td>' + (row.이름 || '-') + '</td><td>' + (row.차종 || '-') + '</td><td>' + row.실입금.toLocaleString() + '원</td><td>' + formatWorkMinutesLabel(row.영업시간) + '</td><td>' + row.연료비.toLocaleString() + '원</td>';
+                frag.appendChild(tr);
+            });
+            tableBody.innerHTML = '';
+            tableBody.appendChild(frag);
+        }
+
+        function sortTable(tableId, columnIndex, direction) {
+            var table = document.getElementById(tableId);
+            var tbody = table.getElementsByTagName('tbody')[0];
+            var rows = Array.from(tbody.getElementsByTagName('tr'));
+            var headers = table.getElementsByTagName('th');
+            for (var i = 0; i < headers.length; i++) {
+                headers[i].querySelectorAll('.sort-btn').forEach(function(btn) { btn.classList.remove('active'); });
+            }
+            var sortBtn = headers[columnIndex].querySelector(direction === 'asc' ? '.sort-btn:first-child' : '.sort-btn:last-child');
+            if (sortBtn) sortBtn.classList.add('active');
+            rows.sort(function(a, b) {
+                var aValue = a.cells[columnIndex].textContent.replace(/,/g, '').trim();
+                var bValue = b.cells[columnIndex].textContent.replace(/,/g, '').trim();
+                if (!isNaN(aValue) && !isNaN(bValue) && aValue !== '' && bValue !== '') {
+                    aValue = parseFloat(aValue); bValue = parseFloat(bValue);
+                }
+                return direction === 'asc' ? (aValue > bValue ? 1 : -1) : (aValue < bValue ? 1 : -1);
+            });
+            rows.forEach(function(row) { tbody.appendChild(row); });
+            invalidateTableRowCache();
+            var activeSheet = document.querySelector('.tabs:not(.hide)');
+            refreshSummaryIfActive(activeSheet);
+        }
+
+        function initDayRangeSlider() {
+            var minEl = document.getElementById('dayRangeMin');
+            var maxEl = document.getElementById('dayRangeMax');
+            var minNum = document.getElementById('dayRangeMinNum');
+            var maxNum = document.getElementById('dayRangeMaxNum');
+            if (!minEl || !maxEl) return;
+
+            renderDayTicks();
+            requestAnimationFrame(function() {
+                updateDayRangeUI(true);
+                requestAnimationFrame(function() { updateDayRangeUI(true); });
+            });
+
+            function onSliderInput() {
+                updateSliderDuringDrag();
+            }
+            function onSliderRelease() {
+                commitSliderRange();
+            }
+
+            minEl.addEventListener('input', onSliderInput);
+            maxEl.addEventListener('input', onSliderInput);
+            minEl.addEventListener('change', onSliderRelease);
+            maxEl.addEventListener('change', onSliderRelease);
+            minEl.addEventListener('mousedown', function() { minEl.style.zIndex = '6'; });
+            maxEl.addEventListener('mousedown', function() { maxEl.style.zIndex = '6'; });
+
+            function onNumChange(isMin, commit) {
+                var src = isMin ? minNum : maxNum;
+                var otherNum = isMin ? maxNum : minNum;
+                var otherEl = isMin ? maxEl : minEl;
+                var selfEl = isMin ? minEl : maxEl;
+                if (!src) return;
+                var v = clampDay(src.value);
+                src.value = v;
+                selfEl.value = v;
+                if (isMin && v > clampDay(otherNum.value)) {
+                    otherNum.value = v;
+                    otherEl.value = v;
+                } else if (!isMin && v < clampDay(otherNum.value)) {
+                    otherNum.value = v;
+                    otherEl.value = v;
+                }
+                if (commit) commitSliderRange();
+                else updateSliderDuringDrag();
+            }
+
+            if (minNum) {
+                minNum.addEventListener('change', function() { onNumChange(true, true); });
+                minNum.addEventListener('input', function() { onNumChange(true, false); });
+            }
+            if (maxNum) {
+                maxNum.addEventListener('change', function() { onNumChange(false, true); });
+                maxNum.addEventListener('input', function() { onNumChange(false, false); });
+            }
+
+            var resizeTimer;
+            window.addEventListener('resize', function() {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(function() {
+                    renderDayTicks();
+                    updateDayRangeUI(true);
+                }, 100);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var lastSheet = localStorage.getItem('lastSelectedSalesSheet');
+            if (lastSheet && document.getElementById(lastSheet)) {
+                document.querySelectorAll('.tabs').forEach(function(el) { el.classList.add('hide'); });
+                document.querySelectorAll('.sheet-tab-button').forEach(function(el) { el.classList.remove('active'); });
+                document.getElementById(lastSheet).classList.remove('hide');
+                var btn = document.querySelector('.sheet-tab-button[onclick*="' + lastSheet + '"]');
+                if (btn) btn.classList.add('active');
+            }
+            document.querySelectorAll('.salesFilterInput').forEach(function(input) {
+                input.addEventListener('input', function() {
+                    cachedFilterCtx.sheet = null;
+                    applySalesFilters(false);
+                });
+            });
+            document.querySelectorAll('.chart-filter-select').forEach(function(select) {
+                select.addEventListener('change', function() {
+                    var sheet = select.closest('.tabs');
+                    if (sheet) onChartFilterChange(sheet);
+                });
+            });
+            document.querySelectorAll('.scatter-filter-bar').forEach(function(bar) {
+                bar.addEventListener('change', function(e) {
+                    if (e.target.matches('input[type="checkbox"]')) {
+                        var sheet = bar.closest('.tabs');
+                        if (sheet) onScatterFilterChange(sheet);
+                    }
+                });
+                bar.querySelectorAll('.scatter-filter-btn').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        var action = btn.getAttribute('data-action');
+                        bar.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+                            cb.checked = action === 'all';
+                        });
+                        var sheet = bar.closest('.tabs');
+                        if (sheet) onScatterFilterChange(sheet);
+                    });
+                });
+            });
+            initDayRangeSlider();
+            initSalesEditControls();
+            applySalesFilters(true);
+            var firstSheet = document.querySelector('.tabs:not(.hide)') || document.querySelector('.tabs');
+            if (firstSheet) {
+                var summaryTab = firstSheet.querySelector('.tab-content[id^="summary-"]');
+                if (summaryTab && summaryTab.classList.contains('active')) {
+                    updateSummaryTab(firstSheet);
+                }
+            }
+        });
+
+        document.getElementById('uploadForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            var uploadButton = document.getElementById('uploadButton');
+            var originalText = uploadButton.textContent;
+            var fileInput = document.getElementById('dat_files');
+            var fuelPrice = document.getElementById('fuel_price').value;
+            var files = Array.from(fileInput.files || []).filter(function(f) {
+                return /\.dat$/i.test(f.name);
+            });
+
+            if (!files.length) {
+                alert('.dat 파일을 선택해 주세요.');
+                return;
+            }
+
+            uploadButton.disabled = true;
+            var total = files.length;
+            var completed = 0;
+
+            function setUploadProgress() {
+                uploadButton.textContent = '업로드 중... ' + completed + ' / ' + total;
+            }
+
+            var formData = new FormData();
+            files.forEach(function(file) {
+                formData.append('dat_files', file);
+            });
+            formData.append('fuel_price', fuelPrice);
+
+            setUploadProgress();
+
+            fetch('/sales/upload/batch', { method: 'POST', body: formData })
+                .then(function(response) {
+                    if (!response.ok) {
+                        return response.json().then(function(data) {
+                            throw new Error((data && data.error) || '업로드에 실패했습니다.');
+                        }).catch(function() {
+                            throw new Error('업로드에 실패했습니다.');
+                        });
+                    }
+                    if (!response.body || !response.body.getReader) {
+                        throw new Error('브라우저가 업로드 진행률 스트림을 지원하지 않습니다.');
+                    }
+
+                    var reader = response.body.getReader();
+                    var decoder = new TextDecoder();
+                    var buffer = '';
+
+                    function handleLine(line) {
+                        if (!line) return;
+                        var data;
+                        try {
+                            data = JSON.parse(line);
+                        } catch (err) {
+                            return;
+                        }
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+                        if (data.completed != null && data.total != null) {
+                            completed = data.completed;
+                            total = data.total;
+                            setUploadProgress();
+                        }
+                        if (data.done) {
+                            var now = new Date();
+                            var dateStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+                            var timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+                            var savedCount = data.saved_count || total;
+                            var label = savedCount === 1 ? files[0].name : savedCount + '개 dat 파일';
+                            var uploadMessage = '<span style="color:#007bff;font-weight:bold;">' + label + '</span> 업로드 완료 (' + dateStr + ' ' + timeStr + ' | {{ current_user.name }})';
+                            var HISTORY_KEY = 'salesUploadHistory';
+                            var history = [];
+                            try { history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch (err) {}
+                            history.unshift(uploadMessage);
+                            localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 3)));
+                            setTimeout(function() { window.location.reload(); }, 800);
+                        }
+                    }
+
+                    function readChunk() {
+                        return reader.read().then(function(result) {
+                            if (result.value) {
+                                buffer += decoder.decode(result.value, { stream: !result.done });
+                                var lines = buffer.split('\n');
+                                buffer = lines.pop();
+                                for (var i = 0; i < lines.length; i++) {
+                                    handleLine(lines[i].trim());
+                                }
+                            }
+                            if (result.done) {
+                                if (buffer.trim()) {
+                                    handleLine(buffer.trim());
+                                }
+                                return;
+                            }
+                            return readChunk();
+                        });
+                    }
+
+                    return readChunk();
+                })
+                .catch(function(err) {
+                    alert(err && err.message ? err.message : '업로드 중 오류가 발생했습니다.');
+                })
+                .finally(function() {
+                    uploadButton.textContent = originalText;
+                    uploadButton.disabled = false;
+                });
+        });
+
+        (function restoreUploadHistory() {
+            var HISTORY_KEY = 'salesUploadHistory';
+            var history = [];
+            try { history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch (e) {}
+            if (!history.length) {
+                fetch('/api/latest-upload?type=sales').then(function(r) { return r.json(); }).then(function(data) {
+                    if (data.filename) {
+                        var msg = '<span style="color:#007bff;font-weight:bold;">' + data.filename + '</span> (업로드: ' + data.upload_time + ' | ' + data.uploader + ')';
+                        history = [msg];
+                        localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+                        renderUploadHistory(history);
+                    }
+                });
+            } else {
+                renderUploadHistory(history);
+            }
+            function renderUploadHistory(items) {
+                var wrap = document.getElementById('uploadResultWrap');
+                var container = document.getElementById('uploadResult');
+                if (!wrap || !items.length) return;
+                container.querySelector('.upload-result-placeholder').style.display = 'none';
+                wrap.classList.add('visible');
+                wrap.innerHTML = '<div class="upload-result-head"><span class="text">' + items[0] + '</span></div>';
+            }
+        })();
+    </script>
+{% endblock %}

@@ -198,58 +198,79 @@
         
         .dispatch-table th:nth-child(2),
         .dispatch-table td:nth-child(2) {
-            width: 45px;
-            min-width: 45px;
+            width: 58px;
+            min-width: 58px;
             left: 45px;
+            white-space: nowrap;
         }
         
         .dispatch-table th:nth-child(3),
         .dispatch-table td:nth-child(3) {
             width: 45px;
             min-width: 45px;
-            left: 90px;
+            left: 103px;
         }
         
         .dispatch-table th:nth-child(4),
         .dispatch-table td:nth-child(4) {
             width: 45px;
             min-width: 45px;
-            left: 135px;
+            left: 148px;
         }
         
         .dispatch-table th:nth-child(5),
         .dispatch-table td:nth-child(5) {
             width: 70px;
             min-width: 70px;
-            left: 180px;
+            left: 193px;
         }
         
         .dispatch-table th:nth-child(6),
         .dispatch-table td:nth-child(6) {
-            width: 45px;
-            min-width: 45px;
-            left: 250px;
+            width: 42px;
+            min-width: 42px;
+            left: 263px;
         }
         
         .dispatch-table th:nth-child(7),
         .dispatch-table td:nth-child(7) {
-            width: 45px;
-            min-width: 45px;
-            left: 295px;
+            width: 42px;
+            min-width: 42px;
+            left: 305px;
         }
         
         .dispatch-table th:nth-child(8),
         .dispatch-table td:nth-child(8) {
-            width: 45px;
-            min-width: 45px;
-            left: 340px;
+            width: 42px;
+            min-width: 42px;
+            left: 347px;
         }
 
         .dispatch-table th:nth-child(9),
         .dispatch-table td:nth-child(9) {
-            width: 45px;
-            min-width: 45px;
-            left: 385px;
+            width: 42px;
+            min-width: 42px;
+            left: 389px;
+        }
+
+        /* 인정·승무·결근·휴가 집계 열 body 배경 */
+        .dispatch-table tbody td:nth-child(6),
+        .dispatch-table tbody td:nth-child(7),
+        .dispatch-table tbody td:nth-child(8),
+        .dispatch-table tbody td:nth-child(9) {
+            background-color: #e8f5e9;
+        }
+
+        /* 호버 시 고정 컬럼(차번~기사) 배경색 */
+        .dispatch-table tbody tr:hover td:nth-child(-n+5) {
+            background-color: rgba(135, 206, 235, 0.3);  /* 하늘색 투명도 30% */
+        }
+
+        .dispatch-table tbody tr:hover td:nth-child(6),
+        .dispatch-table tbody tr:hover td:nth-child(7),
+        .dispatch-table tbody tr:hover td:nth-child(8),
+        .dispatch-table tbody tr:hover td:nth-child(9) {
+            background-color: #c8e6c9;
         }
 
         .dispatch-table thead tr th {
@@ -262,11 +283,6 @@
         .dispatch-table thead tr th:nth-child(-n+9) {
             z-index: 3;
             background-color: #f0f0f0;
-        }
-
-        /* 호버 시 고정 컬럼의 배경색도 하늘색으로 유지 */
-        .dispatch-table tbody tr:hover td:nth-child(-n+9) {
-            background-color: rgba(135, 206, 235, 0.3);  /* 하늘색 투명도 30% */
         }
 
         .dispatch-table thead th {
@@ -608,7 +624,7 @@
                     </div>
                     <!-- 배차 통합 검색 필터 -->
                     <div style="margin-bottom:20px;">
-                        <input type="text" id="scheduleUnifiedFilter" placeholder="쉼표(,) 다중 검색 · 차번 / 차종 / 근무(주간·야간·일차·교대·리스) / 사번 / 이름 · 차량 모델명 정확히 구분 (K5 ≠ K5H)" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
+                        <input type="text" id="scheduleUnifiedFilter" placeholder="쉼표(,) 다중 조건 · 차번 / 차종 / 근무(주간·야간·일차·교대·리스) / 사번 / 이름 · 차량 모델명 정확히 구분 (K5 ≠ K5H)" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
                     </div>
                     {% for sheet_name, data in dispatch_data.items() %}
                     <div id="sheet-{{ sheet_name }}" class="sheet-content{% if loop.first %} active{% endif %}">
@@ -625,7 +641,12 @@
                                     {% for row in data.data %}
                                     <tr>
                                         {% for header in data.headers %}
-                                        <td data-col="{{ header }}" data-value="{{ row[header] }}">{{ row[header] }}</td>
+                                        {% if header == '사번' %}
+                                        {% set cell_value = row[header]|sales_emp_id %}
+                                        {% else %}
+                                        {% set cell_value = row[header] %}
+                                        {% endif %}
+                                        <td data-col="{{ header }}" data-value="{{ cell_value }}">{{ cell_value }}</td>
                                         {% endfor %}
                                     </tr>
                                     {% endfor %}

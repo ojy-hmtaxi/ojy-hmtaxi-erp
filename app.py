@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, session, redirect, url_for, flash, send_from_directory, jsonify
+from flask import Flask, render_template, request, session, redirect, url_for, flash, send_from_directory, jsonify, Response, stream_with_context
 import pandas as pd
 import os
 import json
@@ -11,6 +11,15 @@ from sqlalchemy.orm import joinedload
 import base64
 import calendar
 import re
+import shutil
+
+from dat_parser import (
+    parse_dat_bytes,
+    compute_daily_interval_minutes,
+    compute_daily_trip_stats,
+    compute_daily_interval_stats,
+    compute_daily_fare_trip_count,
+)
 
 from dotenv import load_dotenv
 import pytz
@@ -23,6 +32,7 @@ except:
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['DAT_FOLDER'] = os.path.join('uploads', 'dat')
 app.config['DATA_FOLDER'] = 'data'  # 데이터 저장용 폴더
 app.config['SECRET_KEY'] = 'hanmi_taxi_secret_key'  # 실제 운영 환경에서는 환경 변수로 관리
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
@@ -68,6 +78,37 @@ DISPATCH_HEADER_DISPLAY = {
 def dispatch_header_display(name):
     """배차 표 thead용 짧은 헤더 라벨."""
     return DISPATCH_HEADER_DISPLAY.get(str(name), str(name))
+
+
+def format_work_minutes_label(minutes):
+    """영업분 표시: 905분 (15시간05분)"""
+    minutes = max(0, int(minutes or 0))
+    hours, mins = divmod(minutes, 60)
+    return f'{minutes}분 ({hours}시간{mins:02d}분)'
+
+
+@app.template_filter('sales_work_minutes')
+def sales_work_minutes_display(row):
+    """수입금 행의 영업분 표시값. 저장 필드 없으면 영업시작·종료 시각으로 계산."""
+    if not isinstance(row, dict):
+        return format_work_minutes_label(0)
+    minutes = row.get('영업시간')
+    if minutes in (None, ''):
+        minutes = row.get('영업분')
+    if minutes in (None, ''):
+        minutes = resolve_sales_work_minutes(row, reparse_dat=False)
+    else:
+        try:
+            minutes = int(minutes)
+        except (ValueError, TypeError):
+            minutes = 0
+    return format_work_minutes_label(minutes)
+
+
+@app.template_filter('sales_emp_id')
+def sales_emp_id_display(value):
+    """수입금 표 사번 표시 (소수점 제거)."""
+    return normalize_emp_id(value)
 
 
 # 로그인 라우트
@@ -716,6 +757,245 @@ def pay_lease():
     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
     return render_template('pay_lease.html', salary_data=salary_data, messages=messages, current_user=current_user)
 
+@app.route('/sales', methods=['GET', 'POST'])
+@login_required
+def sales():
+    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
+    upload_summary = None
+
+    if request.method == 'POST':
+        files = request.files.getlist('dat_files')
+        fuel_price = float(request.form.get('fuel_price', DEFAULT_FUEL_PRICE) or DEFAULT_FUEL_PRICE)
+        valid_files = [f for f in files if f and f.filename]
+
+        if not valid_files:
+            return render_template(
+                'sales.html',
+                sales_data=load_sales_data(),
+                error='.dat 파일을 선택해 주세요.',
+                fuel_price=fuel_price,
+                messages=messages,
+                current_user=current_user,
+                upload_summary=upload_summary,
+            )
+
+        try:
+            merged, saved_names, err = process_dat_upload(valid_files, fuel_price=fuel_price)
+            if err:
+                return render_template(
+                    'sales.html',
+                    sales_data=load_sales_data(),
+                    error=err,
+                    fuel_price=fuel_price,
+                    messages=messages,
+                    current_user=current_user,
+                    upload_summary=upload_summary,
+                )
+
+            batch_label = saved_names[0] if len(saved_names) == 1 else f'{len(saved_names)}개 dat 파일'
+            flask_url = url_for(
+                'uploaded_dat_file',
+                filename=os.path.basename(saved_names[0]),
+                _external=True,
+            ) if saved_names else ''
+            record = UploadRecord(
+                filename=batch_label,
+                uploader=current_user.name,
+                github_url=flask_url,
+                upload_type='sales',
+            )
+            db.session.add(record)
+            db.session.commit()
+
+            matched = sum(1 for m in merged.values() for r in m.get('data', []) if r.get('매칭') == '완료')
+            total_rows = sum(len(m.get('data', [])) for m in merged.values())
+            upload_summary = {
+                'file_count': len(saved_names),
+                'matched': matched,
+                'total': total_rows,
+            }
+            return render_template(
+                'sales.html',
+                sales_data=normalize_sales_data(merged),
+                fuel_price=fuel_price,
+                messages=messages,
+                current_user=current_user,
+                upload_summary=upload_summary,
+            )
+        except Exception as e:
+            return render_template(
+                'sales.html',
+                sales_data=load_sales_data(),
+                error=f'.dat 파일 처리 중 오류: {str(e)}',
+                fuel_price=fuel_price,
+                messages=messages,
+                current_user=current_user,
+                upload_summary=upload_summary,
+            )
+
+    sales_data = load_sales_data()
+    return render_template(
+        'sales.html',
+        sales_data=sales_data,
+        fuel_price=DEFAULT_FUEL_PRICE,
+        messages=messages,
+        current_user=current_user,
+        upload_summary=upload_summary,
+    )
+
+
+@app.route('/sales/upload', methods=['POST'])
+@login_required
+def sales_upload_api():
+    """dat 파일 업로드 — JSON 응답 (소량·레거시)."""
+    files = request.files.getlist('dat_files')
+    fuel_price = float(request.form.get('fuel_price', DEFAULT_FUEL_PRICE) or DEFAULT_FUEL_PRICE)
+    valid_files = [f for f in files if f and f.filename]
+
+    if not valid_files:
+        return jsonify({'success': False, 'error': '.dat 파일을 선택해 주세요.'}), 400
+
+    try:
+        _merged, saved_names, err = process_dat_upload(valid_files, fuel_price=fuel_price)
+        if err:
+            return jsonify({'success': False, 'error': err}), 400
+        return jsonify({
+            'success': True,
+            'saved': saved_names,
+            'saved_count': len(saved_names),
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'.dat 파일 처리 중 오류: {str(e)}'}), 500
+
+
+@app.route('/sales/upload/batch', methods=['POST'])
+@login_required
+def sales_upload_batch():
+    """dat 일괄 업로드 — NDJSON 스트림으로 파일별 진행률 전송 (JSON 1회 load/save)."""
+    files = request.files.getlist('dat_files')
+    fuel_price = float(request.form.get('fuel_price', DEFAULT_FUEL_PRICE) or DEFAULT_FUEL_PRICE)
+    valid_files = [
+        f for f in files
+        if f and f.filename and allowed_dat_file(f.filename)
+    ]
+
+    if not valid_files:
+        return jsonify({'success': False, 'error': '.dat 파일을 선택해 주세요.'}), 400
+
+    @stream_with_context
+    def generate():
+        try:
+            existing = _read_sales_data_raw() or OrderedDict()
+            lookup_cache = {}
+            new_rows = []
+            saved_names = []
+            total = len(valid_files)
+
+            for index, file in enumerate(valid_files, start=1):
+                filename = secure_filename(file.filename.replace('/', '').replace('\\', ''))
+                filepath = os.path.join(app.config['DAT_FOLDER'], filename)
+                raw = file.read()
+                with open(filepath, 'wb') as out:
+                    out.write(raw)
+
+                parsed = parse_dat_bytes(raw, filename)
+                business_date = parsed.get('file_date') or parsed.get('header', {}).get('end', '')[:10]
+                if not business_date and parsed.get('trips'):
+                    d = parsed['trips'][0].get('date', '')
+                    if len(d) == 8:
+                        business_date = f"{d[:4]}-{d[4:6]}-{d[6:8]}"
+                month_key = sales_dispatch_month_key(business_date)
+                if month_key not in lookup_cache:
+                    lookup_cache[month_key] = build_vehicle_lookup(dispatch_month=month_key)
+
+                row = dat_parsed_to_sales_row(
+                    parsed, fuel_price=fuel_price, lookup=lookup_cache[month_key],
+                )
+                new_rows.append(row)
+                saved_names.append(filename)
+                yield json.dumps({'completed': index, 'total': total}, ensure_ascii=False) + '\n'
+
+            merged = merge_sales_records(existing, new_rows)
+            save_sales_data(merged, normalize=True)
+            _remove_dat_files(saved_names)
+
+            batch_label = saved_names[0] if total == 1 else f'{total}개 dat 파일'
+            first_filename = os.path.basename(saved_names[0]) if saved_names else ''
+            flask_url = url_for(
+                'uploaded_dat_file',
+                filename=first_filename,
+                _external=True,
+            ) if first_filename else ''
+            record = UploadRecord(
+                filename=batch_label,
+                uploader=current_user.name,
+                github_url=flask_url,
+                upload_type='sales',
+            )
+            db.session.add(record)
+            db.session.commit()
+
+            yield json.dumps({
+                'done': True,
+                'saved_count': total,
+                'first_filename': first_filename,
+            }, ensure_ascii=False) + '\n'
+        except Exception as e:
+            db.session.rollback()
+            yield json.dumps({'error': f'.dat 파일 처리 중 오류: {str(e)}'}, ensure_ascii=False) + '\n'
+
+    return Response(
+        generate(),
+        mimetype='application/x-ndjson',
+        headers={
+            'X-Accel-Buffering': 'no',
+            'Cache-Control': 'no-cache',
+        },
+    )
+
+
+@app.route('/sales/upload/complete', methods=['POST'])
+@login_required
+def sales_upload_complete():
+    """일괄 업로드 완료 후 업로드 이력 기록."""
+    payload = request.get_json(silent=True) or {}
+    try:
+        file_count = max(0, int(payload.get('file_count') or 0))
+    except (TypeError, ValueError):
+        file_count = 0
+    first_filename = os.path.basename(str(payload.get('first_filename') or '').strip())
+
+    if file_count <= 0:
+        return jsonify({'success': False, 'error': '업로드 파일 수가 없습니다.'}), 400
+
+    batch_label = first_filename if file_count == 1 else f'{file_count}개 dat 파일'
+    flask_url = url_for(
+        'uploaded_dat_file',
+        filename=first_filename,
+        _external=True,
+    ) if first_filename else ''
+    record = UploadRecord(
+        filename=batch_label,
+        uploader=current_user.name,
+        github_url=flask_url,
+        upload_type='sales',
+    )
+    db.session.add(record)
+    db.session.commit()
+    return jsonify({'success': True, 'file_count': file_count})
+
+
+@app.route('/sales/save', methods=['POST'])
+@login_required
+def sales_save():
+    payload = request.get_json(silent=True) or {}
+    updates = payload.get('updates') or []
+    ok, result = apply_sales_row_updates(updates)
+    if not ok:
+        return jsonify({'success': False, 'error': result}), 400
+    return jsonify({'success': True, 'updated': result})
+
+
 @app.route('/accident', methods=['GET', 'POST'])
 @login_required
 def accident():
@@ -898,15 +1178,45 @@ app.permanent_session_lifetime = timedelta(days=900)
 
 # 허용할 파일 확장자 설정
 ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
+ALLOWED_DAT_EXTENSIONS = {'dat'}
 
 def allowed_file(filename):
     """허용된 파일 확장자인지 확인"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# 업로드 폴더와 데이터 폴더가 없으면 생성
-for folder in [app.config['UPLOAD_FOLDER'], app.config['DATA_FOLDER']]:
+
+def allowed_dat_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_DAT_EXTENSIONS
+
+# 업로드·데이터 폴더 생성, .dat 파일은 uploads/dat 으로 정리
+for folder in [app.config['UPLOAD_FOLDER'], app.config['DAT_FOLDER'], app.config['DATA_FOLDER']]:
     if not os.path.exists(folder):
         os.makedirs(folder)
+
+upload_dir = app.config['UPLOAD_FOLDER']
+dat_dir = app.config['DAT_FOLDER']
+
+
+def _move_dat_files(src_dir, label):
+    if not os.path.isdir(src_dir) or os.path.abspath(src_dir) == os.path.abspath(dat_dir):
+        return
+    for name in os.listdir(src_dir):
+        if not name.lower().endswith('.dat'):
+            continue
+        src = os.path.join(src_dir, name)
+        dst = os.path.join(dat_dir, name)
+        if not os.path.isfile(src):
+            continue
+        if os.path.exists(dst):
+            continue
+        try:
+            shutil.move(src, dst)
+        except OSError as e:
+            print(f"{label} → uploads/dat 이동 실패 ({name}): {e}")
+
+
+_move_dat_files(upload_dir, 'uploads')
+_move_dat_files('dat', 'dat(legacy)')
 
 
 
@@ -956,6 +1266,8 @@ def enrich_dispatch_record(row):
     for old_key in DISPATCH_LEGACY_STAT_KEYS:
         row.pop(old_key, None)
     row.update(stats)
+    if '사번' in row:
+        row['사번'] = normalize_emp_id(row['사번'])
     return row
 
 
@@ -1053,6 +1365,531 @@ def load_lease_data():
             print(f"lease_data.json 읽기 오류: {e}")
             return None
     return None
+
+DEFAULT_FUEL_PRICE = 1100
+
+
+def extract_car_suffix(value):
+    """차량번호에서 뒤 4자리(차번) 추출."""
+    text = str(value or '').strip()
+    if not text:
+        return ''
+    match = re.search(r'(\d{4})\s*$', text)
+    if match:
+        return match.group(1)
+    digits = re.sub(r'\D', '', text)
+    if len(digits) >= 4:
+        return digits[-4:]
+    return digits.zfill(4) if digits else ''
+
+
+def normalize_emp_id(value):
+    """사번을 정수 문자열로 통일 (6228.0 → 6228)."""
+    if value is None:
+        return ''
+    s = str(value).strip()
+    if not s or s.lower() in ('nan', 'none'):
+        return ''
+    if isinstance(value, float) and value == int(value):
+        return str(int(value))
+    if re.fullmatch(r'\d+\.0+', s):
+        return s.split('.')[0]
+    try:
+        num = float(s)
+        if num == int(num):
+            return str(int(num))
+    except ValueError:
+        pass
+    return s
+
+
+def sales_dispatch_month_key(business_date: str) -> str | None:
+    """행 날짜 → 배차 데이터 월 키 (예: 2026-04-01 → 04월)."""
+    if not business_date:
+        return None
+    date_part = str(business_date).strip()[:10]
+    if len(date_part) < 7:
+        return None
+    return f"{date_part[5:7]}월"
+
+
+def build_vehicle_lookup(dispatch_month: str | None = None):
+    """배차·정비·기사 데이터에서 차번(4자리) → 기사/차량 정보 매핑.
+
+    dispatch_month가 있으면 해당 월 배차만 사용 (수입금 행 날짜 기준).
+    """
+    lookup = {}
+
+    dispatch_data = load_dispatch_data()
+    if dispatch_data:
+        if dispatch_month:
+            month_data = dispatch_data.get(dispatch_month)
+            month_sources = [(dispatch_month, month_data)] if month_data else []
+        else:
+            month_sources = list(dispatch_data.items())
+
+        for _month_key, month_data in month_sources:
+            for record in month_data.get('data', []):
+                vehicle_no = record.get('차량번호') or record.get('차번') or ''
+                suffix = extract_car_suffix(vehicle_no)
+                if not suffix:
+                    continue
+                lookup[suffix] = {
+                    '차량번호': vehicle_no,
+                    '차번': suffix,
+                    '사번': normalize_emp_id(record.get('사번', '')),
+                    '이름': str(record.get('운전기사') or record.get('이름') or ''),
+                    '차종': str(record.get('차종', '') or ''),
+                    '근무유형': str(record.get('근무유형', '') or ''),
+                    'source': 'dispatch',
+                }
+
+    events, _ = load_car_maintenance_events()
+    for event in events:
+        suffix = extract_car_suffix(event.get('차번', ''))
+        if not suffix or suffix in lookup:
+            continue
+        lookup[suffix] = {
+            '차량번호': event.get('차번', ''),
+            '차번': suffix,
+            '사번': '',
+            '이름': '',
+            '차종': str(event.get('차종', '') or ''),
+            'source': 'maintenance',
+        }
+
+    driver_data = load_driver_data()
+    if driver_data and driver_data.get('list'):
+        for driver in driver_data['list']:
+            for key in ('차번', '차량번호', '배정차량'):
+                suffix = extract_car_suffix(driver.get(key, ''))
+                if not suffix:
+                    continue
+                if suffix not in lookup:
+                    lookup[suffix] = {
+                        '차량번호': driver.get(key, ''),
+                        '차번': suffix,
+                        '사번': normalize_emp_id(driver.get('사번', '')),
+                        '이름': str(driver.get('이름', '') or ''),
+                        '차종': str(driver.get('차종', '') or ''),
+                        'source': 'driver',
+                    }
+                else:
+                    entry = lookup[suffix]
+                    if not entry.get('사번') and driver.get('사번'):
+                        entry['사번'] = normalize_emp_id(driver.get('사번'))
+                    if not entry.get('이름') and driver.get('이름'):
+                        entry['이름'] = str(driver.get('이름'))
+                    if not entry.get('차종') and driver.get('차종'):
+                        entry['차종'] = str(driver.get('차종'))
+
+    return lookup
+
+
+def match_vehicle_record(car_suffix, plate='', lookup=None, business_date=None):
+    if lookup is None:
+        lookup = build_vehicle_lookup(
+            dispatch_month=sales_dispatch_month_key(business_date) if business_date else None
+        )
+    info = lookup.get(car_suffix, {})
+    matched = bool(info.get('이름') or info.get('사번'))
+    return {
+        '차번': car_suffix,
+        '차량번호': info.get('차량번호') or plate or car_suffix,
+        '사번': normalize_emp_id(info.get('사번', '')),
+        '이름': info.get('이름', ''),
+        '차종': info.get('차종', ''),
+        '근무유형': info.get('근무유형', ''),
+        '매칭': '완료' if matched else '미매칭',
+    }
+
+
+def compute_sales_summary(data):
+    if not data:
+        return {'total_count': 0, 'total_income': 0, 'avg_income': 0}
+    incomes = [int(r.get('실입금', 0) or 0) for r in data]
+    return {
+        'total_count': len(data),
+        'total_income': sum(incomes),
+        'avg_income': int(sum(incomes) / len(incomes)) if incomes else 0,
+    }
+
+
+def _load_sales_parsed_row(row):
+    """원본 .dat 파일이 있으면 재파싱."""
+    source_file = row.get('원본파일')
+    business_date = row.get('날짜', '')
+    if not source_file or not business_date:
+        return None
+    filename = os.path.basename(str(source_file).replace('/', '').replace('\\', ''))
+    filepath = os.path.join(app.config['DAT_FOLDER'], filename)
+    if not os.path.exists(filepath):
+        return None
+    try:
+        with open(filepath, 'rb') as dat_file:
+            return parse_dat_bytes(dat_file.read(), filename)
+    except OSError:
+        return None
+
+
+def _sales_fuel_unit_price(row, fuel_price=None):
+    if fuel_price is not None:
+        return float(fuel_price)
+    try:
+        stored = row.get('연료단가')
+        if stored not in (None, ''):
+            return float(stored)
+    except (ValueError, TypeError):
+        pass
+    try:
+        liters = float(row.get('충전량') or row.get('연료L') or 0)
+        cost = float(row.get('연료비') or 0)
+        if liters > 0 and cost > 0:
+            return cost / liters
+    except (ValueError, TypeError):
+        pass
+    return float(DEFAULT_FUEL_PRICE)
+
+
+def resolve_daily_sales_metrics(row, parsed=None, fuel_price=None, reparse_dat=False):
+    """실입금(#2)·연료·운행거리(#3)·건수(#2 영업 건): 당일 기준 집계.
+
+    reparse_dat=False(기본): sales_data.json 저장값 사용.
+    업로드 시 parsed를 넘기거나 reparse_dat=True일 때만 .dat 재파싱.
+    """
+    business_date = row.get('날짜', '')
+    if parsed is None and reparse_dat:
+        parsed = _load_sales_parsed_row(row)
+
+    if parsed is not None and business_date:
+        trips = compute_daily_trip_stats(parsed.get('trips', []), business_date)
+        intervals = compute_daily_interval_stats(parsed.get('intervals', []), business_date)
+        unit_price = _sales_fuel_unit_price(row, fuel_price=fuel_price)
+        fuel_liters = intervals['fuel_l']
+        return {
+            '실입금': str(trips['income_won']),
+            '건수': str(compute_daily_fare_trip_count(parsed.get('trips', []), business_date)),
+            '충전량': str(fuel_liters),
+            '연료비': str(int(round(fuel_liters * unit_price))),
+            '운행거리': str(intervals['distance_km']),
+        }
+
+    return {
+        '실입금': str(int(row.get('실입금') or 0)),
+        '건수': str(int(row.get('건수') or 0)),
+        '충전량': str(row.get('충전량') or row.get('연료L') or '0'),
+        '연료비': str(int(row.get('연료비') or 0)),
+        '운행거리': str(row.get('운행거리') or '0'),
+    }
+
+
+def resolve_sales_work_minutes(row, parsed=None, reparse_dat=False):
+    """영업분: 당일 #3 운행 구간(interval) 시작~종료 시간 합(분).
+
+    reparse_dat=False(기본): JSON 저장값 사용.
+    """
+    business_date = row.get('날짜', '')
+    if parsed is None and reparse_dat:
+        parsed = _load_sales_parsed_row(row)
+    if parsed is not None and business_date:
+        return compute_daily_interval_minutes(parsed.get('intervals', []), business_date)
+
+    try:
+        return max(0, int(row.get('영업시간') or row.get('영업분') or 0))
+    except (ValueError, TypeError):
+        return 0
+
+
+def resolve_sales_vehicle_match(row, parsed=None):
+    """행 날짜 해당 월 배차 기준으로 사번·이름·차종·매칭 보정."""
+    car_suffix = str(row.get('차번') or '').strip()
+    if not car_suffix:
+        return {}
+
+    plate = ''
+    if parsed:
+        plate = parsed.get('header', {}).get('plate', '') or ''
+    if not plate:
+        plate = str(row.get('차량번호') or '')
+
+    business_date = row.get('날짜', '')
+    lookup = build_vehicle_lookup(dispatch_month=sales_dispatch_month_key(business_date))
+    return match_vehicle_record(car_suffix, plate, lookup=lookup)
+
+
+def enrich_sales_row(row, parsed=None, fuel_price=None, reparse_dat=False):
+    """저장 행 보정.
+
+    - 업로드: parsed 전달 → .dat 기준 수치 계산 후 JSON에 저장.
+    - 조회/저장: reparse_dat=False → JSON 수치 유지, 배차 매칭만 갱신.
+    """
+    row.update(resolve_daily_sales_metrics(
+        row, parsed=parsed, fuel_price=fuel_price, reparse_dat=reparse_dat,
+    ))
+    row['영업시간'] = str(resolve_sales_work_minutes(
+        row, parsed=parsed, reparse_dat=reparse_dat,
+    ))
+
+    match_info = resolve_sales_vehicle_match(row, parsed=parsed)
+    if match_info:
+        row['사번'] = normalize_emp_id(match_info.get('사번', ''))
+        row['이름'] = match_info.get('이름', '')
+        row['차종'] = match_info.get('차종', '')
+        row['근무유형'] = match_info.get('근무유형', '')
+        row['매칭'] = match_info.get('매칭', '')
+        if not parsed and match_info.get('차량번호'):
+            row['차량번호'] = match_info['차량번호']
+        elif parsed:
+            header_plate = parsed.get('header', {}).get('plate', '')
+            row['차량번호'] = header_plate or match_info.get('차량번호') or str(row.get('차번') or '')
+    else:
+        row['사번'] = normalize_emp_id(row.get('사번', ''))
+
+    row.pop('영업건수', None)
+    row.pop('연료L', None)
+    row.pop('영업분', None)
+    return row
+
+
+def normalize_sales_data(data, reparse_dat=False):
+    """sales_data 전체 행 표시용 필드 보정 (기본: JSON 판, 배차 매칭만)."""
+    if not data:
+        return data
+    for month in data.values():
+        for row in month.get('data', []):
+            enrich_sales_row(row, reparse_dat=reparse_dat)
+    return data
+
+
+def dat_parsed_to_sales_row(parsed, fuel_price=DEFAULT_FUEL_PRICE, lookup=None):
+    header = parsed.get('header', {})
+    car_suffix = (
+        parsed.get('file_car_suffix')
+        or header.get('car_suffix')
+        or extract_car_suffix(header.get('plate', ''))
+    )
+    business_date = parsed.get('file_date') or header.get('end', '')[:10]
+    if not business_date and parsed.get('trips'):
+        d = parsed['trips'][0].get('date', '')
+        if len(d) == 8:
+            business_date = f"{d[:4]}-{d[4:6]}-{d[6:8]}"
+
+    if lookup is None:
+        lookup = build_vehicle_lookup(dispatch_month=sales_dispatch_month_key(business_date))
+
+    match_info = match_vehicle_record(car_suffix, header.get('plate', ''), lookup=lookup)
+    business_start = header.get('start', '')
+    business_end = header.get('end', '')
+
+    return enrich_sales_row({
+        '날짜': business_date or '',
+        '차번': car_suffix,
+        '차량번호': header.get('plate') or match_info['차량번호'] or car_suffix,
+        '사번': match_info['사번'],
+        '이름': match_info['이름'],
+        '차종': match_info['차종'],
+        '근무유형': match_info.get('근무유형', ''),
+        '매칭': match_info['매칭'],
+        '원본파일': parsed.get('source_file', ''),
+        '영업시작': business_start,
+        '영업종료': business_end,
+        '연료단가': str(float(fuel_price)),
+    }, parsed=parsed, fuel_price=fuel_price)
+
+
+def _sales_month_sort_key(month_label):
+    match = re.match(r'(\d{1,2})', str(month_label))
+    return int(match.group(1)) if match else 99
+
+
+def sort_sales_data_by_month(data):
+    """월별 탭을 01월~12월 순으로 정렬."""
+    if not data:
+        return data
+    return OrderedDict(sorted(data.items(), key=lambda item: _sales_month_sort_key(item[0])))
+
+
+def save_sales_data(data, normalize=True):
+    filepath = os.path.join(app.config['DATA_FOLDER'], 'sales_data.json')
+    data = sort_sales_data_by_month(data)
+    if normalize:
+        data = normalize_sales_data(data)
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+SALES_EDITABLE_FIELDS = ('실입금', '건수', '영업시간', '연료비', '충전량')
+
+
+def _normalize_sales_edit_field(field, value):
+    text = str(value or '').strip().replace(',', '')
+    if field == '충전량':
+        return str(round(float(text or 0), 2))
+    if field in ('영업시간', '영업분'):
+        return str(max(0, int(float(text or 0))))
+    return str(max(0, int(float(text or 0))))
+
+
+def apply_sales_row_updates(updates):
+    """수입금 표에서 수정한 행을 sales_data.json에 반영 (raw load/save — normalize 생략)."""
+    data = _read_sales_data_raw()
+    if not data:
+        return False, '저장된 수입금 데이터가 없습니다.'
+    if not updates:
+        return False, '변경된 항목이 없습니다.'
+
+    updated_count = 0
+    updated_months = set()
+    for item in updates:
+        month = str(item.get('month') or item.get('월') or '').strip()
+        date = str(item.get('날짜', '')).strip()
+        car = str(item.get('차번', '')).strip()
+        if not month or not date or not car:
+            continue
+
+        month_data = data.get(month)
+        if not month_data:
+            continue
+
+        for row in month_data.get('data', []):
+            if row.get('날짜') != date or str(row.get('차번', '')).strip() != car:
+                continue
+            for field in SALES_EDITABLE_FIELDS:
+                if field in item:
+                    row[field] = _normalize_sales_edit_field(field, item[field])
+                elif field == '영업시간' and '영업분' in item:
+                    row['영업시간'] = _normalize_sales_edit_field('영업시간', item['영업분'])
+            row.pop('영업분', None)
+            updated_count += 1
+            updated_months.add(month)
+            break
+
+    if updated_count == 0:
+        return False, '일치하는 행을 찾지 못했습니다.'
+
+    for month_key in updated_months:
+        month_data = data.get(month_key)
+        if month_data:
+            month_data['summary'] = compute_sales_summary(month_data.get('data', []))
+
+    save_sales_data(data, normalize=False)
+    return True, updated_count
+
+
+def _read_sales_data_raw():
+    """sales_data.json 읽기 (normalize 없음 — 업로드 배치용)."""
+    filepath = os.path.join(app.config['DATA_FOLDER'], 'sales_data.json')
+    if os.path.exists(filepath):
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if content:
+                    return sort_sales_data_by_month(json.loads(content))
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"sales_data.json 읽기 오류: {e}")
+    return None
+
+
+def load_sales_data():
+    data = _read_sales_data_raw()
+    if data is None:
+        return None
+    return normalize_sales_data(data)
+
+
+def merge_sales_records(existing, new_rows):
+    """월별 sales_data에 신규 행 병합 (같은 날짜+차번은 덮어씀)."""
+    if existing is None:
+        existing = OrderedDict()
+    if not isinstance(existing, OrderedDict):
+        existing = OrderedDict(existing)
+
+    for row in new_rows:
+        date_str = row.get('날짜', '')
+        if not date_str or len(date_str) < 7:
+            continue
+        month_key = f"{date_str[5:7]}월"
+        if month_key not in existing:
+            existing[month_key] = {'data': [], 'summary': {}}
+
+        key = (row.get('날짜', ''), row.get('차번', ''))
+        month_rows = [
+            r for r in existing[month_key]['data']
+            if (r.get('날짜', ''), r.get('차번', '')) != key
+        ]
+        month_rows.append(row)
+        month_rows.sort(key=lambda r: (r.get('날짜', ''), r.get('차번', '')))
+        existing[month_key]['data'] = month_rows
+        existing[month_key]['summary'] = compute_sales_summary(month_rows)
+
+    return sort_sales_data_by_month(existing)
+
+
+def _remove_dat_files(filenames):
+    """JSON 저장 완료 후 uploads/dat 임시 .dat 파일 삭제."""
+    for name in filenames:
+        if not name:
+            continue
+        filepath = os.path.join(
+            app.config['DAT_FOLDER'],
+            os.path.basename(str(name).replace('/', '').replace('\\', '')),
+        )
+        try:
+            if os.path.isfile(filepath):
+                os.remove(filepath)
+        except OSError as e:
+            print(f'.dat 삭제 실패 ({name}): {e}')
+
+
+def process_dat_files(files, fuel_price=DEFAULT_FUEL_PRICE, existing=None, persist=True, normalize_on_save=True):
+    """dat 파일 목록 파싱·병합 → JSON 저장 후 .dat 임시 파일 삭제."""
+    if existing is None:
+        existing = _read_sales_data_raw()
+
+    lookup_cache = {}
+    new_rows = []
+    saved_names = []
+
+    for file in files:
+        if not file or not file.filename:
+            continue
+        if not allowed_dat_file(file.filename):
+            continue
+        filename = secure_filename(file.filename.replace('/', '').replace('\\', ''))
+        filepath = os.path.join(app.config['DAT_FOLDER'], filename)
+        raw = file.read()
+        file.seek(0)
+        with open(filepath, 'wb') as out:
+            out.write(raw)
+
+        parsed = parse_dat_bytes(raw, filename)
+        business_date = parsed.get('file_date') or parsed.get('header', {}).get('end', '')[:10]
+        if not business_date and parsed.get('trips'):
+            d = parsed['trips'][0].get('date', '')
+            if len(d) == 8:
+                business_date = f"{d[:4]}-{d[4:6]}-{d[6:8]}"
+        month_key = sales_dispatch_month_key(business_date)
+        if month_key not in lookup_cache:
+            lookup_cache[month_key] = build_vehicle_lookup(dispatch_month=month_key)
+
+        row = dat_parsed_to_sales_row(
+            parsed, fuel_price=fuel_price, lookup=lookup_cache[month_key],
+        )
+        new_rows.append(row)
+        saved_names.append(filename)
+
+    if not new_rows:
+        return None, [], '유효한 .dat 파일이 없습니다.'
+
+    merged = merge_sales_records(existing, new_rows)
+    if persist:
+        save_sales_data(merged, normalize=normalize_on_save)
+        _remove_dat_files(saved_names)
+    return merged, saved_names, None
+
+
+def process_dat_upload(files, fuel_price=DEFAULT_FUEL_PRICE):
+    return process_dat_files(files, fuel_price=fuel_price)
 
 ACCIDENT_DEFAULT_YEAR_PREFIX = '26'
 
@@ -1498,10 +2335,32 @@ def map():
 
 # 운전기사 데이터 저장/불러오기 함수
 
+DRIVER_DATA_COLUMNS = [
+    '사번', '이름', '근무유형', '나이', '주민등록번호', '면허번호',
+    '갱신시작', '갱신마감', '입사일자', '퇴사일자', '연락처', '거주지',
+]
+
+
+def normalize_driver_data(data):
+    """기사 JSON 컬럼·사번 형식 보정 (레거시 데이터 포함)."""
+    if not data or not isinstance(data, dict):
+        return data
+    data['columns'] = list(DRIVER_DATA_COLUMNS)
+    for row in data.get('list', []):
+        for col in DRIVER_DATA_COLUMNS:
+            if col not in row:
+                row[col] = ''
+        if row.get('사번'):
+            row['사번'] = normalize_emp_id(row['사번'])
+        row['근무유형'] = str(row.get('근무유형', '') or '').strip()
+    return data
+
+
 def save_driver_data(data):
     print("=== save_driver_data 함수 시작 ===")
     filepath = os.path.join(app.config['DATA_FOLDER'], 'driver_data.json')
     print(f"JSON 저장 경로: {filepath}")
+    data = normalize_driver_data(data)
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     print("JSON 파일 저장 완료")
@@ -1514,7 +2373,7 @@ def load_driver_data():
             with open(filepath, 'r', encoding='utf-8') as f:
                 content = f.read().strip()
                 if content:  # 파일이 비어있지 않은 경우에만 파싱
-                    return json.loads(content)
+                    return normalize_driver_data(json.loads(content))
                 else:
                     print(f"driver_data.json 파일이 비어있습니다.")
                     return None
@@ -1745,7 +2604,7 @@ def driver():
     print(f"요청 메서드: {request.method}")
     print(f"현재 사용자: {current_user.username if current_user else 'None'}")
     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
-    required_columns = ['사번', '이름', '나이', '주민등록번호', '면허번호', '갱신시작', '갱신마감', '입사일자', '퇴사일자', '연락처', '거주지']
+    required_columns = DRIVER_DATA_COLUMNS
     if request.method == 'POST':
         print("POST 요청 받음")
         if 'excel_file' not in request.files:
@@ -1781,10 +2640,10 @@ def driver():
                 kst = pytz.timezone('Asia/Seoul')
                 upload_time = pd.Timestamp.now(tz=kst).strftime('%Y-%m-%d %H:%M:%S')
                 driver_list = df[required_columns].fillna('').astype(str).to_dict('records')
-                driver_data = {
+                driver_data = normalize_driver_data({
                     'list': driver_list,
-                    'columns': required_columns
-                }
+                    'columns': required_columns,
+                })
                 # 파일로 저장 
                 save_driver_data(driver_data)
                 # UploadRecord 데이터베이스 저장
@@ -1867,7 +2726,7 @@ def driver_profile(driver_id):
     driver_info = None
     if driver_data and 'list' in driver_data:
         for d in driver_data['list']:
-            if d['사번'] == driver_id:
+            if normalize_emp_id(d.get('사번', '')) == normalize_emp_id(driver_id):
                 driver_info = d
                 break
     if not driver_info:
@@ -1885,7 +2744,7 @@ def driver_profile(driver_id):
         
         # 월별 데이터 집계
         monthly_stats = {}
-        work_type = ''
+        work_type = str(driver_info.get('근무유형', '') or '').strip()
         vehicle_types = set()
         
         # 배차 데이터에서 승무일 수 집계
@@ -2172,6 +3031,16 @@ def driver_profile(driver_id):
             {accident_table}
         </div>
         '''
+    renewal_start = str(driver_info.get('갱신시작', '') or '').split(' ')[0]
+    renewal_end = str(driver_info.get('갱신마감', '') or '').split(' ')[0]
+    if renewal_start and renewal_end:
+        renewal_period = f'{renewal_start} ~ {renewal_end}'
+    elif renewal_start:
+        renewal_period = renewal_start
+    elif renewal_end:
+        renewal_period = renewal_end
+    else:
+        renewal_period = '-'
     # 상세 페이지 카드형 디자인 (이미지 예시 참고)
     return f'''
     <html lang="ko"><head><meta charset="utf-8"><title>운전기사 인사정보</title>
@@ -2230,9 +3099,9 @@ def driver_profile(driver_id):
             <div class="profile-section">
                 <h3>근무 정보</h3>
                 <table class="profile-table">
+                    <tr><td class="label">근무유형</td><td>{driver_info.get('근무유형','') or '-'}</td></tr>
                     <tr><td class="label">면허번호</td><td>{driver_info.get('면허번호','')}</td></tr>
-                    <tr><td class="label">갱신시작</td><td>{driver_info.get('갱신시작','').split(' ')[0] if driver_info.get('갱신시작') else ''}</td></tr>
-                    <tr><td class="label">갱신마감</td><td>{driver_info.get('갱신마감','').split(' ')[0] if driver_info.get('갱신마감') else ''}</td></tr>
+                    <tr><td class="label">갱신기간</td><td>{renewal_period}</td></tr>
                     <tr><td class="label">입사일자</td><td>{driver_info.get('입사일자','').split(' ')[0] if driver_info.get('입사일자') else ''}</td></tr>
                     <tr><td class="label">퇴사일자</td><td>{driver_info.get('퇴사일자','').split(' ')[0] if driver_info.get('퇴사일자') else ''}</td></tr>
                 </table>
@@ -2467,6 +3336,13 @@ def load_map_json():
         print("=== 📖 사고지도 JSON 불러오기 실패 ===\n")
         return jsonify({'success': False, 'error': f'JSON 불러오기 실패: {str(e)}'}), 500
 
+@app.route('/build_note')
+@login_required
+def build_note():
+    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
+    return render_template('buildnote.html', messages=messages, current_user=current_user)
+
+
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
@@ -2589,6 +3465,11 @@ def admin_delete_user(user_id):
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+
+@app.route('/uploads/dat/<filename>')
+def uploaded_dat_file(filename):
+    return send_from_directory(app.config['DAT_FOLDER'], filename)
 
 @app.route('/api/latest-upload')
 def latest_upload():

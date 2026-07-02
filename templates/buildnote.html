@@ -1,0 +1,384 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar %}
+{% from "right_sidebar.html" import right_sidebar %}
+
+{% block sidebar %}
+{{ sidebar(current_user) }}
+{% endblock %}
+
+{% block title %}빌드노트{% endblock %}
+
+{% block head %}
+<style>
+    .buildnote-wrap {
+        width: 95%;
+        max-width: 900px;
+        margin: 0 auto 40px;
+    }
+    .buildnote-intro {
+        background: #fff;
+        padding: 20px 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border-left: 4px solid #4CAF50;
+    }
+    .buildnote-intro p {
+        margin: 0;
+        color: #555;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+    .buildnote-article {
+        background: #fff;
+        margin-bottom: 28px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    .buildnote-article-header {
+        padding: 20px 24px 16px;
+        border-bottom: 1px solid #eee;
+    }
+    .buildnote-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+        font-size: 13px;
+        color: #888;
+    }
+    .buildnote-badge {
+        display: inline-block;
+        background: #4CAF50;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 2px;
+    }
+    .buildnote-badge.patch {
+        background: #2196F3;
+    }
+    .buildnote-article-header h2 {
+        margin: 0;
+        font-size: 20px;
+        color: #333;
+        line-height: 1.4;
+    }
+    .buildnote-article-body {
+        padding: 20px 24px 24px;
+        font-size: 14px;
+        line-height: 1.75;
+        color: #444;
+    }
+    .buildnote-article-body h3 {
+        font-size: 15px;
+        color: #333;
+        margin: 22px 0 10px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid #eee;
+    }
+    .buildnote-article-body h3:first-child {
+        margin-top: 0;
+    }
+    .buildnote-article-body ul {
+        margin: 0 0 12px;
+        padding-left: 20px;
+    }
+    .buildnote-article-body li {
+        margin-bottom: 6px;
+    }
+    .buildnote-article-body code {
+        background: #f5f5f5;
+        padding: 1px 6px;
+        font-size: 13px;
+        color: #c7254e;
+    }
+    .buildnote-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px dashed #eee;
+    }
+    .buildnote-tag {
+        font-size: 11px;
+        color: #666;
+        background: #f0f0f0;
+        padding: 3px 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{{ right_sidebar(messages, current_user) }}
+
+<div class="buildnote-wrap">
+    <div class="buildnote-intro">
+        <p>
+            <strong>한미운수 ERP</strong>의 버전별 변경·추가 기능을 정리합니다.
+            사이드바에 표시된 버전(<code>beta 0.1.2</code>)을 참고해 주세요.
+        </p>
+    </div>
+
+    <article class="buildnote-article">
+        <header class="buildnote-article-header">
+            <div class="buildnote-meta">
+                <span class="buildnote-badge patch">패치</span>
+                <time datetime="2026-07-02">2026-07-02</time>
+            </div>
+            <h2>beta 0.1.2 — 수입금 차트 강화 · 배차·기사·사고보고서 개선</h2>
+        </header>
+        <div class="buildnote-article-body">
+            <p>
+                <strong>수입금 관리</strong> 분석 탭의 차트·필터를 대폭 확장하고,
+                <strong>배차·기사</strong> 목록 UI·검색을 정비했으며,
+                <strong>교통사고보고서</strong> 인쇄 양식을 A4 기준으로 재구성했습니다.
+            </p>
+
+            <h3>수입금 관리 — 차트·분석 강화</h3>
+            <ul>
+                <li><strong>복합 막대 차트</strong> — 실입금(막대) + 영업시간(분)(라인) + 실입금 평균선(점선) 이중 Y축</li>
+                <li>차트 필터 드롭다운: 차번 · 차종 · 사번 · 운전기사 · <strong>근무유형</strong> (전체/개별 선택, 표 필터와 연동)</li>
+                <li><strong>산점도</strong> — 실입금 vs 연료비, 차종·근무 조합별 색상·범례, 체크박스로 차종·근무 필터 (전체 선택/해제)</li>
+                <li><strong>파이 차트</strong> — 차종별 평균 실입금·연료비 분포</li>
+                <li>실입금 <strong>순위 요약표</strong> (1~3위 금·은·동 배지), 일자 범위 슬라이더·표 합계 행</li>
+                <li>표에 <strong>근무유형</strong> 열 추가, 정렬·인라인 편집·업로드 이력 드롭다운 유지</li>
+            </ul>
+
+            <h3>배차 관리</h3>
+            <ul>
+                <li>월간 배차표 <strong>좌측 5열 고정</strong> (차번~기사) + 인정·승무·결근·휴가 집계열 배경 강조</li>
+                <li>통합 검색: <code>data-col</code> 기준 (짧은 헤더 표시와 무관), 쉼표 다중 조건</li>
+                <li>차종 <strong>정확 일치</strong> (<code>K5</code> ≠ <code>K5H</code>), 검색 시 표 높이 고정으로 화면 흔들림 방지</li>
+                <li>일별 근무 색상 (<code>o</code> 녹색 · <code>x</code> 빨강 · <code>/</code> 주황 · <code>H</code> 공휴), 업로드 이력 드롭다운</li>
+            </ul>
+
+            <h3>운전기사 관리</h3>
+            <ul>
+                <li>목록에서 <strong>거주지 열 숨김</strong>, <code>근무유형</code> → <code>근무</code> 짧은 표시</li>
+                <li>통합 검색: 사번 · 이름 · 근무(주간·야간·일차·교대·리스·월차) · 차종 (쉼표 다중, 근무·차종 정확 일치)</li>
+                <li>입·퇴사일, 면허 갱신일 <strong>날짜만</strong> 표시, 사번 소수점 제거 (<code>6228.0</code> → <code>6228</code>)</li>
+                <li>사번 클릭 → 기사 프로필(새 탭), 업로드 이력 드롭다운 (최근 3건)</li>
+            </ul>
+
+            <h3>사고 보고서 (가해 / 피해)</h3>
+            <ul>
+                <li><strong>A4 인쇄 레이아웃</strong> (<code>794×1123px</code>), 결재란 (담당 · 상무 · 부사장 · 대표)</li>
+                <li>가해·피해 템플릿 분리 재구성: 기본정보 · 보상/현황 · 대인 · 대물 · 가해차량(피해) 섹션</li>
+                <li>행 높이·열 너비 통일 (<code>row-fixed</code>), 긴 텍스트 2줄 클램프 (<code>cell-long</code>)</li>
+                <li>사고 현장 <strong>약도 + 사고경위</strong> 좌우 배치, Cloudtype·로컬 약도 경로 자동 분기</li>
+                <li>치료견적·수리추산 금액 천 단위 콤마, 하단 경찰서·조사관·사고번호·처리여부</li>
+            </ul>
+
+            <div class="buildnote-tags">
+                <span class="buildnote-tag">수입금</span>
+                <span class="buildnote-tag">차트</span>
+                <span class="buildnote-tag">배차</span>
+                <span class="buildnote-tag">기사</span>
+                <span class="buildnote-tag">사고보고서</span>
+            </div>
+        </div>
+    </article>
+
+    <article class="buildnote-article">
+        <header class="buildnote-article-header">
+            <div class="buildnote-meta">
+                <span class="buildnote-badge">beta 0.1.2</span>
+                <time datetime="2026-07-01">2026-07-01</time>
+            </div>
+            <h2>beta 0.1.2 — 스마트카드 .dat → 수입금 연동</h2>
+        </header>
+        <div class="buildnote-article-body">
+            <p>
+                택시 미터기(스마트카드/TIMS)에서 내려받은 <code>.dat</code> 파일을
+                <strong>수입금 관리</strong> 메뉴에 업로드하면 일별 수입 데이터로 자동 변환·저장됩니다.
+                배차 데이터와 연동해 기사 정보를 매칭합니다.
+            </p>
+
+            <h3>수입금 관리 — .dat 업로드</h3>
+            <ul>
+                <li>미터기 <code>.dat</code> 파일 <strong>복수 선택·일괄 업로드</strong> (파일명 예: <code>YYYYMMDD_차번4자리_…</code>)</li>
+                <li>대량 업로드 시 <strong>진행률 표시</strong> (배치 API, NDJSON 스트림)</li>
+                <li>업로드 후 <code>sales_data.json</code>에 월별(01월~12월)로 병합 저장</li>
+            </ul>
+
+            <h3>.dat에서 자동 추출·계산</h3>
+            <ul>
+                <li><strong>실입금</strong> — #2 운행·요금 블록 당일 합계</li>
+                <li><strong>건수</strong> — 당일 영업(요금) 건수</li>
+                <li><strong>영업분</strong> — #3 운행 구간(interval) 시간 합 → <code>분 (시간분)</code> 표시</li>
+                <li><strong>운행거리·연료(L)</strong> — #3 구간 데이터 집계</li>
+                <li><strong>연료비</strong> — 업로드 시 입력한 연료 단가(원/L) × 충전량</li>
+                <li>영업 시작·종료 시각 (#1 헤더)</li>
+            </ul>
+
+            <h3>배차 데이터 연동</h3>
+            <ul>
+                <li>행 날짜 기준 <strong>해당 월 배차표</strong>와 차번(4자리) 매칭</li>
+                <li>자동 보정: <strong>사번·이름·차종</strong>, 매칭 상태 <code>완료</code> / <code>미매칭</code></li>
+                <li>사번 소수점 제거 (<code>6228.0</code> → <code>6228</code>)</li>
+            </ul>
+
+            <h3>조회·편집·분석</h3>
+            <ul>
+                <li>월별 탭, 통합 검색 (날짜·차번·사번·이름·차종·매칭)</li>
+                <li>표 셀 <strong>인라인 편집</strong> 및 저장 API</li>
+                <li>차번·사번·이름·차종 필터, 일별·기사별 **수입 차트**</li>
+                <li>업로드 완료 요약: 파일 수, 전체 건수, 기사 매칭 건수</li>
+            </ul>
+
+            <h3>기술</h3>
+            <ul>
+                <li><code>dat_parser.py</code> — UTF-8/cp949 인코딩, #1~#4 블록 파싱</li>
+                <li>업로드 이력 <code>UploadRecord</code> (type: <code>sales</code>) DB 저장</li>
+            </ul>
+
+            <div class="buildnote-tags">
+                <span class="buildnote-tag">수입금</span>
+                <span class="buildnote-tag">스마트카드</span>
+                <span class="buildnote-tag">.dat</span>
+                <span class="buildnote-tag">배차연동</span>
+            </div>
+        </div>
+    </article>
+
+    <article class="buildnote-article">
+        <header class="buildnote-article-header">
+            <div class="buildnote-meta">
+                <span class="buildnote-badge patch">패치</span>
+                <time datetime="2026-05-29">2026-05-29</time>
+            </div>
+            <h2>beta 0.1.1 — UI·통계·배포 개선</h2>
+        </header>
+        <div class="buildnote-article-body">
+            <h3>배차 관리</h3>
+            <ul>
+                <li>인정일·승무일·결근일·휴가 자동 집계 (엑셀 수식: 인정일 = 승무일 + 휴가 + 공휴일 <code>H</code>)</li>
+                <li>표 헤더 짧은 표시 (차번, 근무, 인정, 승무, 결근 등)</li>
+                <li>통합 검색: 차번·차종·근무·사번·기사명, 쉼표 다중 조건·차종 정확 일치</li>
+                <li>사번 정수 표시 (<code>6393.0</code> → <code>6393</code>)</li>
+                <li>차종 열 폭 확대 — <strong>쏘나타</strong> 등 3글자 차종 한 줄 표시</li>
+                <li>업로드 이력 드롭다운 (최근 2건)</li>
+            </ul>
+
+            <h3>사고 관리</h3>
+            <ul>
+                <li>사고번호 형식 통일 (<code>26-G01</code>), 약도 파일명 연동·레거시 마이그레이션</li>
+                <li>통계·분석 탭에 <strong>월별 사고 현황</strong> 막대 차트 (가해/피해, 사고원인 툴팁)</li>
+                <li>미결 행 강조, 종결/미결 색상 구분</li>
+                <li>기사 프로필·보고서에서 사고번호 → 인쇄 보고서 링크</li>
+            </ul>
+
+            <h3>대시보드</h3>
+            <ul>
+                <li>월별 사고 막대 차트 ID 정리 (<code>accidentBarChart</code>)</li>
+                <li>호버 시 월별 <strong>사고원인</strong> 분포 스택 툴팁</li>
+            </ul>
+
+            <h3>공통·계정</h3>
+            <ul>
+                <li>사이드바 <strong>한미택시 로고</strong> 및 앱 버전 표시</li>
+                <li>회원가입·프로필·관리자 화면 <strong>소속(department)</strong> 필드</li>
+                <li>메시지 보드: 다른 사용자 새 글 알림 (사용자별 읽음 처리)</li>
+                <li>Cloudtype 배포 시 DB 스키마 자동 마이그레이션 (<code>users.department</code> 등)</li>
+            </ul>
+
+            <h3>문서</h3>
+            <ul>
+                <li><code>README.md</code> 기능·로컬 설치·Cloudtype 배포 섹션 보강</li>
+                <li>빌드노트 페이지 추가 (본 페이지)</li>
+            </ul>
+
+            <div class="buildnote-tags">
+                <span class="buildnote-tag">배차</span>
+                <span class="buildnote-tag">사고</span>
+                <span class="buildnote-tag">UI</span>
+                <span class="buildnote-tag">Cloudtype</span>
+            </div>
+        </div>
+    </article>
+
+    <article class="buildnote-article">
+        <header class="buildnote-article-header">
+            <div class="buildnote-meta">
+                <span class="buildnote-badge">beta 0.1.1</span>
+                <time datetime="2026-05-29">2026-05-29</time>
+            </div>
+            <h2>beta 0.1.1 — ERP 베타 최초 공개</h2>
+        </header>
+        <div class="buildnote-article-body">
+            <p>택시 회사 업무를 웹에서 통합 관리하는 ERP 베타 버전을 공개했습니다. 엑셀·<code>.dat</code> 업로드 기반으로 데이터를 저장·조회합니다.</p>
+
+            <h3>대시보드</h3>
+            <ul>
+                <li>월별 실입금·연료비 요약 (전월 대비 증감)</li>
+                <li>배차 현황: 근무 유형별(주간·야간·일차·교대·리스) 배차일수·기사 수</li>
+                <li>사고 현황: 가해/피해·미결 건수, 수리·치료·보상 금액</li>
+                <li>월별 수입금·배차·사고 통계 차트 (Chart.js)</li>
+            </ul>
+
+            <h3>배차 관리</h3>
+            <ul>
+                <li>월별(01월~12월) 엑셀 → 월간 배차현황 저장·조회</li>
+                <li>일별 근무: <code>o</code>(승무), <code>x</code>(결근), <code>/</code>(휴가), <code>H</code>(공휴일)</li>
+                <li>날짜별·근무유형별 배차 현황 통계표</li>
+            </ul>
+
+            <h3>급여 계산 (리스)</h3>
+            <ul>
+                <li>월별 시트 엑셀 (<code>실입금</code>, <code>리스료</code>, <code>연료비</code>)</li>
+                <li>급여 = (실입금 − 리스료 − 연료비) × 0.8</li>
+                <li>기사별 급여·실입금 표, 급여 순위 차트, 월별 평균·최고·최저</li>
+            </ul>
+
+            <h3>수입금 관리</h3>
+            <ul>
+                <li>택시 미터 <code>.dat</code> 업로드 (단건·일괄, 진행률)</li>
+                <li>연료 단가 → 연료비 자동 산출, 영업분 표시</li>
+                <li>배차 데이터 자동 매칭 (사번·이름·차종, 완료/미매칭)</li>
+                <li>월별 탭, 차트 필터, 표 셀 인라인 편집·저장</li>
+            </ul>
+
+            <h3>사고 관리</h3>
+            <ul>
+                <li>엑셀 <code>가해사고</code> / <code>피해사고</code> 시트 분리 저장</li>
+                <li>가해/피해 목록, 통계·분석(기사별·차량별), 통합 검색</li>
+                <li>사고 보고서 인쇄 (<code>/accident/print/...</code>)</li>
+            </ul>
+
+            <h3>운전기사 관리</h3>
+            <ul>
+                <li>기사 명부 엑셀 (사번, 면허, 입·퇴사일, 연락처 등)</li>
+                <li>기사 프로필: 월별 승무일·실입금·연료비·급여 표·차트, 사고 이력</li>
+            </ul>
+
+            <h3>차량 관리</h3>
+            <ul>
+                <li>정비 일정 엑셀 → 월별 정비현황 (○예방 / △일반 / □사고 / !검사 / m정비소)</li>
+                <li>수리 데이터 업로드, 월별 탭·정비 통계</li>
+            </ul>
+
+            <h3>사고 현장 약도</h3>
+            <ul>
+                <li>캔버스 약도 그리기 (<code>/map</code>)</li>
+                <li>사고번호별 PNG·JSON 저장·불러오기, 보고서 연동</li>
+            </ul>
+
+            <h3>공통·계정</h3>
+            <ul>
+                <li>로그인 / 회원가입, 프로필 수정</li>
+                <li>관리자: 사용자·역할 관리</li>
+                <li>우측 메시지 보드, 엑셀·dat 업로드 이력 DB 저장</li>
+            </ul>
+
+            <div class="buildnote-tags">
+                <span class="buildnote-tag">베타</span>
+                <span class="buildnote-tag">전체 모듈</span>
+                <span class="buildnote-tag">2026-05-29</span>
+            </div>
+        </div>
+    </article>
+</div>
+{% endblock %}

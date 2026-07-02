@@ -71,7 +71,9 @@
 <div class="sidebar">
     <div class="logo">
         <img src="{{ url_for('static', filename='logo/logo_HMtaxi.png') }}" alt="Hanmi Taxi">
-        <p class="app-ver">ERP System<br>beta 0.1.1 (2026.05.29)</p>
+        <p class="app-ver">ERP System<br>beta 0.1.2 (2026.07.01)<br>
+        <a href="{{ url_for('build_note') }}">빌드 노트</a>
+        </p>
     </div>
     <ul class="nav flex-column">
         <li class="nav-item">
@@ -97,6 +99,11 @@
         <li class="nav-item">
             <a class="nav-link {% if request.endpoint == 'accident' %}active{% endif %}" href="/accident">
                 사고 관리
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'sales' %}active{% endif %}" href="/sales">
+                수입금 관리
             </a>
         </li>
         <li class="nav-item">

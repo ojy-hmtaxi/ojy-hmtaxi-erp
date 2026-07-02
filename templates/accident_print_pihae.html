@@ -6,8 +6,8 @@
     <style>
         body { font-family: 'Malgun Gothic', Arial, sans-serif; margin: 0; padding: 0; background-color: #f0f0f0; }
         .report-container {
-            width: 794px; /* A4 portrait width at 96 DPI */
-            height: 1123px; /* A4 portrait height at 96 DPI */
+            width: 794px;
+            min-height: 1123px;
             margin: 20px auto;
             padding: 40px;
             background: #fff;
@@ -15,28 +15,87 @@
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
             box-sizing: border-box;
         }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-        th, td { border: 1px solid #000; padding: 4px 6px; font-size: 14px; }
-        th { background: #f0f0f0; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 10px; table-layout: fixed; }
+        th, td {
+            border: 1px solid #000;
+            padding: 3px 5px;
+            font-size: 13px;
+            vertical-align: middle;
+            overflow: hidden;
+            line-height: 1.25;
+        }
+        th { background: #f0f0f0; font-weight: normal; white-space: nowrap; }
+        td.cell-value {
+            word-break: normal;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+        .report-table-4 th { width: auto; }
+        .report-table-8 th { width: auto; }
+        .report-table-6 .row-fixed,
+        .report-table-4 .row-fixed,
+        .report-table-8 .row-fixed { height: 26px; }
+        .report-table-6 .row-fixed td,
+        .report-table-6 .row-fixed th,
+        .report-table-4 .row-fixed td,
+        .report-table-4 .row-fixed th,
+        .report-table-8 .row-fixed td,
+        .report-table-8 .row-fixed th {
+            height: 26px;
+            max-height: 26px;
+        }
+        .cell-long {
+            font-size: 11px;
+            line-height: 1.2;
+            word-break: break-all;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            max-height: 26px;
+        }
+        .section-header th {
+            text-align: center;
+            font-weight: bold;
+            height: 28px;
+        }
         .section-title { text-align: center; font-size: 22px; font-weight: bold; padding: 10px 0; }
-        .map, .desc { display: inline-block; vertical-align: top; }
-        .map { width: 55%; border: 1px solid #000; height: 220px; }
-        .desc { width: 44%; border: 1px solid #000; height: 220px; }
-        .footer-table th, .footer-table td { font-size: 13px; }
+        .report-header-table { table-layout: fixed; height: 80px; }
+        .map-desc-row { display: flex; margin-top: 10px; gap: 0; }
+        .map, .desc {
+            box-sizing: border-box;
+            border: 1px solid #000;
+            width: 50%;
+            height: 300px;
+            padding: 8px;
+            overflow: hidden;
+            font-size: 13px;
+        }
+        .desc-body {
+            margin-top: 8px;
+            font-size: 11px;
+            line-height: 1.3;
+            height: 250px;
+            max-height: 250px;
+            overflow: hidden;
+            word-break: break-all;
+        }
+        .map img {
+            width: 100%;
+            max-height: 260px;
+            margin-top: 6px;
+            object-fit: contain;
+        }
+        .footer-table th, .footer-table td { font-size: 12px; height: 28px; }
         @media print {
-            body > :not(.report-container) {
-                display: none;
-            }
-            body {
-                margin: 0;
-                padding: 0;
-            }
+            body > :not(.report-container) { display: none; }
+            body { margin: 0; padding: 0; }
             .report-container {
                 box-shadow: none;
                 margin: 0;
                 width: 100%;
                 border: none;
-                height: auto;
+                min-height: auto;
                 padding: 0;
             }
         }
@@ -44,165 +103,177 @@
 </head>
 <body>
 <div class="report-container">
-    <table style="height:80px;">
+    <table class="report-header-table">
         <tr>
-            <!-- <th rowspan="2" style="width:12%;">접수번호</th> -->
             <th colspan="5" class="section-title">교 통 사 고 보 고 서 (피해)</th>
             <th rowspan="2" style="width:8%;">결<br>재</th>
-        
-            <td style="width:8%; text-align:center;" >담당<hr><br><br></td>
+            <td style="width:8%; text-align:center;">담당<hr><br><br></td>
             <td style="width:8%; text-align:center;">상무<hr><br><br></td>
             <td style="width:8%; text-align:center;">부사장<hr><br><br></td>
             <td style="width:8%; text-align:center;">대표<hr><br><br></td>
         </tr>
     </table>
-    <table>
-        <tr>
+
+    <table class="report-table-6">
+        <colgroup>
+            <col style="width:11%"><col style="width:22%">
+            <col style="width:11%"><col style="width:22%">
+            <col style="width:11%"><col style="width:23%">
+        </colgroup>
+        <tr class="row-fixed">
             <th>사고일시</th>
-            <td style="width:30%;">{{ accident.사고일시 or '' }}</td>
+            <td class="cell-value">{{ accident.사고일시 or '' }}</td>
             <th>차량번호</th>
-            <td style="width:20%;">{{ accident.차번 or '' }}</td>
+            <td class="cell-value">{{ accident.차번 or '' }}</td>
             <th>차종</th>
-            <td style="width:20%;">{{ accident.차종 or '' }}</td>
+            <td class="cell-value">{{ accident.차종 or '' }}</td>
         </tr>
-        <tr>
+        <tr class="row-fixed">
             <th>사고장소</th>
-            <td colspan="3" style="width:60%;">{{ accident.사고장소 or '' }}</td>
+            <td colspan="3"><span class="cell-long">{{ accident.사고장소 or '' }}</span></td>
             <th>사고원인</th>
-            <td style="width:20%;">{{ accident.사고원인 or '' }}</td>
+            <td><span class="cell-long">{{ accident.사고원인 or '' }}</span></td>
         </tr>
     </table>
-    <table>
-        <tr>
-            <th colspan="6" style="width:100%;">자차운전자</th>
+
+    <table class="report-table-6">
+        <colgroup>
+            <col style="width:11%"><col style="width:22%">
+            <col style="width:11%"><col style="width:22%">
+            <col style="width:11%"><col style="width:23%">
+        </colgroup>
+        <tr class="section-header">
+            <th colspan="6">자차운전자</th>
         </tr>
-        <tr>
+        <tr class="row-fixed">
             <th>기사명</th>
-            <td style="width:20%;">{{ accident.기사명 or '' }}</td>
+            <td class="cell-value">{{ accident.기사명 or '' }}</td>
             <th>주민번호</th>
-            <td style="width:20%;">{{ accident.주민등록번호 or '' }}</td>
+            <td class="cell-value">{{ accident.주민등록번호 or '' }}</td>
             <th>연락처</th>
-            <td style="width:20%;">{{ accident.연락처 or '' }}</td>
+            <td class="cell-value">{{ accident.연락처 or '' }}</td>
         </tr>
-        <tr>
+        <tr class="row-fixed">
             <th>사번</th>
-            <td style="width:20%;">{{ accident.사번 or '' }}</td>
+            <td class="cell-value">{{ accident.사번 or '' }}</td>
             <th>면허번호</th>
-            <td style="width:20%;">{{ accident.면허번호 or '' }}</td>
+            <td class="cell-value">{{ accident.면허번호 or '' }}</td>
             <th>유효기간</th>
-            <td style="width:20%;">{{ accident.갱신마감.split(' ')[0] if accident.갱신마감 else '' }}</td>
+            <td class="cell-value">{{ accident.갱신마감.split(' ')[0] if accident.갱신마감 else '' }}</td>
         </tr>
-        <tr>
+        <tr class="row-fixed">
             <th>거주지</th>
-            <td colspan="3" style="width:60%;">{{ accident.거주지 or '' }}</td>
+            <td colspan="3"><span class="cell-long">{{ accident.거주지 or '' }}</span></td>
             <th>입사일자</th>
-            <td style="width:20%;">{{ accident.입사일자.split(' ')[0] if accident.입사일자 else '' }}</td>
+            <td class="cell-value">{{ accident.입사일자.split(' ')[0] if accident.입사일자 else '' }}</td>
         </tr>
     </table>
-    <table>
-        <tr>
-            <th colspan="6" style="width:100%;">가해차량</th>
+
+    <table class="report-table-4">
+        <colgroup>
+            <col style="width:20%"><col style="width:30%"><col style="width:20%"><col style="width:30%">
+        </colgroup>
+        <tr class="section-header">
+            <th colspan="4">가해차량</th>
         </tr>
-        <tr>
-            <th style="width:20%;">가해차번</th>
-            <td style="width:30%;">{{ accident.가해차번 or '' }}</td>
-            <th style="width:20%;">가해차종</th>
-            <td style="width:30%;">{{ accident.가해차종 or '' }}</td>
+        <tr class="row-fixed">
+            <th>가해차번</th>
+            <td class="cell-value">{{ accident.가해차번 or '' }}</td>
+            <th>가해차종</th>
+            <td class="cell-value">{{ accident.가해차종 or '' }}</td>
         </tr>
-        <tr>
+        <tr class="row-fixed">
             <th>운전자</th>
-            <td>{{ accident.운전자 or '' }}</td>
+            <td class="cell-value">{{ accident.운전자 or '' }}</td>
             <th>연락처</th>
-            <td>{{ accident.운전자연락처 or '' }}</td>
+            <td class="cell-value">{{ accident.운전자연락처 or '' }}</td>
         </tr>
-        <!--tr>
-            <th>공업사</th>
-            <td>{{ accident.공업사 or '' }}</td>
-            <th>공업사연락처</th>
-            <td>{{ accident.공업사연락처 or '' }}</td>
-        </tr-->
     </table>
-    <table>
-        <tr>
-            <th colspan="6" style="width:100%;">보상내역 / 피해현황</th>
+
+    <table class="report-table-4">
+        <colgroup>
+            <col style="width:20%"><col style="width:30%"><col style="width:20%"><col style="width:30%">
+        </colgroup>
+        <tr class="section-header">
+            <th colspan="4">보상내역 / 피해현황</th>
         </tr>
-        <tr>
-            <th style="width:20%;">보험사</th>
-            <td style="width:30%;">{{ accident.보험사 or '' }}</td>
-            <th style="width:20%;">접보번호</th>
-            <td style="width:30%;">{{ accident.접보번호 or '' }}</td>          
+        <tr class="row-fixed">
+            <th>보험사</th>
+            <td class="cell-value">{{ accident.보험사 or '' }}</td>
+            <th>접보번호</th>
+            <td class="cell-value">{{ accident.접보번호 or '' }}</td>
         </tr>
-        <tr>
+        <tr class="row-fixed">
             <th>담당자</th>
-            <td>{{ accident.담당자 or '' }}</td>
+            <td class="cell-value">{{ accident.담당자 or '' }}</td>
             <th>연결번호</th>
-            <td>{{ accident.연결번호 or '' }}</td>
+            <td class="cell-value">{{ accident.연결번호 or '' }}</td>
         </tr>
-        <tr>
+        <tr class="row-fixed">
             <th>비고</th>
-            <td colspan="4">{{ accident.비고 or '' }}</td>
+            <td colspan="3"><span class="cell-long">{{ accident.비고 or '' }}</span></td>
         </tr>
     </table>
-    <table>
-        <tr>
-            <th colspan="6" style="width:100%;">대인</th>
+
+    <table class="report-table-4">
+        <colgroup>
+            <col style="width:20%"><col style="width:30%"><col style="width:20%"><col style="width:30%">
+        </colgroup>
+        <tr class="section-header">
+            <th colspan="4">대인</th>
         </tr>
-        <tr>
-            <th style="width:20%;">피해자</th>
-            <td style="width:30%;">{{ accident.피해자 or '' }}</td>
-            <th style="width:20%;">연락처</th>
-            <td style="width:30%;">{{ accident.피해자연락처 or '' }}</td>
+        <tr class="row-fixed">
+            <th>피해자</th>
+            <td class="cell-value">{{ accident.피해자 or '' }}</td>
+            <th>연락처</th>
+            <td class="cell-value">{{ accident.피해자연락처 or '' }}</td>
         </tr>
-        <tr>
+        <tr class="row-fixed">
             <th>병원</th>
-            <td>{{ accident.병원 or '' }}</td>
+            <td class="cell-value">{{ accident.병원 or '' }}</td>
             <th>병원연락처</th>
-            <td>{{ accident.병원연락처 or '' }}</td>
+            <td class="cell-value">{{ accident.병원연락처 or '' }}</td>
         </tr>
-        <!--tr>
-            <th>치료견적</th>
-            <td>{{ "{:,}".format(accident.치료견적|int) if accident.치료견적 and accident.치료견적.replace(',', '').isdigit() else accident.치료견적 or '' }}</td>
-            <th>상해</th>
-            <td>{{ accident.상해 or '' }}</td>
-        </tr-->
     </table>
-    
-    <table>
-        <tr>
-            <th colspan="8" style="width:100%;">대물</th>
+
+    <table class="report-table-8">
+        <colgroup>
+            <col style="width:10%"><col style="width:15%">
+            <col style="width:10%"><col style="width:15%">
+            <col style="width:10%"><col style="width:15%">
+            <col style="width:10%"><col style="width:25%">
+        </colgroup>
+        <tr class="section-header">
+            <th colspan="8">대물</th>
         </tr>
-        <tr>
+        <tr class="row-fixed">
             <th>차량번호</th>
-            <td>{{ accident.차번 }}</td>
+            <td class="cell-value">{{ accident.차번 }}</td>
             <th>피해견적</th>
-            <td>{{ "{:,}".format(accident.피해견적|int) if accident.피해견적 and accident.피해견적.replace(',', '').isdigit() else accident.피해견적 }}</td>
+            <td class="cell-value">{{ "{:,}".format(accident.피해견적|int) if accident.피해견적 and accident.피해견적.replace(',', '').isdigit() else accident.피해견적 }}</td>
             <th>수리처</th>
-            <td>{{ accident.수리처 or '' }}</td>
+            <td class="cell-value">{{ accident.수리처 or '' }}</td>
             <th>수리내역</th>
-            <td>{{ accident.수리내역 or '' }}</td>
+            <td><span class="cell-long">{{ accident.수리내역 or '' }}</span></td>
         </tr>
     </table>
-    <div style="display: flex; margin-top: 10px;">
-       <div class="map" style="width: 50%; height: 300px; padding: 10px;">
+
+    <div class="map-desc-row">
+        <div class="map">
             [사고 현장 약도]<br>
-            <!--img src="/uploads/maps/{{ accident.사고번호 }}.png" alt="사고 현장 약도" style="width:100%;max-height: 300px; margin-top: 10px;"-->
             {% if config.get('CLOUDTYPE_ENV') %}
-            <img src="/tmp/uploads/maps/{{ accident.map_key }}.png"
-            alt="사고 현장 약도"
-            style="width:100%;max-height: 300px; margin-top: 10px;">
+            <img src="/tmp/uploads/maps/{{ accident.map_key }}.png" alt="사고 현장 약도">
             {% else %}
-            <img src="/uploads/maps/{{ accident.map_key }}.png"
-            alt="사고 번호"
-            style="width:100%;max-height: 300px; margin-top: 10px;">
+            <img src="/uploads/maps/{{ accident.map_key }}.png" alt="사고 현장 약도">
             {% endif %}
         </div>
-        <div class="desc" style="width: 50%; height: 300px; padding: 10px;">
-            [사고 경위]<br><br>
-            {{ accident.사고경위 or '' }}
-            <!-- 필요시 accident.description 등 추가 -->
+        <div class="desc">
+            [사고 경위]
+            <div class="desc-body">{{ accident.사고경위 or '' }}</div>
         </div>
     </div>
-    <table class="footer-table" style="margin-top:10px;">
+
+    <table class="footer-table" style="margin-top:10px; text-align:center;">
         <tr>
             <th>경찰서</th>
             <th>조사관</th>
@@ -217,18 +288,14 @@
             <td>{{ accident.보험사 or '' }}</td>
             <td>{{ accident.담당자 or '' }}</td>
             <td>{{ accident.연결번호 or '' }}</td>
-            <td style="font-size: 20px; font-weight: bold; text-align: center;">{{ accident.사고번호 }}</td>
+            <td style="font-size: 18px; font-weight: bold;">{{ accident.사고번호 }}</td>
         </tr>
     </table>
-    </div>
-    <div style="text-align:center; margin:20px;">
-        <button onclick="window.open('https://drive.google.com/file/d/{{ accident.file_id }}/preview', '_blank')" style="padding:8px 24px; font-size:15px; background:#af4c4c; color:#fff; border:none; border-radius:5px; cursor:pointer;">사고영상(준비중)</button>
-        <button onclick="window.open('/map?version={{ accident.map_key }}', '_blank')" style="padding:8px 24px; font-size:15px; background:#4CAF50; color:#fff; border:none; border-radius:5px; cursor:pointer;">약도 제작/편집</button>
-        <button onclick="window.print()" style="padding:8px 24px; font-size:15px; background:#4CAF50; color:#fff; border:none; border-radius:5px; cursor:pointer;">프린트하기</button>
-    </div>
 </div>
-<script>
-    // window.onload = function() { window.print(); }
-</script>
+<div style="text-align:center; margin:20px;">
+    <button onclick="window.open('https://drive.google.com/file/d/{{ accident.file_id }}/preview', '_blank')" style="padding:8px 24px; font-size:15px; background:#af4c4c; color:#fff; border:none; border-radius:5px; cursor:pointer;">사고영상(준비중)</button>
+    <button onclick="window.open('/map?version={{ accident.map_key }}', '_blank')" style="padding:8px 24px; font-size:15px; background:#4CAF50; color:#fff; border:none; border-radius:5px; cursor:pointer;">약도 제작/편집</button>
+    <button onclick="window.print()" style="padding:8px 24px; font-size:15px; background:#4CAF50; color:#fff; border:none; border-radius:5px; cursor:pointer;">프린트하기</button>
+</div>
 </body>
-</html> 
+</html>
