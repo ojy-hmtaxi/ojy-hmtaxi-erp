@@ -916,7 +916,7 @@ def sales_upload_batch():
                 yield json.dumps({'completed': index, 'total': total}, ensure_ascii=False) + '\n'
 
             merged = merge_sales_records(existing, new_rows)
-            save_sales_data(merged, normalize=True)
+            save_sales_data(merged, normalize=False)
             _remove_dat_files(saved_names)
 
             batch_label = saved_names[0] if total == 1 else f'{total}개 dat 파일'
@@ -1228,6 +1228,31 @@ DISPATCH_HEADER_RENAME = {
 }
 DISPATCH_LEGACY_STAT_KEYS = ('인정일수', '근무일수', '승무일수', '결근일수')
 
+_dispatch_data_cache = {'path': None, 'mtime': None, 'data': None}
+_vehicle_lookup_cache = {}
+
+
+def invalidate_dispatch_caches():
+    """배차 JSON 저장·갱신 후 캐시 무효화."""
+    _dispatch_data_cache['path'] = None
+    _dispatch_data_cache['mtime'] = None
+    _dispatch_data_cache['data'] = None
+    _vehicle_lookup_cache.clear()
+
+
+def _dispatch_data_is_normalized(data):
+    """이미 enrich된 배차 JSON이면 load 시 재계산 생략."""
+    if not data:
+        return True
+    for sheet_data in data.values():
+        headers = [str(h) for h in sheet_data.get('headers', [])]
+        if any(h in DISPATCH_LEGACY_STAT_KEYS for h in headers):
+            return False
+        rows = sheet_data.get('data', [])
+        if rows and '인정일' not in rows[0] and '승무일' not in rows[0]:
+            return False
+    return True
+
 
 def _dispatch_val_matches(val, symbol):
     """배차 일자 심볼 비교 (O/X/H는 대·소문자 모두 인정)."""
@@ -1309,33 +1334,48 @@ def save_dispatch_data(data):
     data = normalize_dispatch_data(data)
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    invalidate_dispatch_caches()
     print("JSON 파일 저장 완료")
 
 
 def load_dispatch_data():
-    """저장된 배차 데이터를 불러옴"""
+    """저장된 배차 데이터를 불러옴 (프로세스 내 캐시)."""
     filepath = os.path.join(app.config['DATA_FOLDER'], 'dispatch_data.json')
-    if os.path.exists(filepath):
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                content = f.read().strip()
-                if content:  # 파일이 비어있지 않은 경우에만 파싱
-                    raw = json.loads(content)
-                    if isinstance(raw, dict):
-                        return normalize_dispatch_data(
-                            OrderedDict(raw) if not isinstance(raw, OrderedDict) else raw
-                        )
-                    return raw
-                else:
-                    print(f"dispatch_data.json 파일이 비어있습니다.")
-                    return None
-        except json.JSONDecodeError as e:
-            print(f"dispatch_data.json JSON 파싱 오류: {e}")
-            return None
-        except Exception as e:
-            print(f"dispatch_data.json 읽기 오류: {e}")
-            return None
-    return None
+    if not os.path.exists(filepath):
+        return None
+
+    try:
+        mtime = os.path.getmtime(filepath)
+    except OSError:
+        mtime = None
+
+    if (
+        _dispatch_data_cache['path'] == filepath
+        and _dispatch_data_cache['mtime'] == mtime
+        and _dispatch_data_cache['data'] is not None
+    ):
+        return _dispatch_data_cache['data']
+
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+            if not content:
+                print("dispatch_data.json 파일이 비어있습니다.")
+                return None
+            raw = json.loads(content)
+            if not isinstance(raw, dict):
+                return raw
+            data = OrderedDict(raw) if not isinstance(raw, OrderedDict) else raw
+            if not _dispatch_data_is_normalized(data):
+                data = normalize_dispatch_data(data)
+            _dispatch_data_cache.update({'path': filepath, 'mtime': mtime, 'data': data})
+            return data
+    except json.JSONDecodeError as e:
+        print(f"dispatch_data.json JSON 파싱 오류: {e}")
+        return None
+    except Exception as e:
+        print(f"dispatch_data.json 읽기 오류: {e}")
+        return None
 
 def save_lease_data(data):
     print("=== save_lease_data 함수 시작 ===")
@@ -1418,6 +1458,10 @@ def build_vehicle_lookup(dispatch_month: str | None = None):
 
     dispatch_month가 있으면 해당 월 배차만 사용 (수입금 행 날짜 기준).
     """
+    cache_key = dispatch_month or '__all__'
+    if cache_key in _vehicle_lookup_cache:
+        return _vehicle_lookup_cache[cache_key]
+
     lookup = {}
 
     dispatch_data = load_dispatch_data()
@@ -1483,6 +1527,7 @@ def build_vehicle_lookup(dispatch_month: str | None = None):
                     if not entry.get('차종') and driver.get('차종'):
                         entry['차종'] = str(driver.get('차종'))
 
+    _vehicle_lookup_cache[cache_key] = lookup
     return lookup
 
 
@@ -1600,7 +1645,7 @@ def resolve_sales_work_minutes(row, parsed=None, reparse_dat=False):
         return 0
 
 
-def resolve_sales_vehicle_match(row, parsed=None):
+def resolve_sales_vehicle_match(row, parsed=None, lookup=None):
     """행 날짜 해당 월 배차 기준으로 사번·이름·차종·매칭 보정."""
     car_suffix = str(row.get('차번') or '').strip()
     if not car_suffix:
@@ -1613,11 +1658,12 @@ def resolve_sales_vehicle_match(row, parsed=None):
         plate = str(row.get('차량번호') or '')
 
     business_date = row.get('날짜', '')
-    lookup = build_vehicle_lookup(dispatch_month=sales_dispatch_month_key(business_date))
+    if lookup is None:
+        lookup = build_vehicle_lookup(dispatch_month=sales_dispatch_month_key(business_date))
     return match_vehicle_record(car_suffix, plate, lookup=lookup)
 
 
-def enrich_sales_row(row, parsed=None, fuel_price=None, reparse_dat=False):
+def enrich_sales_row(row, parsed=None, fuel_price=None, reparse_dat=False, lookup=None):
     """저장 행 보정.
 
     - 업로드: parsed 전달 → .dat 기준 수치 계산 후 JSON에 저장.
@@ -1630,7 +1676,7 @@ def enrich_sales_row(row, parsed=None, fuel_price=None, reparse_dat=False):
         row, parsed=parsed, reparse_dat=reparse_dat,
     ))
 
-    match_info = resolve_sales_vehicle_match(row, parsed=parsed)
+    match_info = resolve_sales_vehicle_match(row, parsed=parsed, lookup=lookup)
     if match_info:
         row['사번'] = normalize_emp_id(match_info.get('사번', ''))
         row['이름'] = match_info.get('이름', '')
@@ -1655,9 +1701,15 @@ def normalize_sales_data(data, reparse_dat=False):
     """sales_data 전체 행 표시용 필드 보정 (기본: JSON 판, 배차 매칭만)."""
     if not data:
         return data
+    lookup_cache = {}
     for month in data.values():
         for row in month.get('data', []):
-            enrich_sales_row(row, reparse_dat=reparse_dat)
+            month_key = sales_dispatch_month_key(row.get('날짜', ''))
+            if month_key not in lookup_cache:
+                lookup_cache[month_key] = build_vehicle_lookup(dispatch_month=month_key)
+            enrich_sales_row(
+                row, reparse_dat=reparse_dat, lookup=lookup_cache[month_key],
+            )
     return data
 
 
@@ -1694,7 +1746,7 @@ def dat_parsed_to_sales_row(parsed, fuel_price=DEFAULT_FUEL_PRICE, lookup=None):
         '영업시작': business_start,
         '영업종료': business_end,
         '연료단가': str(float(fuel_price)),
-    }, parsed=parsed, fuel_price=fuel_price)
+    }, parsed=parsed, fuel_price=fuel_price, lookup=lookup)
 
 
 def _sales_month_sort_key(month_label):
@@ -1841,7 +1893,7 @@ def _remove_dat_files(filenames):
             print(f'.dat 삭제 실패 ({name}): {e}')
 
 
-def process_dat_files(files, fuel_price=DEFAULT_FUEL_PRICE, existing=None, persist=True, normalize_on_save=True):
+def process_dat_files(files, fuel_price=DEFAULT_FUEL_PRICE, existing=None, persist=True, normalize_on_save=False):
     """dat 파일 목록 파싱·병합 → JSON 저장 후 .dat 임시 파일 삭제."""
     if existing is None:
         existing = _read_sales_data_raw()
