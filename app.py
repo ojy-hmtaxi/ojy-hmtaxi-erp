@@ -16,9 +16,14 @@ import shutil
 from dat_parser import (
     parse_dat_bytes,
     compute_daily_interval_minutes,
-    compute_daily_trip_stats,
-    compute_daily_interval_stats,
-    compute_daily_fare_trip_count,
+    compute_closing_sales_metrics,
+    compute_daily_sales_metrics,
+    resolve_closing_business_date,
+    infer_shift_band_from_start,
+    is_prolonged_closing,
+    is_handshake_closing_day,
+    iter_closing_calendar_dates,
+    clip_datetime_to_business_day,
 )
 
 from dotenv import load_dotenv
@@ -85,6 +90,16 @@ def format_work_minutes_label(minutes):
     minutes = max(0, int(minutes or 0))
     hours, mins = divmod(minutes, 60)
     return f'{minutes}분 ({hours}시간{mins:02d}분)'
+
+
+@app.template_filter('sales_minutes')
+def sales_minutes_label(value):
+    """분 단위 숫자를 수입금 표 시간 라벨로 표시."""
+    try:
+        minutes = int(value or 0)
+    except (ValueError, TypeError):
+        minutes = 0
+    return format_work_minutes_label(minutes)
 
 
 @app.template_filter('sales_work_minutes')
@@ -871,23 +886,36 @@ def sales_upload_api():
 @app.route('/sales/upload/batch', methods=['POST'])
 @login_required
 def sales_upload_batch():
-    """dat 일괄 업로드 — NDJSON 스트림으로 파일별 진행률 전송 (JSON 1회 load/save)."""
+    """dat 일괄 업로드 + 선택적 T머니 CSV 대조 — NDJSON 스트림으로 진행률 전송."""
     files = request.files.getlist('dat_files')
+    csv_file = request.files.get('tmoney_csv')
     fuel_price = float(request.form.get('fuel_price', DEFAULT_FUEL_PRICE) or DEFAULT_FUEL_PRICE)
     valid_files = [
         f for f in files
         if f and f.filename and allowed_dat_file(f.filename)
     ]
+    csv_filename = ''
+    csv_raw = b''
+    if csv_file and csv_file.filename:
+        if not allowed_tmoney_csv_file(csv_file.filename):
+            return jsonify({'success': False, 'error': 'T머니 CSV는 .csv 파일만 업로드할 수 있습니다.'}), 400
+        csv_filename = secure_filename(csv_file.filename.replace('/', '').replace('\\', ''))
+        csv_raw = csv_file.read()
 
-    if not valid_files:
-        return jsonify({'success': False, 'error': '.dat 파일을 선택해 주세요.'}), 400
+    if not valid_files and not csv_raw:
+        return jsonify({
+            'success': False,
+            'error': '미터기 .dat 파일 또는 T머니 CSV 중 하나 이상을 선택해 주세요.',
+        }), 400
 
     @stream_with_context
     def generate():
         try:
+            from sales_reconcile import reconcile_sales_with_csv_bytes
+
             existing = _read_sales_data_raw() or OrderedDict()
             lookup_cache = {}
-            new_rows = []
+            parsed_list = []
             saved_names = []
             total = len(valid_files)
 
@@ -899,33 +927,42 @@ def sales_upload_batch():
                     out.write(raw)
 
                 parsed = parse_dat_bytes(raw, filename)
-                business_date = parsed.get('file_date') or parsed.get('header', {}).get('end', '')[:10]
-                if not business_date and parsed.get('trips'):
-                    d = parsed['trips'][0].get('date', '')
-                    if len(d) == 8:
-                        business_date = f"{d[:4]}-{d[4:6]}-{d[6:8]}"
-                month_key = sales_dispatch_month_key(business_date)
-                if month_key not in lookup_cache:
-                    lookup_cache[month_key] = build_vehicle_lookup(dispatch_month=month_key)
-
-                row = dat_parsed_to_sales_row(
-                    parsed, fuel_price=fuel_price, lookup=lookup_cache[month_key],
-                )
-                new_rows.append(row)
+                parsed_list.append(parsed)
+                _purge_sales_rows_by_source(existing, filename)
                 saved_names.append(filename)
                 yield json.dumps({'completed': index, 'total': total}, ensure_ascii=False) + '\n'
 
-            merged = merge_sales_records(existing, new_rows)
-            save_sales_data(merged, normalize=False)
-            _remove_dat_files(saved_names)
+            merged = existing
+            if parsed_list:
+                new_rows = build_dat_upload_sales_rows(
+                    parsed_list, fuel_price=fuel_price, lookup_cache=lookup_cache,
+                )
+                merged = merge_sales_records(existing, new_rows)
 
-            batch_label = saved_names[0] if total == 1 else f'{total}개 dat 파일'
-            first_filename = os.path.basename(saved_names[0]) if saved_names else ''
+            csv_reconcile_report = None
+            if csv_raw:
+                merged, csv_reconcile_report = reconcile_sales_with_csv_bytes(
+                    merged, csv_raw, filename=csv_filename,
+                )
+
+            save_sales_data(merged, normalize=False)
+            if saved_names:
+                _remove_dat_files(saved_names)
+            if csv_raw and csv_filename:
+                _remove_tmoney_csv_file(csv_filename)
+
+            parts = []
+            if saved_names:
+                parts.append(f'{len(saved_names)}개 dat')
+            if csv_raw:
+                parts.append('T머니 CSV')
+            batch_label = ' + '.join(parts) if parts else '수입금 데이터'
+            first_filename = os.path.basename(saved_names[0]) if saved_names else csv_filename
             flask_url = url_for(
                 'uploaded_dat_file',
                 filename=first_filename,
                 _external=True,
-            ) if first_filename else ''
+            ) if first_filename and saved_names else ''
             record = UploadRecord(
                 filename=batch_label,
                 uploader=current_user.name,
@@ -937,12 +974,15 @@ def sales_upload_batch():
 
             yield json.dumps({
                 'done': True,
-                'saved_count': total,
+                'saved_count': len(saved_names),
+                'csv_reconciled': bool(csv_raw),
+                'csv_filename': csv_filename,
                 'first_filename': first_filename,
+                'reconcile_report': csv_reconcile_report,
             }, ensure_ascii=False) + '\n'
         except Exception as e:
             db.session.rollback()
-            yield json.dumps({'error': f'.dat 파일 처리 중 오류: {str(e)}'}, ensure_ascii=False) + '\n'
+            yield json.dumps({'error': f'수입금 데이터 처리 중 오류: {str(e)}'}, ensure_ascii=False) + '\n'
 
     return Response(
         generate(),
@@ -1187,6 +1227,10 @@ def allowed_file(filename):
 
 def allowed_dat_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_DAT_EXTENSIONS
+
+
+def allowed_tmoney_csv_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'csv'
 
 # 업로드·데이터 폴더 생성, .dat 파일은 uploads/dat 으로 정리
 for folder in [app.config['UPLOAD_FOLDER'], app.config['DAT_FOLDER'], app.config['DATA_FOLDER']]:
@@ -1453,16 +1497,79 @@ def sales_dispatch_month_key(business_date: str) -> str | None:
     return f"{date_part[5:7]}월"
 
 
+_DISPATCH_DAY_WORK_TYPES = ('주간', '일차', '리스')
+_DISPATCH_NIGHT_WORK_TYPES = ('야간',)
+
+
+def _dispatch_entry_info(record, source='dispatch'):
+    vehicle_no = record.get('차량번호') or record.get('차번') or ''
+    suffix = extract_car_suffix(vehicle_no)
+    if not suffix:
+        return None, None
+    return suffix, {
+        '차량번호': vehicle_no,
+        '차번': suffix,
+        '사번': normalize_emp_id(record.get('사번', '')),
+        '이름': str(record.get('운전기사') or record.get('이름') or ''),
+        '차종': str(record.get('차종', '') or ''),
+        '근무유형': str(record.get('근무유형', '') or ''),
+        'source': source,
+    }
+
+
+def _lookup_car_entries(lookup, car_suffix: str) -> list:
+    """차번 suffix에 해당하는 배차·기사 후보 목록."""
+    if not lookup or not car_suffix:
+        return []
+    if isinstance(lookup, dict) and 'suffixes' in lookup:
+        return list(lookup['suffixes'].get(car_suffix, []))
+    info = lookup.get(car_suffix)
+    return [info] if info else []
+
+
+def _pick_dispatch_entry(entries: list, shift_band: str = '', emp: str = '') -> dict:
+    """동일 차번 다중 배차(주간/야간 등) 중 사번·시작 시각에 맞는 기사 선택."""
+    if not entries:
+        return {}
+    if len(entries) == 1:
+        return entries[0]
+
+    emp = normalize_emp_id(emp)
+    if emp:
+        for entry in entries:
+            if normalize_emp_id(entry.get('사번', '')) == emp:
+                return entry
+
+    work_type = lambda e: str(e.get('근무유형', '') or '').strip()
+
+    if shift_band == 'day':
+        for preferred in _DISPATCH_DAY_WORK_TYPES:
+            for entry in entries:
+                if work_type(entry) == preferred:
+                    return entry
+    elif shift_band == 'night':
+        for preferred in _DISPATCH_NIGHT_WORK_TYPES:
+            for entry in entries:
+                if work_type(entry) == preferred:
+                    return entry
+        for entry in entries:
+            if work_type(entry) == '교대':
+                return entry
+
+    return entries[0]
+
+
 def build_vehicle_lookup(dispatch_month: str | None = None):
     """배차·정비·기사 데이터에서 차번(4자리) → 기사/차량 정보 매핑.
 
+    동일 차번에 여러 근무(주간/야간) 행이 있으면 suffixes[차번]에 목록으로 보관.
     dispatch_month가 있으면 해당 월 배차만 사용 (수입금 행 날짜 기준).
     """
     cache_key = dispatch_month or '__all__'
     if cache_key in _vehicle_lookup_cache:
         return _vehicle_lookup_cache[cache_key]
 
-    lookup = {}
+    suffixes: dict[str, list] = {}
 
     dispatch_data = load_dispatch_data()
     if dispatch_data:
@@ -1474,33 +1581,36 @@ def build_vehicle_lookup(dispatch_month: str | None = None):
 
         for _month_key, month_data in month_sources:
             for record in month_data.get('data', []):
-                vehicle_no = record.get('차량번호') or record.get('차번') or ''
-                suffix = extract_car_suffix(vehicle_no)
-                if not suffix:
+                suffix, entry = _dispatch_entry_info(record)
+                if not suffix or not entry:
                     continue
-                lookup[suffix] = {
-                    '차량번호': vehicle_no,
-                    '차번': suffix,
-                    '사번': normalize_emp_id(record.get('사번', '')),
-                    '이름': str(record.get('운전기사') or record.get('이름') or ''),
-                    '차종': str(record.get('차종', '') or ''),
-                    '근무유형': str(record.get('근무유형', '') or ''),
-                    'source': 'dispatch',
-                }
+                bucket = suffixes.setdefault(suffix, [])
+                work = entry.get('근무유형', '')
+                entry_emp = normalize_emp_id(entry.get('사번', ''))
+                replaced = False
+                for idx, existing in enumerate(bucket):
+                    if (existing.get('근무유형') == work
+                            and normalize_emp_id(existing.get('사번', '')) == entry_emp):
+                        bucket[idx] = entry
+                        replaced = True
+                        break
+                if not replaced:
+                    bucket.append(entry)
 
     events, _ = load_car_maintenance_events()
     for event in events:
         suffix = extract_car_suffix(event.get('차번', ''))
-        if not suffix or suffix in lookup:
+        if not suffix or suffix in suffixes:
             continue
-        lookup[suffix] = {
+        suffixes[suffix] = [{
             '차량번호': event.get('차번', ''),
             '차번': suffix,
             '사번': '',
             '이름': '',
             '차종': str(event.get('차종', '') or ''),
+            '근무유형': '',
             'source': 'maintenance',
-        }
+        }]
 
     driver_data = load_driver_data()
     if driver_data and driver_data.get('list'):
@@ -1509,34 +1619,54 @@ def build_vehicle_lookup(dispatch_month: str | None = None):
                 suffix = extract_car_suffix(driver.get(key, ''))
                 if not suffix:
                     continue
-                if suffix not in lookup:
-                    lookup[suffix] = {
+                if suffix not in suffixes:
+                    suffixes[suffix] = [{
                         '차량번호': driver.get(key, ''),
                         '차번': suffix,
                         '사번': normalize_emp_id(driver.get('사번', '')),
                         '이름': str(driver.get('이름', '') or ''),
                         '차종': str(driver.get('차종', '') or ''),
+                        '근무유형': str(driver.get('근무유형', '') or ''),
                         'source': 'driver',
-                    }
+                    }]
                 else:
-                    entry = lookup[suffix]
-                    if not entry.get('사번') and driver.get('사번'):
-                        entry['사번'] = normalize_emp_id(driver.get('사번'))
-                    if not entry.get('이름') and driver.get('이름'):
-                        entry['이름'] = str(driver.get('이름'))
-                    if not entry.get('차종') and driver.get('차종'):
-                        entry['차종'] = str(driver.get('차종'))
+                    for entry in suffixes[suffix]:
+                        if not entry.get('사번') and driver.get('사번'):
+                            entry['사번'] = normalize_emp_id(driver.get('사번'))
+                        if not entry.get('이름') and driver.get('이름'):
+                            entry['이름'] = str(driver.get('이름'))
+                        if not entry.get('차종') and driver.get('차종'):
+                            entry['차종'] = str(driver.get('차종'))
 
+    lookup = {'suffixes': suffixes}
     _vehicle_lookup_cache[cache_key] = lookup
     return lookup
 
 
-def match_vehicle_record(car_suffix, plate='', lookup=None, business_date=None):
+def match_vehicle_record(
+    car_suffix,
+    plate='',
+    lookup=None,
+    business_date=None,
+    parsed=None,
+    row=None,
+):
     if lookup is None:
         lookup = build_vehicle_lookup(
             dispatch_month=sales_dispatch_month_key(business_date) if business_date else None
         )
-    info = lookup.get(car_suffix, {})
+
+    shift_band = ''
+    emp_hint = ''
+    if parsed:
+        header = parsed.get('header') or {}
+        shift_band = infer_shift_band_from_start(header.get('start', ''))
+    elif row:
+        shift_band = infer_shift_band_from_start(row.get('영업시작', ''))
+        emp_hint = normalize_emp_id(row.get('사번', ''))
+
+    entries = _lookup_car_entries(lookup, car_suffix)
+    info = _pick_dispatch_entry(entries, shift_band, emp=emp_hint)
     matched = bool(info.get('이름') or info.get('사번'))
     return {
         '차번': car_suffix,
@@ -1547,6 +1677,61 @@ def match_vehicle_record(car_suffix, plate='', lookup=None, business_date=None):
         '근무유형': info.get('근무유형', ''),
         '매칭': '완료' if matched else '미매칭',
     }
+
+
+def sales_record_key(row) -> tuple:
+    """수입금 행 고유 키 — (날짜, 차번, 식별자).
+
+    같은 차번·같은 날짜에 주간/야간 2명이 각각 1행씩 저장되도록
+    영업시작 → 근무유형 → 사번 → 원본파일 순으로 구분.
+    장기 마감 일별 분할(daily_split)은 (날짜, 차번) 단위로 병합·교체.
+    """
+    date = str(row.get('날짜') or '').strip()
+    car = str(row.get('차번') or '').strip()
+    if str(row.get('집계기준') or '') == 'daily_split':
+        return (date, car, 'daily_split')
+    start = str(row.get('영업시작') or '').strip()[:16]
+    if start:
+        return (date, car, 'start', start)
+    work = str(row.get('근무유형') or '').strip()
+    if work:
+        return (date, car, 'work', work)
+    emp = normalize_emp_id(row.get('사번', ''))
+    if emp:
+        return (date, car, 'emp', emp)
+    source = os.path.basename(str(row.get('원본파일') or '').replace('\\', '/'))
+    if source:
+        return (date, car, 'file', source)
+    return (date, car, '', '')
+
+
+def _sales_row_matches_update(row, item) -> bool:
+    """저장 API — 수정 대상 행 일치 (다중 근무·동일 차번 구분)."""
+    if row.get('날짜') != str(item.get('날짜', '')).strip():
+        return False
+    if str(row.get('차번', '')).strip() != str(item.get('차번', '')).strip():
+        return False
+
+    start = str(item.get('영업시작') or '').strip()[:16]
+    if start:
+        return str(row.get('영업시작') or '').strip()[:16] == start
+
+    work = str(item.get('근무유형') or '').strip()
+    if work:
+        return str(row.get('근무유형') or '').strip() == work
+
+    emp = normalize_emp_id(item.get('사번', ''))
+    if emp:
+        return normalize_emp_id(row.get('사번', '')) == emp
+
+    return sales_record_key(row) == sales_record_key({
+        '날짜': item.get('날짜', ''),
+        '차번': item.get('차번', ''),
+        '영업시작': item.get('영업시작', ''),
+        '근무유형': item.get('근무유형', ''),
+        '사번': item.get('사번', ''),
+        '원본파일': item.get('원본파일', ''),
+    })
 
 
 def compute_sales_summary(data):
@@ -1596,27 +1781,37 @@ def _sales_fuel_unit_price(row, fuel_price=None):
     return float(DEFAULT_FUEL_PRICE)
 
 
-def resolve_daily_sales_metrics(row, parsed=None, fuel_price=None, reparse_dat=False):
-    """실입금(#2)·연료·운행거리(#3)·건수(#2 영업 건): 당일 기준 집계.
+def resolve_sales_metrics(row, parsed=None, fuel_price=None, reparse_dat=False, daily_date=None):
+    """실입금·건수·연료·거리: .dat 마감 기준.
+
+    - 일반 마감(1~2일): #2/#3 파일 전체 (closing).
+    - 장기 마감(3일+): daily_date(또는 행 날짜)에 해당하는 당일분만 (daily_split).
 
     reparse_dat=False(기본): sales_data.json 저장값 사용.
-    업로드 시 parsed를 넘기거나 reparse_dat=True일 때만 .dat 재파싱.
     """
-    business_date = row.get('날짜', '')
     if parsed is None and reparse_dat:
         parsed = _load_sales_parsed_row(row)
 
-    if parsed is not None and business_date:
-        trips = compute_daily_trip_stats(parsed.get('trips', []), business_date)
-        intervals = compute_daily_interval_stats(parsed.get('intervals', []), business_date)
+    if parsed is not None:
+        business_day = daily_date or str(row.get('날짜') or '').strip()[:10]
+        if row.get('집계기준') == 'daily_split' or (
+            is_prolonged_closing(parsed) and daily_date
+        ):
+            metrics = compute_daily_sales_metrics(parsed, business_day)
+        else:
+            metrics = compute_closing_sales_metrics(parsed)
         unit_price = _sales_fuel_unit_price(row, fuel_price=fuel_price)
-        fuel_liters = intervals['fuel_l']
+        fuel_liters = metrics['fuel_l']
         return {
-            '실입금': str(trips['income_won']),
-            '건수': str(compute_daily_fare_trip_count(parsed.get('trips', []), business_date)),
+            '실입금': str(metrics['income_won']),
+            '건수': str(metrics['fare_count']),
             '충전량': str(fuel_liters),
             '연료비': str(int(round(fuel_liters * unit_price))),
-            '운행거리': str(intervals['distance_km']),
+            '운행거리': str(metrics['distance_km']),
+            '총거리': str(metrics.get('total_distance_km', 0)),
+            '총시간': str(metrics.get('total_minutes', 0)),
+            '빈차시간': str(metrics.get('empty_minutes', 0)),
+            '빈차거리': str(metrics.get('empty_distance_km', 0)),
         }
 
     return {
@@ -1625,19 +1820,32 @@ def resolve_daily_sales_metrics(row, parsed=None, fuel_price=None, reparse_dat=F
         '충전량': str(row.get('충전량') or row.get('연료L') or '0'),
         '연료비': str(int(row.get('연료비') or 0)),
         '운행거리': str(row.get('운행거리') or '0'),
+        '총거리': str(row.get('총거리') or '0'),
+        '총시간': str(row.get('총시간') or '0'),
+        '빈차시간': str(row.get('빈차시간') or '0'),
+        '빈차거리': str(row.get('빈차거리') or '0'),
     }
 
 
-def resolve_sales_work_minutes(row, parsed=None, reparse_dat=False):
-    """영업분: 당일 #3 운행 구간(interval) 시작~종료 시간 합(분).
+def resolve_daily_sales_metrics(row, parsed=None, fuel_price=None, reparse_dat=False):
+    """레거시 alias — resolve_sales_metrics와 동일."""
+    return resolve_sales_metrics(row, parsed=parsed, fuel_price=fuel_price, reparse_dat=reparse_dat)
 
-    reparse_dat=False(기본): JSON 저장값 사용.
+
+def resolve_sales_work_minutes(row, parsed=None, reparse_dat=False, daily_date=None):
+    """영업시간: .dat #3 interval 합(분), 없으면 #4 duty·#1 구간 폴백.
+
+    장기 마감은 daily_date(또는 행 날짜) 당일분만.
     """
-    business_date = row.get('날짜', '')
     if parsed is None and reparse_dat:
         parsed = _load_sales_parsed_row(row)
-    if parsed is not None and business_date:
-        return compute_daily_interval_minutes(parsed.get('intervals', []), business_date)
+    if parsed is not None:
+        business_day = daily_date or str(row.get('날짜') or '').strip()[:10]
+        if row.get('집계기준') == 'daily_split' or (
+            is_prolonged_closing(parsed) and daily_date
+        ):
+            return compute_daily_sales_metrics(parsed, business_day)['work_minutes']
+        return compute_closing_sales_metrics(parsed)['work_minutes']
 
     try:
         return max(0, int(row.get('영업시간') or row.get('영업분') or 0))
@@ -1660,40 +1868,73 @@ def resolve_sales_vehicle_match(row, parsed=None, lookup=None):
     business_date = row.get('날짜', '')
     if lookup is None:
         lookup = build_vehicle_lookup(dispatch_month=sales_dispatch_month_key(business_date))
-    return match_vehicle_record(car_suffix, plate, lookup=lookup)
+    return match_vehicle_record(
+        car_suffix, plate, lookup=lookup, business_date=business_date,
+        parsed=parsed, row=row,
+    )
 
 
-def enrich_sales_row(row, parsed=None, fuel_price=None, reparse_dat=False, lookup=None):
+def enrich_sales_row(row, parsed=None, fuel_price=None, reparse_dat=False, lookup=None, daily_date=None):
     """저장 행 보정.
 
     - 업로드: parsed 전달 → .dat 기준 수치 계산 후 JSON에 저장.
     - 조회/저장: reparse_dat=False → JSON 수치 유지, 배차 매칭만 갱신.
     """
-    row.update(resolve_daily_sales_metrics(
+    row.update(resolve_sales_metrics(
         row, parsed=parsed, fuel_price=fuel_price, reparse_dat=reparse_dat,
+        daily_date=daily_date,
     ))
     row['영업시간'] = str(resolve_sales_work_minutes(
-        row, parsed=parsed, reparse_dat=reparse_dat,
+        row, parsed=parsed, reparse_dat=reparse_dat, daily_date=daily_date,
     ))
 
     match_info = resolve_sales_vehicle_match(row, parsed=parsed, lookup=lookup)
+    tmoney_source = str(row.get('T머니출처') or '').strip()
+    csv_emp = normalize_emp_id(row.get('사번', ''))
+    csv_name = str(row.get('이름') or '').strip()
     if match_info:
-        row['사번'] = normalize_emp_id(match_info.get('사번', ''))
-        row['이름'] = match_info.get('이름', '')
-        row['차종'] = match_info.get('차종', '')
-        row['근무유형'] = match_info.get('근무유형', '')
-        row['매칭'] = match_info.get('매칭', '')
-        if not parsed and match_info.get('차량번호'):
-            row['차량번호'] = match_info['차량번호']
-        elif parsed:
-            header_plate = parsed.get('header', {}).get('plate', '')
-            row['차량번호'] = header_plate or match_info.get('차량번호') or str(row.get('차번') or '')
+        if tmoney_source and csv_emp:
+            row['사번'] = csv_emp
+            if csv_name:
+                row['이름'] = csv_name
+            elif match_info.get('이름'):
+                row['이름'] = match_info.get('이름', '')
+            if not str(row.get('차종') or '').strip():
+                row['차종'] = match_info.get('차종', '')
+            if not str(row.get('근무유형') or '').strip():
+                row['근무유형'] = match_info.get('근무유형', '')
+            row['매칭'] = match_info.get('매칭', '')
+            if not str(row.get('차량번호') or '').strip() and match_info.get('차량번호'):
+                row['차량번호'] = match_info['차량번호']
+        else:
+            row['사번'] = normalize_emp_id(match_info.get('사번', ''))
+            row['이름'] = match_info.get('이름', '')
+            row['차종'] = match_info.get('차종', '')
+            row['근무유형'] = match_info.get('근무유형', '')
+            row['매칭'] = match_info.get('매칭', '')
+            if not parsed and match_info.get('차량번호'):
+                row['차량번호'] = match_info['차량번호']
+            elif parsed:
+                header_plate = parsed.get('header', {}).get('plate', '')
+                row['차량번호'] = header_plate or match_info.get('차량번호') or str(row.get('차번') or '')
     else:
         row['사번'] = normalize_emp_id(row.get('사번', ''))
 
     row.pop('영업건수', None)
     row.pop('연료L', None)
     row.pop('영업분', None)
+    if parsed:
+        header = parsed.get('header') or {}
+        if daily_date or row.get('집계기준') == 'daily_split':
+            row['집계기준'] = 'daily_split'
+            row['마감시작'] = header.get('start', '')
+            row['마감종료'] = header.get('end', '')
+        else:
+            row['집계기준'] = 'closing'
+        file_date = parsed.get('file_date') or ''
+        closing_date = parsed.get('closing_date') or ''
+        if file_date and closing_date and file_date != closing_date:
+            row['파일명일'] = file_date
     return row
 
 
@@ -1720,7 +1961,12 @@ def dat_parsed_to_sales_row(parsed, fuel_price=DEFAULT_FUEL_PRICE, lookup=None):
         or header.get('car_suffix')
         or extract_car_suffix(header.get('plate', ''))
     )
-    business_date = parsed.get('file_date') or header.get('end', '')[:10]
+    business_date = (
+        parsed.get('closing_date')
+        or resolve_closing_business_date(parsed)
+        or parsed.get('file_date')
+        or header.get('end', '')[:10]
+    )
     if not business_date and parsed.get('trips'):
         d = parsed['trips'][0].get('date', '')
         if len(d) == 8:
@@ -1729,7 +1975,10 @@ def dat_parsed_to_sales_row(parsed, fuel_price=DEFAULT_FUEL_PRICE, lookup=None):
     if lookup is None:
         lookup = build_vehicle_lookup(dispatch_month=sales_dispatch_month_key(business_date))
 
-    match_info = match_vehicle_record(car_suffix, header.get('plate', ''), lookup=lookup)
+    match_info = match_vehicle_record(
+        car_suffix, header.get('plate', ''), lookup=lookup,
+        business_date=business_date, parsed=parsed,
+    )
     business_start = header.get('start', '')
     business_end = header.get('end', '')
 
@@ -1747,6 +1996,168 @@ def dat_parsed_to_sales_row(parsed, fuel_price=DEFAULT_FUEL_PRICE, lookup=None):
         '영업종료': business_end,
         '연료단가': str(float(fuel_price)),
     }, parsed=parsed, fuel_price=fuel_price, lookup=lookup)
+
+
+def dat_parsed_to_sales_rows(parsed, fuel_price=DEFAULT_FUEL_PRICE, lookup=None, parsed_context=None):
+    """.dat → 수입금 행 목록. 장기 마감(3일+)은 달력일별로 분할(파일당 1일 1행)."""
+    context = parsed_context if parsed_context is not None else [parsed]
+    if not is_prolonged_closing(parsed):
+        return [dat_parsed_to_sales_row(parsed, fuel_price=fuel_price, lookup=lookup)]
+
+    header = parsed.get('header') or {}
+    car_suffix = (
+        parsed.get('file_car_suffix')
+        or header.get('car_suffix')
+        or extract_car_suffix(header.get('plate', ''))
+    )
+    closing_start = header.get('start', '')
+    closing_end = header.get('end', '')
+    rows = []
+
+    for day in iter_closing_calendar_dates(parsed):
+        if is_handshake_closing_day(parsed, day, context):
+            continue
+
+        if lookup is None:
+            lookup = build_vehicle_lookup(dispatch_month=sales_dispatch_month_key(day))
+
+        match_info = match_vehicle_record(
+            car_suffix, header.get('plate', ''), lookup=lookup,
+            business_date=day, parsed=parsed,
+        )
+        metrics = compute_daily_sales_metrics(parsed, day)
+        if not any((
+            metrics['income_won'],
+            metrics['fare_count'],
+            metrics['work_minutes'],
+            metrics['distance_km'],
+            metrics['fuel_l'],
+        )):
+            continue
+
+        row = enrich_sales_row({
+            '날짜': day,
+            '차번': car_suffix,
+            '차량번호': header.get('plate') or match_info['차량번호'] or car_suffix,
+            '사번': match_info['사번'],
+            '이름': match_info['이름'],
+            '차종': match_info['차종'],
+            '근무유형': match_info.get('근무유형', ''),
+            '매칭': match_info['매칭'],
+            '원본파일': parsed.get('source_file', ''),
+            '영업시작': clip_datetime_to_business_day(closing_start, day, 'start'),
+            '영업종료': clip_datetime_to_business_day(closing_end, day, 'end'),
+            '연료단가': str(float(fuel_price)),
+            '집계기준': 'daily_split',
+        }, parsed=parsed, fuel_price=fuel_price, lookup=lookup, daily_date=day)
+        rows.append(row)
+
+    if rows:
+        return rows
+    return [dat_parsed_to_sales_row(parsed, fuel_price=fuel_price, lookup=lookup)]
+
+
+def build_dat_upload_sales_rows(parsed_list, fuel_price=DEFAULT_FUEL_PRICE, lookup_cache=None):
+    """배치 업로드 — 장기 마감 일별 행 생성(핸드셰이크일·중복일 제외)."""
+    if lookup_cache is None:
+        lookup_cache = {}
+    rows = []
+    for parsed in parsed_list:
+        if not is_prolonged_closing(parsed):
+            closing_date = (
+                parsed.get('closing_date')
+                or resolve_closing_business_date(parsed)
+                or parsed.get('file_date')
+                or (parsed.get('header') or {}).get('end', '')[:10]
+            )
+            month_key = sales_dispatch_month_key(closing_date)
+            if month_key not in lookup_cache:
+                lookup_cache[month_key] = build_vehicle_lookup(dispatch_month=month_key)
+            rows.extend(dat_parsed_to_sales_rows(
+                parsed, fuel_price=fuel_price,
+                lookup=lookup_cache[month_key], parsed_context=parsed_list,
+            ))
+            continue
+
+        header = parsed.get('header') or {}
+        car_suffix = (
+            parsed.get('file_car_suffix')
+            or header.get('car_suffix')
+            or extract_car_suffix(header.get('plate', ''))
+        )
+        closing_start = header.get('start', '')
+        closing_end = header.get('end', '')
+
+        for day in iter_closing_calendar_dates(parsed):
+            if is_handshake_closing_day(parsed, day, parsed_list):
+                continue
+            month_key = sales_dispatch_month_key(day)
+            if month_key not in lookup_cache:
+                lookup_cache[month_key] = build_vehicle_lookup(dispatch_month=month_key)
+            lookup = lookup_cache[month_key]
+
+            match_info = match_vehicle_record(
+                car_suffix, header.get('plate', ''), lookup=lookup,
+                business_date=day, parsed=parsed,
+            )
+            metrics = compute_daily_sales_metrics(parsed, day)
+            if not any((
+                metrics['income_won'],
+                metrics['fare_count'],
+                metrics['work_minutes'],
+                metrics['distance_km'],
+                metrics['fuel_l'],
+            )):
+                continue
+
+            rows.append(enrich_sales_row({
+                '날짜': day,
+                '차번': car_suffix,
+                '차량번호': header.get('plate') or match_info['차량번호'] or car_suffix,
+                '사번': match_info['사번'],
+                '이름': match_info['이름'],
+                '차종': match_info['차종'],
+                '근무유형': match_info.get('근무유형', ''),
+                '매칭': match_info['매칭'],
+                '원본파일': parsed.get('source_file', ''),
+                '영업시작': clip_datetime_to_business_day(closing_start, day, 'start'),
+                '영업종료': clip_datetime_to_business_day(closing_end, day, 'end'),
+                '연료단가': str(float(fuel_price)),
+                '집계기준': 'daily_split',
+            }, parsed=parsed, fuel_price=fuel_price, lookup=lookup, daily_date=day))
+
+    return rows
+
+
+def _sales_source_basename(row) -> str:
+    return os.path.basename(str(row.get('원본파일') or '').replace('\\', '/'))
+
+
+def _purge_sales_rows_by_source(data, source_file: str):
+    """동일 .dat 재업로드 시 이전 행(장기 마감 분할·단일 마감 포함) 제거."""
+    basename = os.path.basename(str(source_file or '').replace('\\', '/'))
+    if not basename:
+        return
+
+    def row_has_source(row) -> bool:
+        raw = str(row.get('원본파일') or '')
+        parts = [os.path.basename(p.strip().replace('\\', '/')) for p in raw.split(',') if p.strip()]
+        return basename in parts
+
+    for month_data in data.values():
+        rows = month_data.get('data', [])
+        month_data['data'] = [r for r in rows if not row_has_source(r)]
+
+
+def _daily_split_identity(row):
+    if str(row.get('집계기준') or '') != 'daily_split':
+        return None
+    date = str(row.get('날짜') or '').strip()
+    car = str(row.get('차번') or '').strip()
+    if not date or not car:
+        return None
+    return (date, car)
+
 
 
 def _sales_month_sort_key(month_label):
@@ -1770,16 +2181,41 @@ def save_sales_data(data, normalize=True):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-SALES_EDITABLE_FIELDS = ('실입금', '건수', '영업시간', '연료비', '충전량')
+SALES_EDITABLE_FIELDS = (
+    '실입금', '건수', '영업시간', '빈차시간', '연료비', '충전량', '운행거리', '빈차거리',
+)
 
 
 def _normalize_sales_edit_field(field, value):
     text = str(value or '').strip().replace(',', '')
-    if field == '충전량':
+    if field in ('충전량', '운행거리', '빈차거리', '총거리'):
         return str(round(float(text or 0), 2))
-    if field in ('영업시간', '영업분'):
+    if field in ('영업시간', '영업분', '총시간', '빈차시간'):
         return str(max(0, int(float(text or 0))))
     return str(max(0, int(float(text or 0))))
+
+
+def _apply_sales_derived_totals(row):
+    """수동 수정 후 총시간·총거리를 구성 항목 합으로 맞춤."""
+    try:
+        work_minutes = max(0, int(float(row.get('영업시간') or 0)))
+    except (ValueError, TypeError):
+        work_minutes = 0
+    try:
+        empty_minutes = max(0, int(float(row.get('빈차시간') or 0)))
+    except (ValueError, TypeError):
+        empty_minutes = 0
+    row['총시간'] = str(work_minutes + empty_minutes)
+
+    try:
+        running_km = round(float(row.get('운행거리') or 0), 2)
+    except (ValueError, TypeError):
+        running_km = 0.0
+    try:
+        empty_km = round(float(row.get('빈차거리') or 0), 2)
+    except (ValueError, TypeError):
+        empty_km = 0.0
+    row['총거리'] = str(round(running_km + empty_km, 2))
 
 
 def apply_sales_row_updates(updates):
@@ -1804,13 +2240,14 @@ def apply_sales_row_updates(updates):
             continue
 
         for row in month_data.get('data', []):
-            if row.get('날짜') != date or str(row.get('차번', '')).strip() != car:
+            if not _sales_row_matches_update(row, item):
                 continue
             for field in SALES_EDITABLE_FIELDS:
                 if field in item:
                     row[field] = _normalize_sales_edit_field(field, item[field])
                 elif field == '영업시간' and '영업분' in item:
                     row['영업시간'] = _normalize_sales_edit_field('영업시간', item['영업분'])
+            _apply_sales_derived_totals(row)
             row.pop('영업분', None)
             updated_count += 1
             updated_months.add(month)
@@ -1850,7 +2287,10 @@ def load_sales_data():
 
 
 def merge_sales_records(existing, new_rows):
-    """월별 sales_data에 신규 행 병합 (같은 날짜+차번은 덮어씀)."""
+    """월별 sales_data에 신규 행 병합.
+
+    daily_split(장기 마감 일별)은 같은 날짜·차번이면 **교체**(합산하지 않음).
+    """
     if existing is None:
         existing = OrderedDict()
     if not isinstance(existing, OrderedDict):
@@ -1864,15 +2304,32 @@ def merge_sales_records(existing, new_rows):
         if month_key not in existing:
             existing[month_key] = {'data': [], 'summary': {}}
 
-        key = (row.get('날짜', ''), row.get('차번', ''))
-        month_rows = [
-            r for r in existing[month_key]['data']
-            if (r.get('날짜', ''), r.get('차번', '')) != key
-        ]
-        month_rows.append(row)
-        month_rows.sort(key=lambda r: (r.get('날짜', ''), r.get('차번', '')))
-        existing[month_key]['data'] = month_rows
-        existing[month_key]['summary'] = compute_sales_summary(month_rows)
+        month_rows = existing[month_key]['data']
+        daily_id = _daily_split_identity(row)
+        if daily_id:
+            month_rows = [
+                r for r in month_rows if _daily_split_identity(r) != daily_id
+            ]
+            month_rows.append(row)
+        else:
+            key = sales_record_key(row)
+            month_rows = [
+                r for r in month_rows
+                if sales_record_key(r) != key
+            ]
+            month_rows.append(row)
+
+        existing[month_key]['data'] = sorted(
+            month_rows,
+            key=lambda r: (
+                r.get('날짜', ''),
+                r.get('차번', ''),
+                r.get('영업시작', ''),
+                r.get('근무유형', ''),
+                r.get('사번', ''),
+            ),
+        )
+        existing[month_key]['summary'] = compute_sales_summary(existing[month_key]['data'])
 
     return sort_sales_data_by_month(existing)
 
@@ -1893,13 +2350,28 @@ def _remove_dat_files(filenames):
             print(f'.dat 삭제 실패 ({name}): {e}')
 
 
+def _remove_tmoney_csv_file(filename):
+    """JSON 저장·CSV 대조 완료 후 uploads 폴더 임시 CSV 삭제."""
+    if not filename:
+        return
+    filepath = os.path.join(
+        app.config['UPLOAD_FOLDER'],
+        os.path.basename(str(filename).replace('/', '').replace('\\', '')),
+    )
+    try:
+        if os.path.isfile(filepath):
+            os.remove(filepath)
+    except OSError as e:
+        print(f'T머니 CSV 삭제 실패 ({filename}): {e}')
+
+
 def process_dat_files(files, fuel_price=DEFAULT_FUEL_PRICE, existing=None, persist=True, normalize_on_save=False):
     """dat 파일 목록 파싱·병합 → JSON 저장 후 .dat 임시 파일 삭제."""
     if existing is None:
         existing = _read_sales_data_raw()
 
     lookup_cache = {}
-    new_rows = []
+    parsed_list = []
     saved_names = []
 
     for file in files:
@@ -1915,20 +2387,13 @@ def process_dat_files(files, fuel_price=DEFAULT_FUEL_PRICE, existing=None, persi
             out.write(raw)
 
         parsed = parse_dat_bytes(raw, filename)
-        business_date = parsed.get('file_date') or parsed.get('header', {}).get('end', '')[:10]
-        if not business_date and parsed.get('trips'):
-            d = parsed['trips'][0].get('date', '')
-            if len(d) == 8:
-                business_date = f"{d[:4]}-{d[4:6]}-{d[6:8]}"
-        month_key = sales_dispatch_month_key(business_date)
-        if month_key not in lookup_cache:
-            lookup_cache[month_key] = build_vehicle_lookup(dispatch_month=month_key)
-
-        row = dat_parsed_to_sales_row(
-            parsed, fuel_price=fuel_price, lookup=lookup_cache[month_key],
-        )
-        new_rows.append(row)
+        parsed_list.append(parsed)
+        _purge_sales_rows_by_source(existing, filename)
         saved_names.append(filename)
+
+    new_rows = build_dat_upload_sales_rows(
+        parsed_list, fuel_price=fuel_price, lookup_cache=lookup_cache,
+    ) if parsed_list else []
 
     if not new_rows:
         return None, [], '유효한 .dat 파일이 없습니다.'

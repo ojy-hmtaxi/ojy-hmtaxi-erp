@@ -38,6 +38,29 @@
             margin: 20px 0; padding: 20px;
             background-color: #f8f9fa; border-radius: 0px;
         }
+        .upload-section {
+            margin-bottom: 16px;
+            padding: 14px 16px;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+        }
+        .upload-section-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+        .upload-section-desc {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+        .upload-hint {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #555;
+            line-height: 1.6;
+        }
         .upload-result { margin-top: 10px; border-radius: 0px; display: block; }
         .upload-result-placeholder { padding: 10px; background-color: #e8f5e9; color: #555; }
         .upload-result-wrap { display: none; }
@@ -479,18 +502,31 @@
 
         <div class="excel-upload">
             <form method="POST" enctype="multipart/form-data" id="uploadForm">
-                <div class="form-group">
-                    <label for="dat_files">미터기 .dat 파일 선택 (복수 선택 가능):</label>
-                    <input type="file" id="dat_files" name="dat_files" accept=".dat" multiple required>
-                </div>
-                <div class="fuel-price-row">
+                <div class="upload-section">
+                    <div class="upload-section-title">① T머니 수입금 상세 CSV</div>
+                    <div class="upload-section-desc">운전자별수입금상세내역 CSV — 실입금·건수의 기준 데이터입니다. (월 1개 파일)</div>
                     <div class="form-group">
-                        <label for="fuel_price">연료 단가 (원/L, 연료비 계산용):</label>
-                        <input type="number" id="fuel_price" name="fuel_price" value="{{ fuel_price|default(1100) }}" min="0" step="1">
+                        <label for="tmoney_csv">T머니 CSV 파일:</label>
+                        <input type="file" id="tmoney_csv" name="tmoney_csv" accept=".csv,text/csv">
                     </div>
                 </div>
+                <div class="upload-section">
+                    <div class="upload-section-title">② 미터기 .dat 파일</div>
+                    <div class="upload-section-desc">미터기 마감 .dat — 영업시간·빈차시간·총시간·연료비·충전량·운행거리·빈차거리·총거리 산출에 사용합니다. (복수 선택)</div>
+                    <div class="form-group">
+                        <label for="dat_files">.dat 파일 선택:</label>
+                        <input type="file" id="dat_files" name="dat_files" accept=".dat" multiple>
+                    </div>
+                    <div class="fuel-price-row">
+                        <div class="form-group">
+                            <label for="fuel_price">연료 단가 (원/L, .dat 연료비 계산용):</label>
+                            <input type="number" id="fuel_price" name="fuel_price" value="{{ fuel_price|default(1100) }}" min="0" step="1">
+                        </div>
+                    </div>
+                </div>
+                <p class="upload-hint">권장: CSV와 .dat를 함께 업로드하면 표·차트에 정확한 실입금(카드)과 운행 지표가 한 번에 반영됩니다. CSV만 올리면 기존 행의 실입금·건수만 갱신됩니다.</p>
                 <div class="form-group" style="margin-top: 12px;">
-                    <button type="submit" id="uploadButton">수입금 데이터 업로드 (일괄)</button>
+                    <button type="submit" id="uploadButton">수입금 데이터 업로드</button>
                 </div>
             </form>
             <div id="uploadResult" class="upload-result">
@@ -548,7 +584,7 @@
                     <table class="table" id="salesTable_{{ sheet_name }}" data-month="{{ sheet_name }}">
                         <thead>
                             <tr>
-                                {% for col in ['날짜', '차번', '차종', '근무유형', '사번', '운전기사', '실입금', '건수', '영업시간', '연료비', '충전량', '운행거리', '매칭'] %}
+                                {% for col in ['날짜', '차번', '차종', '근무유형', '사번', '운전기사', '실입금', '건수', '출고일시', '입고일시', '영업시간', '빈차시간', '총시간', '연료비', '충전량', '운행거리', '빈차거리', '총거리', '매칭'] %}
                                 <th>
                                     {% if col == '근무유형' %}근무{% else %}{{ col }}{% endif %}
                                     {% if col != '매칭' %}
@@ -569,16 +605,22 @@
                                 <td>0명</td>
                                 <td>0 원</td>
                                 <td>0 건</td>
+                                <td></td>
+                                <td></td>
+                                <td>0시간 00분</td>
+                                <td>0시간 00분</td>
                                 <td>0시간 00분</td>
                                 <td>0 원</td>
                                 <td>0.00</td>
+                                <td>0.00 km</td>
+                                <td>0.00 km</td>
                                 <td>0.00 km</td>
                                 <td></td>
                             </tr>
                         </thead>
                         <tbody>
                             {% for row in data.data %}
-                            <tr data-day="{{ row.날짜[8:10] if row.날짜 and row.날짜|length >= 10 else '' }}" data-date="{{ row.날짜 }}" data-car="{{ row.차번 }}">
+                            <tr data-day="{{ row.날짜[8:10] if row.날짜 and row.날짜|length >= 10 else '' }}" data-date="{{ row.날짜 }}" data-car="{{ row.차번 }}" data-start="{{ row.영업시작|default('') }}" data-work="{{ row.근무유형|default('') }}" data-emp="{{ row.사번|default('') }}">
                                 <td>{{ row.날짜 }}</td>
                                 <td>{{ row.차번 }}</td>
                                 <td>{{ row.차종 }}</td>
@@ -587,10 +629,16 @@
                                 <td>{{ row.이름 }}</td>
                                 <td>{{ "{:,}".format(row.실입금|int) }}</td>
                                 <td>{{ "{:,}".format((row.건수|default(0))|int) }}</td>
-                                <td>{{ row|sales_work_minutes }}</td>
+                                <td>{{ row.영업시작|default(row.마감시작|default('')) }}</td>
+                                <td>{{ row.영업종료|default(row.마감종료|default('')) }}</td>
+                                <td data-sort-minutes="{{ (row.영업시간|default(0))|int }}">{{ row|sales_work_minutes }}</td>
+                                <td data-sort-minutes="{{ (row.빈차시간|default(0))|int }}">{{ row.빈차시간|default(0)|sales_minutes }}</td>
+                                <td data-sort-minutes="{{ (row.총시간|default(0))|int }}">{{ row.총시간|default(0)|sales_minutes }}</td>
                                 <td>{{ "{:,}".format(row.연료비|int) }}</td>
                                 <td>{{ row.충전량|default(row.연료L|default('0')) }}</td>
                                 <td>{{ row.운행거리 }}</td>
+                                <td>{{ row.빈차거리|default('0') }}</td>
+                                <td>{{ row.총거리|default('0') }}</td>
                                 <td class="{% if row.매칭 == '완료' %}match-ok{% else %}match-fail{% endif %}">{{ row.매칭 }}</td>
                             </tr>
                             {% endfor %}
@@ -1014,13 +1062,17 @@
             var income = 0;
             var tripCount = 0;
             var workMinutes = 0;
+            var totalMinutes = 0;
+            var emptyMinutes = 0;
             var fuel = 0;
             var charge = 0;
             var distance = 0;
+            var totalDistance = 0;
+            var emptyDistance = 0;
 
             rows.forEach(function(row) {
                 var cells = row.cells;
-                if (!cells || cells.length < 13) return;
+                if (!cells || cells.length < 19) return;
                 var editValues = readSalesRowFieldValues(row);
                 var dateVal = cells[0].textContent.trim();
                 var carVal = cells[1].textContent.trim();
@@ -1037,9 +1089,13 @@
                 income += editValues.실입금;
                 tripCount += editValues.건수;
                 workMinutes += editValues.영업시간;
+                emptyMinutes += editValues.빈차시간 || 0;
+                totalMinutes += (editValues.영업시간 || 0) + (editValues.빈차시간 || 0);
                 fuel += editValues.연료비;
                 charge += editValues.충전량;
-                distance += parseFloat(cells[11].textContent.replace(/,/g, '')) || 0;
+                distance += editValues.운행거리 || 0;
+                emptyDistance += editValues.빈차거리 || 0;
+                totalDistance += (editValues.운행거리 || 0) + (editValues.빈차거리 || 0);
             });
 
             var totalCells = totalRow.cells;
@@ -1051,11 +1107,17 @@
             totalCells[5].textContent = Object.keys(names).length.toLocaleString() + '명';
             totalCells[6].textContent = income.toLocaleString() + ' 원';
             totalCells[7].textContent = tripCount.toLocaleString() + ' 건';
-            totalCells[8].textContent = formatWorkMinutesTotalLabel(workMinutes);
-            totalCells[9].textContent = fuel.toLocaleString() + ' 원';
-            totalCells[10].textContent = charge.toFixed(2);
-            totalCells[11].textContent = distance.toFixed(2) + ' km';
-            totalCells[12].textContent = '';
+            totalCells[8].textContent = '';
+            totalCells[9].textContent = '';
+            totalCells[10].textContent = formatWorkMinutesTotalLabel(workMinutes);
+            totalCells[11].textContent = formatWorkMinutesTotalLabel(emptyMinutes);
+            totalCells[12].textContent = formatWorkMinutesTotalLabel(totalMinutes);
+            totalCells[13].textContent = fuel.toLocaleString() + ' 원';
+            totalCells[14].textContent = charge.toFixed(2);
+            totalCells[15].textContent = distance.toFixed(2) + ' km';
+            totalCells[16].textContent = emptyDistance.toFixed(2) + ' km';
+            totalCells[17].textContent = totalDistance.toFixed(2) + ' km';
+            totalCells[18].textContent = '';
         }
 
         function scheduleSummaryUpdate(immediate) {
@@ -1151,10 +1213,20 @@
         }
 
         function salesEditValuesEqual(fieldKey, before, after) {
-            if (fieldKey === '충전량') {
+            if (fieldKey === '충전량' || fieldKey === '운행거리' || fieldKey === '빈차거리') {
                 return Math.abs(Number(before) - Number(after)) < 0.001;
             }
             return Number(before) === Number(after);
+        }
+
+        function formatDistanceLabel(value) {
+            var n = parseFloat(value);
+            if (isNaN(n)) return '0';
+            return String(Math.round(n * 100) / 100);
+        }
+
+        function parseDistanceFromCell(text) {
+            return parseFloat(String(text).replace(/,/g, '').replace(/\s*km\s*$/i, '')) || 0;
         }
 
         function formatWorkMinutesLabel(minutes) {
@@ -1174,10 +1246,14 @@
         var SALES_EDIT_FIELDS = [
             { key: '실입금', idx: 6, parse: function(text) { return parseInt(String(text).replace(/,/g, ''), 10) || 0; }, format: function(v) { return Number(v).toLocaleString(); } },
             { key: '건수', idx: 7, parse: function(text) { return parseInt(String(text).replace(/,/g, ''), 10) || 0; }, format: function(v) { return Number(v).toLocaleString(); } },
-            { key: '영업시간', idx: 8, parse: parseWorkMinutesFromCell, format: formatWorkMinutesLabel },
-            { key: '연료비', idx: 9, parse: function(text) { return parseInt(String(text).replace(/,/g, ''), 10) || 0; }, format: function(v) { return Number(v).toLocaleString(); } },
-            { key: '충전량', idx: 10, parse: function(text) { return parseFloat(String(text).replace(/,/g, '')) || 0; }, format: function(v) { var n = parseFloat(v); return isNaN(n) ? '0' : String(Math.round(n * 100) / 100); } }
+            { key: '영업시간', idx: 10, parse: parseWorkMinutesFromCell, format: formatWorkMinutesLabel },
+            { key: '빈차시간', idx: 11, parse: parseWorkMinutesFromCell, format: formatWorkMinutesLabel },
+            { key: '연료비', idx: 13, parse: function(text) { return parseInt(String(text).replace(/,/g, ''), 10) || 0; }, format: function(v) { return Number(v).toLocaleString(); } },
+            { key: '충전량', idx: 14, parse: function(text) { return parseFloat(String(text).replace(/,/g, '')) || 0; }, format: function(v) { var n = parseFloat(v); return isNaN(n) ? '0' : String(Math.round(n * 100) / 100); } },
+            { key: '운행거리', idx: 15, parse: parseDistanceFromCell, format: formatDistanceLabel },
+            { key: '빈차거리', idx: 16, parse: parseDistanceFromCell, format: formatDistanceLabel }
         ];
+        var SALES_DERIVED_RECALC_FIELDS = ['영업시간', '빈차시간', '운행거리', '빈차거리'];
         var salesEditState = {};
 
         function getSalesTableByMonth(month) {
@@ -1232,15 +1308,49 @@
             var cell = row.cells[field.idx];
             if (!cell) return;
             cell.textContent = field.format(rawValue);
+            if (field.key === '영업시간' || field.key === '빈차시간') {
+                cell.setAttribute('data-sort-minutes', String(Math.max(0, parseInt(rawValue, 10) || 0)));
+            }
+        }
+
+        function recalcSalesDerivedCells(row) {
+            var values = readSalesRowFieldValues(row);
+            var workMinutes = Math.max(0, parseInt(values.영업시간, 10) || 0);
+            var emptyMinutes = Math.max(0, parseInt(values.빈차시간, 10) || 0);
+            var runningKm = Math.max(0, parseFloat(values.운행거리) || 0);
+            var emptyKm = Math.max(0, parseFloat(values.빈차거리) || 0);
+            var totalMinutes = workMinutes + emptyMinutes;
+            var totalKm = Math.round((runningKm + emptyKm) * 100) / 100;
+
+            var totalTimeCell = row.cells[12];
+            if (totalTimeCell) {
+                totalTimeCell.textContent = formatWorkMinutesLabel(totalMinutes);
+                totalTimeCell.setAttribute('data-sort-minutes', String(totalMinutes));
+            }
+            var totalDistCell = row.cells[17];
+            if (totalDistCell) {
+                totalDistCell.textContent = formatDistanceLabel(totalKm);
+            }
+        }
+
+        function salesRowIdentityKey(row) {
+            var date = row.getAttribute('data-date') || '';
+            var car = row.getAttribute('data-car') || '';
+            var start = (row.getAttribute('data-start') || '').trim().slice(0, 16);
+            if (start) return date + '|' + car + '|' + start;
+            var work = (row.getAttribute('data-work') || '').trim();
+            if (work) return date + '|' + car + '|' + work;
+            var emp = (row.getAttribute('data-emp') || '').trim();
+            if (emp) return date + '|' + car + '|' + emp;
+            return date + '|' + car;
         }
 
         function buildSalesRowSnapshot(table) {
             var snapshot = {};
             table.querySelectorAll('tbody tr').forEach(function(row) {
-                var date = row.getAttribute('data-date') || '';
-                var car = row.getAttribute('data-car') || '';
-                if (!date || !car) return;
-                snapshot[date + '|' + car] = readSalesRowFieldValues(row);
+                var key = salesRowIdentityKey(row);
+                if (!key || key.endsWith('|')) return;
+                snapshot[key] = readSalesRowFieldValues(row);
             });
             return snapshot;
         }
@@ -1274,10 +1384,11 @@
                     var values = readSalesRowFieldValues(row);
                     renderSalesEditableCell(row, field, values[field.key]);
                 });
+                recalcSalesDerivedCells(row);
             });
 
             setSalesEditButtons(month, true);
-            setSalesEditStatus(month, '수정 모드 · 실입금 / 건수 / 영업시간 / 연료비 / 충전량을 편집할 수 있습니다.');
+            setSalesEditStatus(month, '수정 모드 · 실입금 / 건수 / 영업시간 / 빈차시간 / 연료비 / 충전량 / 운행거리 / 빈차거리를 편집할 수 있습니다. 총시간·총거리는 자동 계산됩니다.');
         }
 
         function exitSalesEditMode(month, restore) {
@@ -1288,13 +1399,12 @@
             table.classList.remove('sales-table-editing');
             table.querySelectorAll('tbody tr').forEach(function(row) {
                 row.classList.remove('sales-row-editing');
-                var date = row.getAttribute('data-date') || '';
-                var car = row.getAttribute('data-car') || '';
-                var key = date + '|' + car;
+                var key = salesRowIdentityKey(row);
                 var values = restore && state && state.snapshot ? state.snapshot[key] : readSalesRowFieldValues(row);
                 SALES_EDIT_FIELDS.forEach(function(field) {
                     renderSalesDisplayCell(row, field, values[field.key]);
                 });
+                recalcSalesDerivedCells(row);
             });
 
             delete salesEditState[month];
@@ -1315,7 +1425,7 @@
                 var car = row.getAttribute('data-car') || '';
                 if (!date || !car) return;
 
-                var key = date + '|' + car;
+                var key = salesRowIdentityKey(row);
                 var before = state.snapshot[key];
                 var after = readSalesRowFieldValues(row);
                 if (!before) return;
@@ -1328,7 +1438,10 @@
                 var update = {
                     month: month,
                     날짜: date,
-                    차번: car
+                    차번: car,
+                    영업시작: (row.getAttribute('data-start') || '').trim(),
+                    근무유형: (row.getAttribute('data-work') || '').trim(),
+                    사번: (row.getAttribute('data-emp') || '').trim()
                 };
                 changedFields.forEach(function(field) {
                     update[field.key] = String(after[field.key]);
@@ -1388,6 +1501,16 @@
         }
 
         function initSalesEditControls() {
+            document.addEventListener('input', function(e) {
+                if (!e.target.classList.contains('sales-cell-input')) return;
+                var fieldKey = e.target.getAttribute('data-field') || '';
+                if (SALES_DERIVED_RECALC_FIELDS.indexOf(fieldKey) === -1) return;
+                var row = e.target.closest('tr');
+                if (!row || !row.classList.contains('sales-row-editing')) return;
+                recalcSalesDerivedCells(row);
+                updateSalesTableTotals(row.closest('.tabs'));
+            });
+
             document.querySelectorAll('.sales-table-toolbar').forEach(function(toolbar) {
                 var month = toolbar.getAttribute('data-month');
                 toolbar.querySelectorAll('.sales-edit-btn').forEach(function(btn) {
@@ -1417,10 +1540,14 @@
                     실입금: editValues.실입금,
                     건수: editValues.건수,
                     영업시간: editValues.영업시간,
+                    빈차시간: editValues.빈차시간,
                     연료비: editValues.연료비,
                     충전량: editValues.충전량,
-                    운행거리: parseFloat(cells[11].textContent.replace(/,/g, '')) || 0,
-                    매칭: cells[12].textContent.trim()
+                    운행거리: editValues.운행거리,
+                    빈차거리: editValues.빈차거리,
+                    총시간: (editValues.영업시간 || 0) + (editValues.빈차시간 || 0),
+                    총거리: (editValues.운행거리 || 0) + (editValues.빈차거리 || 0),
+                    매칭: cells[18].textContent.trim()
                 };
             });
         }
@@ -1799,6 +1926,38 @@
             tableBody.appendChild(frag);
         }
 
+        function parseSalesSortValue(cell, columnIndex) {
+            if (!cell) return '';
+            if (columnIndex === 10 || columnIndex === 11 || columnIndex === 12) {
+                var rawMinutes = cell.getAttribute('data-sort-minutes');
+                if (rawMinutes !== null && rawMinutes !== '') {
+                    return parseInt(rawMinutes, 10) || 0;
+                }
+                return parseWorkMinutesFromCell(cell.textContent);
+            }
+            if (columnIndex === 6 || columnIndex === 7 || columnIndex === 13) {
+                return parseInt(String(cell.textContent).replace(/,/g, ''), 10) || 0;
+            }
+            if (columnIndex === 14 || columnIndex === 15 || columnIndex === 16 || columnIndex === 17) {
+                return parseFloat(String(cell.textContent).replace(/,/g, '').replace(/\s*km\s*$/i, '')) || 0;
+            }
+            return String(cell.textContent || '').replace(/,/g, '').trim();
+        }
+
+        function compareSalesSortValues(aValue, bValue, direction) {
+            var aIsNum = typeof aValue === 'number' && !isNaN(aValue);
+            var bIsNum = typeof bValue === 'number' && !isNaN(bValue);
+            if (aIsNum && bIsNum) {
+                return direction === 'asc' ? aValue - bValue : bValue - aValue;
+            }
+            var aText = String(aValue);
+            var bText = String(bValue);
+            if (direction === 'asc') {
+                return aText.localeCompare(bText, 'ko', { numeric: true, sensitivity: 'base' });
+            }
+            return bText.localeCompare(aText, 'ko', { numeric: true, sensitivity: 'base' });
+        }
+
         function sortTable(tableId, columnIndex, direction) {
             var table = document.getElementById(tableId);
             var tbody = table.getElementsByTagName('tbody')[0];
@@ -1810,12 +1969,9 @@
             var sortBtn = headers[columnIndex].querySelector(direction === 'asc' ? '.sort-btn:first-child' : '.sort-btn:last-child');
             if (sortBtn) sortBtn.classList.add('active');
             rows.sort(function(a, b) {
-                var aValue = a.cells[columnIndex].textContent.replace(/,/g, '').trim();
-                var bValue = b.cells[columnIndex].textContent.replace(/,/g, '').trim();
-                if (!isNaN(aValue) && !isNaN(bValue) && aValue !== '' && bValue !== '') {
-                    aValue = parseFloat(aValue); bValue = parseFloat(bValue);
-                }
-                return direction === 'asc' ? (aValue > bValue ? 1 : -1) : (aValue < bValue ? 1 : -1);
+                var aValue = parseSalesSortValue(a.cells[columnIndex], columnIndex);
+                var bValue = parseSalesSortValue(b.cells[columnIndex], columnIndex);
+                return compareSalesSortValues(aValue, bValue, direction);
             });
             rows.forEach(function(row) { tbody.appendChild(row); });
             invalidateTableRowCache();
@@ -1945,28 +2101,37 @@
             var uploadButton = document.getElementById('uploadButton');
             var originalText = uploadButton.textContent;
             var fileInput = document.getElementById('dat_files');
+            var csvInput = document.getElementById('tmoney_csv');
             var fuelPrice = document.getElementById('fuel_price').value;
             var files = Array.from(fileInput.files || []).filter(function(f) {
                 return /\.dat$/i.test(f.name);
             });
+            var csvFile = (csvInput.files && csvInput.files[0]) ? csvInput.files[0] : null;
 
-            if (!files.length) {
-                alert('.dat 파일을 선택해 주세요.');
+            if (!files.length && !csvFile) {
+                alert('T머니 CSV 또는 .dat 파일 중 하나 이상을 선택해 주세요.');
                 return;
             }
 
             uploadButton.disabled = true;
-            var total = files.length;
+            var total = Math.max(files.length, 1);
             var completed = 0;
 
             function setUploadProgress() {
-                uploadButton.textContent = '업로드 중... ' + completed + ' / ' + total;
+                if (files.length) {
+                    uploadButton.textContent = '업로드 중... ' + completed + ' / ' + total;
+                } else {
+                    uploadButton.textContent = 'CSV 대조 중...';
+                }
             }
 
             var formData = new FormData();
             files.forEach(function(file) {
                 formData.append('dat_files', file);
             });
+            if (csvFile) {
+                formData.append('tmoney_csv', csvFile);
+            }
             formData.append('fuel_price', fuelPrice);
 
             setUploadProgress();
@@ -2009,7 +2174,14 @@
                             var dateStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
                             var timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
                             var savedCount = data.saved_count || total;
-                            var label = savedCount === 1 ? files[0].name : savedCount + '개 dat 파일';
+                            var labelParts = [];
+                            if (savedCount > 0) {
+                                labelParts.push(savedCount === 1 && files.length ? files[0].name : savedCount + '개 dat');
+                            }
+                            if (data.csv_reconciled && data.csv_filename) {
+                                labelParts.push(data.csv_filename);
+                            }
+                            var label = labelParts.length ? labelParts.join(' + ') : '수입금 데이터';
                             var uploadMessage = '<span style="color:#007bff;font-weight:bold;">' + label + '</span> 업로드 완료 (' + dateStr + ' ' + timeStr + ' | {{ current_user.name }})';
                             var HISTORY_KEY = 'salesUploadHistory';
                             var history = [];
