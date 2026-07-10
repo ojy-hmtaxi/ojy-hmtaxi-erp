@@ -1,0 +1,831 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar %}
+{% from "right_sidebar.html" import right_sidebar %}
+
+{% block sidebar %}
+{{ sidebar(current_user) }}
+{% endblock %}
+
+{% block title %}설정{% endblock %}
+
+{% block head %}
+<style>
+    .settings-container {
+        background: #fff;
+        padding: 24px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    .settings-header {
+        margin-bottom: 20px;
+    }
+    .settings-header h1 {
+        font-size: 1.5rem;
+        color: #333;
+        margin: 0 0 6px;
+    }
+    .settings-header p {
+        margin: 0;
+        color: #777;
+        font-size: 13px;
+    }
+    .settings-tabs-wrap {
+        margin-bottom: 24px;
+        background: #f8f9fa;
+        overflow: hidden;
+    }
+    .settings-tabs-nav {
+        display: flex;
+        border-bottom: 2px solid #dee2e6;
+        background: #fff;
+    }
+    .settings-tab-btn {
+        flex: 1;
+        padding: 12px 16px;
+        border: none;
+        background: transparent;
+        font-size: 14px;
+        color: #6c757d;
+        cursor: pointer;
+    }
+    .settings-tab-btn:hover {
+        background: #f1f3f5;
+        color: #333;
+    }
+    .settings-tab-btn.active {
+        background: #4CAF50;
+        color: #fff;
+    }
+    .settings-tab-panel {
+        display: none;
+        padding-top: 8px;
+    }
+    .settings-tab-panel.active {
+        display: block;
+    }
+    .settings-section {
+        margin-bottom: 28px;
+        border: 1px solid #e5e5e5;
+        background: #fafafa;
+        padding: 18px;
+    }
+    .settings-section h2 {
+        font-size: 15px;
+        color: #333;
+        margin: 0 0 14px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #ddd;
+    }
+    .settings-section h3 {
+        font-size: 13px;
+        color: #555;
+        margin: 16px 0 10px;
+    }
+    .formula-box {
+        background: #fff;
+        border: 1px solid #ddd;
+        padding: 14px 16px;
+        font-size: 15px;
+        font-weight: 600;
+        color: #2e7d32;
+        text-align: center;
+        letter-spacing: 0.5px;
+    }
+    .settings-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+        font-size: 13px;
+    }
+    .settings-table th,
+    .settings-table td {
+        border: 1px solid #ddd;
+        padding: 8px 10px;
+        vertical-align: middle;
+    }
+    .settings-table th {
+        background: #f0f0f0;
+        font-weight: 600;
+        text-align: center;
+        white-space: nowrap;
+    }
+    .settings-table td.label-cell {
+        background: #f9f9f9;
+        font-weight: 500;
+        width: 140px;
+    }
+    .settings-table .remark-cell {
+        color: #555;
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    .inline-fields {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: center;
+    }
+    .field-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+    }
+    .field-item label {
+        margin: 0;
+        color: #555;
+        white-space: nowrap;
+    }
+    .settings-input {
+        width: 120px;
+        padding: 6px 8px;
+        border: 1px solid #ccc;
+        box-sizing: border-box;
+        font-size: 13px;
+        text-align: right;
+    }
+    .settings-input.wide {
+        width: 180px;
+    }
+    .settings-input.narrow {
+        width: 70px;
+    }
+    .settings-input.text-left {
+        text-align: left;
+    }
+    .settings-input.full {
+        width: 100%;
+    }
+    .settings-select {
+        padding: 6px 8px;
+        border: 1px solid #ccc;
+        font-size: 13px;
+        min-width: 120px;
+    }
+    .note-list {
+        margin: 0;
+        padding-left: 18px;
+        color: #555;
+        font-size: 12px;
+        line-height: 1.6;
+    }
+    .formula-text {
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        padding: 10px 12px;
+        font-size: 13px;
+        line-height: 1.7;
+        color: #333;
+        margin-bottom: 10px;
+    }
+    .formula-text strong {
+        color: #2e7d32;
+    }
+    .holiday-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 16px;
+        margin-bottom: 14px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #ddd;
+    }
+    .holiday-section-header h2 {
+        margin: 0;
+        padding: 0;
+        border: none;
+    }
+    .holiday-year-nav {
+        display: flex;
+        align-items: center;
+        gap: 0;
+    }
+    .holiday-year-display {
+        margin: 0 10px 0 10px;
+        min-width: 56px;
+        text-align: center;
+        font-size: 16px;
+        font-weight: 700;
+        color: #333;
+    }
+    .holiday-name-cell {
+        background: #f9f9f9;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+    .holiday-table tbody tr:hover {
+        background: rgba(135, 206, 235, 0.15);
+    }
+    .checkbox-center {
+        text-align: center;
+    }
+    .checkbox-center input {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+    }
+    .btn-row {
+        margin-top: 24px;
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+    }
+    .btn-save {
+        background: #4CAF50;
+        color: #fff;
+        border: none;
+        padding: 10px 24px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+    .btn-save:hover {
+        background: #45a049;
+    }
+    .btn-add-row {
+        margin-top: 10px;
+        background: #6c757d;
+        color: #fff;
+        border: none;
+        padding: 6px 14px;
+        cursor: pointer;
+        font-size: 12px;
+    }
+    .radio-group {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+    }
+    .radio-group label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        margin: 0;
+        cursor: pointer;
+    }
+    .retire-grid {
+        display: grid;
+        grid-template-columns: 160px 1fr;
+        gap: 10px 16px;
+        align-items: center;
+        font-size: 13px;
+    }
+    .retire-grid .grid-label {
+        color: #555;
+        font-weight: 500;
+    }
+    .badge-draft {
+        display: inline-block;
+        background: #fff3cd;
+        color: #856404;
+        font-size: 11px;
+        padding: 2px 8px;
+        margin-left: 8px;
+        border: 1px solid #ffeeba;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{{ right_sidebar(messages, current_user) }}
+<div class="settings-container">
+    <div class="settings-header">
+        <h1>시스템 설정 <span class="badge-draft">UI 설계 · 데이터 연동 전</span></h1>
+        <p>급여, 공휴일, 퇴직금 산정 기준을 설정합니다. 현재는 화면 구성만 제공하며 다른 페이지와 연동되지 않습니다.</p>
+    </div>
+
+    <div class="settings-tabs-wrap">
+        <div class="settings-tabs-nav">
+            <button type="button" class="settings-tab-btn active" data-tab="salary">급여 계산 설정</button>
+            <button type="button" class="settings-tab-btn" data-tab="retire">퇴직금 설정</button>
+            <button type="button" class="settings-tab-btn" data-tab="holiday">공휴일 설정</button>
+        </div>
+    </div>
+
+    <!-- Tab 1: 급여 계산 설정 -->
+    <div class="settings-tab-panel active" id="tabSalary">
+        <div class="settings-section">
+            <h2>급여 계산식</h2>
+            <div class="formula-box">(기본급) + (승무수당) + (야간수당) + (성과금) + (기타수당)</div>
+        </div>
+
+        <div class="settings-section">
+            <h2>기본급 / 근속수당</h2>
+            <div class="inline-fields" style="margin-bottom:14px;">
+                <div class="field-item">
+                    <label>1. 만근일수</label>
+                    <input type="number" class="settings-input narrow" value="26" min="0"> 일
+                    <span style="color:#888;">( 월력</span>
+                    <input type="number" class="settings-input narrow" value="31" min="1"> 일
+                    <span style="color:#888;">)</span>
+                </div>
+            </div>
+            <div class="formula-text">
+                <strong>2. 만근미달자의 기본급</strong> : ( 근무일수 + 주휴일수 ) ×
+                <input type="number" class="settings-input" value="27419" style="display:inline-block;width:100px;"> 원
+            </div>
+            <div class="inline-fields" style="margin-bottom:14px;">
+                <div class="field-item">
+                    <span>→ 기본급(1일분)</span>
+                    <input type="number" class="settings-input" value="850000"> 원 ÷
+                    <input type="number" class="settings-input narrow" value="31" min="1"> 일(월력일수) ＝
+                    <input type="number" class="settings-input" value="27419"> 원
+                </div>
+            </div>
+            <div class="inline-fields">
+                <div class="field-item">
+                    <label>3. 근속수당</label>
+                    <span>실근무</span>
+                    <input type="number" class="settings-input narrow" value="16" min="0"> 일 이상 근무시 지급
+                </div>
+                <div class="field-item">
+                    <label>근속수당 금액</label>
+                    <input type="number" class="settings-input" value="0"> 원
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2>승무수당 / 야간수당</h2>
+            <table class="settings-table">
+                <thead>
+                    <tr>
+                        <th>구분</th>
+                        <th>적용 (실승무일수)</th>
+                        <th>비고</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="label-cell">승무수당</td>
+                        <td style="text-align:center;">월간 입금액 ÷ 정상승무기준금</td>
+                        <td class="remark-cell">
+                            소숫점 첫째자리까지 산정<br>
+                            최대적용일수는 본인 승무일수
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="label-cell">야간수당</td>
+                        <td style="text-align:center;">월간 입금액 ÷ 정상승무기준금</td>
+                        <td class="remark-cell">
+                            야간/일차 = 적용(실승무일수)<br>
+                            2교대 = 적용(실승무일수) ÷
+                            <input type="number" class="settings-input narrow" value="2" min="1" style="display:inline-block;">
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="settings-section">
+            <h2>정상승무 기준금</h2>
+            <table class="settings-table" id="baseFareTable">
+                <thead>
+                    <tr>
+                        <th>구분</th>
+                        <th>차종</th>
+                        <th>2교대</th>
+                        <th>오전</th>
+                        <th>오후</th>
+                        <th>일차</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="label-cell">일반택시</td>
+                        <td><input type="text" class="settings-input text-left full" value="전차종"></td>
+                        <td><input type="number" class="settings-input full" value="215000"></td>
+                        <td><input type="number" class="settings-input full" value="195000"></td>
+                        <td><input type="number" class="settings-input full" value="235000"></td>
+                        <td><input type="number" class="settings-input full" value="280000"></td>
+                    </tr>
+                    <tr>
+                        <td class="label-cell">일반택시</td>
+                        <td><input type="text" class="settings-input text-left full" value="아이오닉"></td>
+                        <td><input type="number" class="settings-input full" value="220000"></td>
+                        <td><input type="number" class="settings-input full" value="200000"></td>
+                        <td><input type="number" class="settings-input full" value="240000"></td>
+                        <td><input type="number" class="settings-input full" value="290000"></td>
+                    </tr>
+                </tbody>
+            </table>
+            <button type="button" class="btn-add-row" onclick="addTableRow('baseFareTable')">행 추가</button>
+        </div>
+
+        <div class="settings-section">
+            <h2>월기준금</h2>
+            <table class="settings-table" id="monthlyBaseTable">
+                <thead>
+                    <tr>
+                        <th>구분</th>
+                        <th>차종</th>
+                        <th>2교대</th>
+                        <th>오전</th>
+                        <th>오후</th>
+                        <th>일차</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="label-cell">일반택시</td>
+                        <td><input type="text" class="settings-input text-left full" value="전차종"></td>
+                        <td><input type="number" class="settings-input full" value="4750000"></td>
+                        <td><input type="number" class="settings-input full" value="4500000"></td>
+                        <td><input type="number" class="settings-input full" value="5000000"></td>
+                        <td><input type="number" class="settings-input full" value="5800000"></td>
+                    </tr>
+                    <tr>
+                        <td class="label-cell">일반택시</td>
+                        <td><input type="text" class="settings-input text-left full" value="아이오닉"></td>
+                        <td><input type="number" class="settings-input full" value="4750000"></td>
+                        <td><input type="number" class="settings-input full" value="4500000"></td>
+                        <td><input type="number" class="settings-input full" value="5000000"></td>
+                        <td><input type="number" class="settings-input full" value="6000000"></td>
+                    </tr>
+                </tbody>
+            </table>
+            <button type="button" class="btn-add-row" onclick="addTableRow('monthlyBaseTable')">행 추가</button>
+        </div>
+
+        <div class="settings-section">
+            <h2>성과급</h2>
+            <div class="inline-fields">
+                <span>월기준금 초과금액의</span>
+                <input type="number" class="settings-input narrow" value="60" min="0" max="100"> %
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2>기타수당</h2>
+            <table class="settings-table" id="extraAllowanceTable">
+                <thead>
+                    <tr>
+                        <th>유형</th>
+                        <th>인정등급</th>
+                        <th>수당 금액 (원)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><input type="text" class="settings-input text-left full" value="지체장애"></td>
+                        <td><input type="text" class="settings-input text-left full" value="4급 이상"></td>
+                        <td><input type="number" class="settings-input full" value="200000"></td>
+                    </tr>
+                </tbody>
+            </table>
+            <button type="button" class="btn-add-row" onclick="addExtraAllowanceRow()">행 추가</button>
+        </div>
+    </div>
+
+    <!-- Tab 2: 공휴일 설정 -->
+    <div class="settings-tab-panel" id="tabHoliday">
+        <div class="settings-section">
+            <div class="holiday-section-header">
+                <h2>대한민국 공휴일</h2>
+                <div class="holiday-year-nav">
+                    <button type="button" id="holidayYearDown" title="이전 해" class="btn btn-sm btn-link p-0 me-1" style="margin-left: 10px;">
+                        <i class="fas fa-arrow-down"></i>
+                    </button>
+                    <span class="holiday-year-display" id="holidayYearDisplay">2026</span>
+                    <button type="button" id="holidayYearUp" title="다음 해" class="btn btn-sm btn-link p-0 ms-1" style="margin-right: 10px;">
+                        <i class="fas fa-arrow-up"></i>
+                    </button>
+                </div>
+            </div>
+            <table class="settings-table holiday-table" id="holidayTable">
+                <thead>
+                    <tr>
+                        <th>공휴일 이름</th>
+                        <th>일자</th>
+                        <th>대체공휴일</th>
+                        <th>수당 제공</th>
+                    </tr>
+                </thead>
+                <tbody id="holidayTableBody"></tbody>
+            </table>
+            <button type="button" class="btn-add-row" onclick="addHolidayRow()">공휴일 추가</button>
+        </div>
+    </div>
+
+    <!-- Tab 3: 퇴직금 설정 -->
+    <div class="settings-tab-panel" id="tabRetire">
+        <div class="settings-section">
+            <h2>퇴직금 산정 기준</h2>
+            <div class="retire-grid">
+                <div class="grid-label">고용 형태</div>
+                <div class="radio-group">
+                    <label><input type="radio" name="empType" value="general" checked> 일반</label>
+                    <label><input type="radio" name="empType" value="contract"> 촉탁직</label>
+                </div>
+                <div class="grid-label">임금 기준</div>
+                <div class="radio-group">
+                    <label><input type="radio" name="wageType" value="avg" checked> 평균임금</label>
+                    <label><input type="radio" name="wageType" value="ordinary"> 통상임금</label>
+                </div>
+                <div class="grid-label">평균임금 산정 기간</div>
+                <div class="radio-group">
+                    <label><input type="radio" name="avgPeriod" value="3m" checked> 3개월</label>
+                    <label><input type="radio" name="avgPeriod" value="1y"> 1년</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2>산정기간에 따른 상여금 · 성과급 · 연차수당 산정식</h2>
+            <h3>3개월 기준</h3>
+            <div class="formula-text">상여금 : (직전 3개월 상여금 총액) ÷ <input type="number" class="settings-input narrow" value="9" style="display:inline-block;"> (3×3)</div>
+            <div class="formula-text">성과급 : (직전 3개월 성과급 총액) ÷ <input type="number" class="settings-input narrow" value="9" style="display:inline-block;"> (3×3)</div>
+            <div class="formula-text">연차수당 : (직전 1년간 연차수당 총액) ÷ <input type="number" class="settings-input narrow" value="9" style="display:inline-block;"> (3×3)</div>
+            <h3>1년 기준</h3>
+            <div class="formula-text">상여금 : (직전 1년간 상여금 총액) ÷ <input type="number" class="settings-input narrow" value="36" style="display:inline-block;"> (12×3)</div>
+            <div class="formula-text">성과급 : (직전 1년간 성과급 총액) ÷ <input type="number" class="settings-input narrow" value="36" style="display:inline-block;"> (12×3)</div>
+            <div class="formula-text">연차수당 : (직전 1년간 연차수당 총액) ÷ <input type="number" class="settings-input narrow" value="36" style="display:inline-block;"> (12×3)</div>
+        </div>
+
+        <div class="settings-section">
+            <h2>일평균임금 계산식</h2>
+            <div class="formula-box" style="font-size:13px;font-weight:normal;color:#333;">
+                ((산정기간 기본급외 급여 총합) + (산정기간 상여금+성과급+연차수당)) ÷ 산정일수
+            </div>
+            <div class="inline-fields" style="margin-top:12px;">
+                <div class="field-item">
+                    <label>산정일수 (3개월)</label>
+                    <input type="number" class="settings-input narrow" value="90"> 일
+                </div>
+                <div class="field-item">
+                    <label>산정일수 (1년)</label>
+                    <input type="number" class="settings-input narrow" value="365"> 일
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2>퇴직금 산정</h2>
+            <div class="formula-box" style="font-size:13px;font-weight:normal;color:#333;">
+                일평균임금 × 30 ÷ 365 × 산정일수
+            </div>
+            <div class="inline-fields" style="margin-top:12px;">
+                <div class="field-item">
+                    <label>산정일수 기본값</label>
+                    <input type="number" class="settings-input narrow" value="365"> 일
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2>공제 · 지급액</h2>
+            <div class="retire-grid">
+                <div class="grid-label">공제 적용</div>
+                <div>
+                    <label style="margin-right:16px;"><input type="checkbox" checked> 퇴직소득세</label>
+                    <label><input type="checkbox" checked> 주민세</label>
+                </div>
+                <div class="grid-label">퇴직소득세율 (%)</div>
+                <div><input type="number" class="settings-input narrow" value="0" step="0.1"></div>
+                <div class="grid-label">주민세율 (%)</div>
+                <div><input type="number" class="settings-input narrow" value="10" step="0.1"></div>
+            </div>
+            <div class="formula-text" style="margin-top:14px;">
+                <strong>지급액 계산식</strong> : 퇴직금 − 공제금액
+            </div>
+        </div>
+    </div>
+
+    <div class="btn-row">
+        <button type="button" class="btn-save" onclick="alert('설정 저장 기능은 추후 데이터 연동 시 적용됩니다.')">설정 저장 (준비 중)</button>
+    </div>
+</div>
+
+<script>
+var HOLIDAY_KEYS = [
+    '신정', '설날', '삼일절', '노동절', '어린이날', '부처님오신날',
+    '전국동시지방선거', '현충일', '제헌절', '광복절', '추석',
+    '개천절', '한글날', '기독탄신일'
+];
+var HOLIDAY_SOLAR_FIXED = {
+    '신정': '01-01',
+    '삼일절': '03-01',
+    '노동절': '05-01',
+    '어린이날': '05-05',
+    '현충일': '06-06',
+    '제헌절': '07-17',
+    '광복절': '08-15',
+    '개천절': '10-03',
+    '한글날': '10-09',
+    '기독탄신일': '12-25'
+};
+var HOLIDAY_CALENDAR = {
+    2023: {
+        '설날': { date: '2023-01-21', dateEnd: '2023-01-23', substitute: '' },
+        '부처님오신날': { date: '2023-05-27', substitute: '' },
+        '추석': { date: '2023-09-28', dateEnd: '2023-09-30', substitute: '' }
+    },
+    2024: {
+        '설날': { date: '2024-02-09', dateEnd: '2024-02-11', substitute: '2024-02-12' },
+        '어린이날': { date: '2024-05-05', substitute: '2024-05-06' },
+        '부처님오신날': { date: '2024-05-15', substitute: '' },
+        '추석': { date: '2024-09-16', dateEnd: '2024-09-18', substitute: '' }
+    },
+    2025: {
+        '설날': { date: '2025-01-28', dateEnd: '2025-01-30', substitute: '' },
+        '삼일절': { date: '2025-03-01', substitute: '2025-03-03' },
+        '부처님오신날': { date: '2025-05-05', substitute: '' },
+        '추석': { date: '2025-10-05', dateEnd: '2025-10-07', substitute: '' }
+    },
+    2026: {
+        '설날': { date: '2026-02-16', dateEnd: '2026-02-18', substitute: '' },
+        '부처님오신날': { date: '2026-05-24', substitute: '' },
+        '전국동시지방선거': { date: '2026-06-03', substitute: '' },
+        '추석': { date: '2026-09-24', dateEnd: '2026-09-26', substitute: '' }
+    },
+    2027: {
+        '설날': { date: '2027-02-06', dateEnd: '2027-02-08', substitute: '' },
+        '부처님오신날': { date: '2027-05-13', substitute: '' },
+        '추석': { date: '2027-09-14', dateEnd: '2027-09-16', substitute: '' }
+    },
+    2028: {
+        '설날': { date: '2028-01-26', dateEnd: '2028-01-28', substitute: '' },
+        '부처님오신날': { date: '2028-05-02', substitute: '' },
+        '추석': { date: '2028-10-02', dateEnd: '2028-10-04', substitute: '' }
+    },
+    2029: {
+        '설날': { date: '2029-02-12', dateEnd: '2029-02-14', substitute: '' },
+        '부처님오신날': { date: '2029-05-20', substitute: '' },
+        '추석': { date: '2029-09-21', dateEnd: '2029-09-23', substitute: '' }
+    },
+    2030: {
+        '설날': { date: '2030-02-02', dateEnd: '2030-02-04', substitute: '' },
+        '부처님오신날': { date: '2030-05-09', substitute: '' },
+        '전국동시지방선거': { date: '2030-06-04', substitute: '' },
+        '추석': { date: '2030-09-11', dateEnd: '2030-09-13', substitute: '' }
+    }
+};
+var ELECTION_YEARS = {
+    2022: '2022-06-01',
+    2026: '2026-06-03',
+    2030: '2030-06-04'
+};
+
+var holidayState = {
+    year: new Date().getFullYear(),
+    substituteStore: {}
+};
+
+function pad2(n) {
+    return String(n).padStart(2, '0');
+}
+
+function formatYmd(year, monthDay) {
+    var parts = monthDay.split('-');
+    return year + '-' + pad2(parts[0]) + '-' + pad2(parts[1]);
+}
+
+function formatHolidayDate(info) {
+    if (!info.date) return '';
+    if (info.dateEnd && info.dateEnd !== info.date) {
+        return info.date + ' ~ ' + info.dateEnd;
+    }
+    return info.date;
+}
+
+function getHolidayInfo(year, key) {
+    var yearData = HOLIDAY_CALENDAR[year];
+    if (yearData && yearData[key]) {
+        return {
+            date: yearData[key].date || '',
+            dateEnd: yearData[key].dateEnd || '',
+            substitute: yearData[key].substitute || ''
+        };
+    }
+    if (key === '전국동시지방선거') {
+        return { date: ELECTION_YEARS[year] || '', dateEnd: '', substitute: '' };
+    }
+    if (HOLIDAY_SOLAR_FIXED[key]) {
+        return { date: formatYmd(year, HOLIDAY_SOLAR_FIXED[key]), dateEnd: '', substitute: '' };
+    }
+    return { date: '', dateEnd: '', substitute: '' };
+}
+
+function saveHolidaySubstitutes(year) {
+    var tbody = document.getElementById('holidayTableBody');
+    if (!tbody) return;
+    if (!holidayState.substituteStore[year]) {
+        holidayState.substituteStore[year] = {};
+    }
+    var rows = tbody.querySelectorAll('tr[data-holiday-key]');
+    rows.forEach(function(row) {
+        var key = row.getAttribute('data-holiday-key');
+        var subInput = row.querySelector('.holiday-substitute');
+        if (key && subInput) {
+            holidayState.substituteStore[year][key] = subInput.value;
+        }
+    });
+}
+
+function renderHolidayTable(year) {
+    var tbody = document.getElementById('holidayTableBody');
+    var yearDisplay = document.getElementById('holidayYearDisplay');
+    if (!tbody) return;
+
+    var customRows = [];
+    tbody.querySelectorAll('tr[data-custom-holiday="1"]').forEach(function(row) {
+        customRows.push(row.outerHTML);
+    });
+
+    tbody.innerHTML = '';
+    HOLIDAY_KEYS.forEach(function(key) {
+        var info = getHolidayInfo(year, key);
+        var storedSub = (holidayState.substituteStore[year] && holidayState.substituteStore[year][key] !== undefined)
+            ? holidayState.substituteStore[year][key]
+            : info.substitute;
+        var dateText = formatHolidayDate(info);
+        var tr = document.createElement('tr');
+        tr.setAttribute('data-holiday-key', key);
+        tr.innerHTML =
+            '<td class="holiday-name-cell">' + key + '</td>' +
+            '<td><input type="text" class="settings-input text-left full holiday-date" value="' + dateText + '" readonly></td>' +
+            '<td><input type="text" class="settings-input text-left full holiday-substitute" value="' + (storedSub || '') + '" placeholder="YYYY-MM-DD"></td>' +
+            '<td class="checkbox-center"><input type="checkbox" class="holiday-allowance" checked></td>';
+        tbody.appendChild(tr);
+    });
+
+    customRows.forEach(function(html) {
+        tbody.insertAdjacentHTML('beforeend', html);
+    });
+
+    if (yearDisplay) yearDisplay.textContent = String(year);
+}
+
+function changeHolidayYear(delta) {
+    saveHolidaySubstitutes(holidayState.year);
+    holidayState.year += delta;
+    renderHolidayTable(holidayState.year);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    var tabBtns = document.querySelectorAll('.settings-tab-btn');
+    var tabPanels = {
+        salary: document.getElementById('tabSalary'),
+        holiday: document.getElementById('tabHoliday'),
+        retire: document.getElementById('tabRetire')
+    };
+    tabBtns.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var tab = this.getAttribute('data-tab');
+            tabBtns.forEach(function(b) { b.classList.remove('active'); });
+            Object.keys(tabPanels).forEach(function(key) {
+                if (tabPanels[key]) tabPanels[key].classList.remove('active');
+            });
+            this.classList.add('active');
+            if (tabPanels[tab]) tabPanels[tab].classList.add('active');
+        });
+    });
+
+    renderHolidayTable(holidayState.year);
+    var yearUp = document.getElementById('holidayYearUp');
+    var yearDown = document.getElementById('holidayYearDown');
+    if (yearUp) yearUp.addEventListener('click', function() { changeHolidayYear(1); });
+    if (yearDown) yearDown.addEventListener('click', function() { changeHolidayYear(-1); });
+});
+
+function addTableRow(tableId) {
+    var table = document.getElementById(tableId);
+    if (!table) return;
+    var tbody = table.querySelector('tbody');
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+        '<td class="label-cell"><input type="text" class="settings-input text-left full" value="일반택시"></td>' +
+        '<td><input type="text" class="settings-input text-left full" value=""></td>' +
+        '<td><input type="number" class="settings-input full" value="0"></td>' +
+        '<td><input type="number" class="settings-input full" value="0"></td>' +
+        '<td><input type="number" class="settings-input full" value="0"></td>' +
+        '<td><input type="number" class="settings-input full" value="0"></td>';
+    tbody.appendChild(tr);
+}
+
+function addExtraAllowanceRow() {
+    var tbody = document.querySelector('#extraAllowanceTable tbody');
+    if (!tbody) return;
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+        '<td><input type="text" class="settings-input text-left full" value=""></td>' +
+        '<td><input type="text" class="settings-input text-left full" value=""></td>' +
+        '<td><input type="number" class="settings-input full" value="0"></td>';
+    tbody.appendChild(tr);
+}
+
+function addHolidayRow() {
+    var tbody = document.querySelector('#holidayTableBody');
+    if (!tbody) return;
+    var tr = document.createElement('tr');
+    tr.setAttribute('data-custom-holiday', '1');
+    tr.innerHTML =
+        '<td><input type="text" class="settings-input text-left full" value="" placeholder="공휴일 이름"></td>' +
+        '<td><input type="text" class="settings-input text-left full" value="" placeholder="YYYY-MM-DD"></td>' +
+        '<td><input type="text" class="settings-input text-left full" value="" placeholder="YYYY-MM-DD"></td>' +
+        '<td class="checkbox-center"><input type="checkbox"></td>';
+    tbody.appendChild(tr);
+}
+</script>
+{% endblock %}

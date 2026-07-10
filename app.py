@@ -3202,7 +3202,8 @@ def car():
                 events, year_from_file, parse_err = parse_maintenance_excel(file_path)
                 if parse_err:
                     return render_template('car.html', error=parse_err, car_data=car_data, messages=messages, current_user=current_user,
-                        maintenance_headers=[], maintenance_table_data=[], maintenance_available_months=[], maintenance_selected_month=None)
+                        maintenance_headers=[], maintenance_table_data=[], maintenance_available_months=[], maintenance_selected_month=None,
+                        repair_headers=[], repair_table_data=[], repair_available_months=[], repair_selected_month=None, repair_stats=None)
                 save_car_maintenance_events(events, year_from_file)
             flask_url = url_for('uploaded_file', filename=os.path.basename(file_path), _external=True)
             record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type=upload_type)
@@ -3210,7 +3211,8 @@ def car():
             db.session.commit()
         except Exception as e:
             return render_template('car.html', error=f'파일 처리 중 오류: {str(e)}', car_data=car_data, messages=messages, current_user=current_user,
-                maintenance_headers=[], maintenance_table_data=[], maintenance_available_months=[], maintenance_selected_month=None)
+                maintenance_headers=[], maintenance_table_data=[], maintenance_available_months=[], maintenance_selected_month=None,
+                repair_headers=[], repair_table_data=[], repair_available_months=[], repair_selected_month=None, repair_stats=None)
     # GET 또는 POST 성공 후: 차량정비 월별 테이블용 데이터 (1월~12월 시트에 맞춰 12개 월 버튼 표시)
     events, maintenance_year = load_car_maintenance_events()
     maintenance_headers = []
@@ -3231,10 +3233,18 @@ def car():
         if maintenance_selected_month and maintenance_selected_month in maintenance_available_months:
             maintenance_headers, maintenance_table_data = build_maintenance_table(events, maintenance_selected_month)
     maintenance_stats = build_maintenance_stats(events, maintenance_selected_month) if (events and maintenance_selected_month) else None
+    repair_headers = []
+    repair_table_data = []
+    repair_available_months = []
+    repair_selected_month = None
+    repair_stats = None
     return render_template('car.html', car_data=car_data, messages=messages, current_user=current_user,
         maintenance_headers=maintenance_headers, maintenance_table_data=maintenance_table_data,
         maintenance_available_months=maintenance_available_months, maintenance_selected_month=maintenance_selected_month,
-        maintenance_stats=maintenance_stats)
+        maintenance_stats=maintenance_stats,
+        repair_headers=repair_headers, repair_table_data=repair_table_data,
+        repair_available_months=repair_available_months, repair_selected_month=repair_selected_month,
+        repair_stats=repair_stats)
 
 @app.route('/driver/profile/<driver_id>')
 @login_required
@@ -3852,6 +3862,13 @@ def load_map_json():
         print(f"❌ JSON 불러오기 중 오류 발생: {str(e)}")
         print("=== 📖 사고지도 JSON 불러오기 실패 ===\n")
         return jsonify({'success': False, 'error': f'JSON 불러오기 실패: {str(e)}'}), 500
+
+@app.route('/settings')
+@login_required
+def settings():
+    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
+    return render_template('settings.html', messages=messages, current_user=current_user)
+
 
 @app.route('/build_note')
 @login_required

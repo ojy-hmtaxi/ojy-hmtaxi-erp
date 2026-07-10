@@ -17,7 +17,7 @@
             border-radius: 0px; 
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             width: 100%;
-            max-width: 1200px;
+            max-width: 1260px;
             margin: 0 auto;
         }
         h1 {
@@ -356,7 +356,7 @@
                     <div id="result-{{ sheet_name }}" class="tab-content active">
                         <!-- 급여 통합 검색 필터 (계산 결과 탭에서만 표시) -->
                         <div style="margin-bottom:10px;">
-                            <input type="text" id="payLeaseUnifiedFilter-sheet-{{ loop.index }}" class="payLeaseFilterInput" placeholder="쉼표(,) 구분 · 사번 / 이름 / 차종 · 차종은 정확히 일치 (K5 ≠ K5H)" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
+                            <input type="text" id="payLeaseUnifiedFilter-sheet-{{ loop.index }}" class="payLeaseFilterInput" placeholder="쉼표(,) 다중 조건 · 사번 / 이름 / 차종 · 차량 모델명 정확히 구분 (K5 ≠ K5H)" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
                         </div>
                         <table class="table" id="payLeaseTable_{{ sheet_name }}">
                             <thead>

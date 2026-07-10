@@ -17,7 +17,7 @@
             border-radius: 0px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             width: 100%;
-            max-width: 1200px;
+            max-width: 1260px;
             margin: 0 auto;
         }
         .form-group { margin-bottom: 15px; }
@@ -151,6 +151,51 @@
         }
         .table tbody tr.sales-row-editing td {
             background-color: #fffde7 !important;
+        }
+        .sales-table-pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin: 12px 0 4px;
+            font-size: 13px;
+        }
+        .sales-page-nav,
+        .sales-page-btn {
+            min-width: 32px;
+            padding: 4px 10px;
+            border: 1px solid #ddd;
+            background: #fff;
+            color: #333;
+            cursor: pointer;
+            width: auto;
+            font-size: 12px;
+            border-radius: 0;
+        }
+        .sales-page-nav:hover:not(:disabled),
+        .sales-page-btn:hover:not(:disabled):not(.active) {
+            background: #f5f5f5;
+        }
+        .sales-page-btn.active {
+            background: #4CAF50;
+            color: #fff;
+            border-color: #4CAF50;
+        }
+        .sales-page-nav:disabled,
+        .sales-page-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+        .sales-page-ellipsis {
+            padding: 4px 6px;
+            color: #888;
+            user-select: none;
+        }
+        .sales-page-info {
+            margin-left: 10px;
+            color: #555;
+            white-space: nowrap;
         }
         .tabs { margin-top: 20px; }
         .tab-buttons {
@@ -298,7 +343,7 @@
             padding: 15px; border-radius: 0px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .summary-table {
-            width: 100%; border-collapse: collapse; margin-top: 20px;
+            width: 100%; border-collapse: collapse; margin-top: 0.15px;
             background: white; border-radius: 0px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 12px;
         }
@@ -309,6 +354,34 @@
         .summary-table tbody tr:hover, .summary-table tbody tr:hover td {
             background-color: rgba(135, 206, 235, 0.3);
         }
+        .summary-rank-tabs {
+            display: flex;
+            margin: 20px auto 0px;
+            flex-wrap: nowrap;
+            overflow-x: hidden;
+            white-space: nowrap;
+            width: 100%;
+            gap: 6px;
+            justify-content: center;
+        }
+        .summary-rank-tab {
+            flex: 0 1 auto;
+            min-width: 90px;
+            padding: 8px 6px;
+            background-color: #b0b0b0;
+            border: none;
+            border-radius: 0px;
+            cursor: pointer;
+            color: #333;
+            font-size: 13px;
+            font-weight: normal;
+            text-align: center;
+            width: auto;
+        }
+        .summary-rank-tab:hover { background-color: #999; color: #fff; }
+        .summary-rank-tab.active { background-color: #4CAF50; color: white; }
+        .summary-rank-panel { display: none; }
+        .summary-rank-panel.active { display: block; }
         .rank-badge {
             display: inline-block; padding: 2px 6px; border-radius: 0px;
             font-size: 12px; font-weight: bold; color: white;
@@ -644,6 +717,12 @@
                             {% endfor %}
                         </tbody>
                     </table>
+                    <div class="sales-table-pagination" data-month="{{ sheet_name }}">
+                        <button type="button" class="sales-page-nav" data-action="prev" disabled>이전</button>
+                        <span class="sales-page-numbers"></span>
+                        <button type="button" class="sales-page-nav" data-action="next" disabled>다음</button>
+                        <span class="sales-page-info">0건</span>
+                    </div>
                 </div>
                 <div id="summary-{{ sheet_name }}" class="tab-content">
                     <div class="chart-container">
@@ -710,21 +789,43 @@
                             <canvas id="fuelPieChart-{{ sheet_name }}" class="chart-fuel-pie"></canvas>
                         </div>
                     </div>
-                    <table class="summary-table">
-                        <thead>
-                            <tr>
-                                <th>순위</th>
-                                <th>날짜</th>
-                                <th>차번</th>
-                                <th>운전기사</th>
-                                <th>차종</th>
-                                <th>실입금</th>
-                                <th>영업시간</th>
-                                <th>연료비</th>
-                            </tr>
-                        </thead>
-                        <tbody id="summaryTableBody-{{ sheet_name }}" class="summary-table-body"></tbody>
-                    </table>
+                    <div class="summary-rank-tabs" data-month="{{ sheet_name }}">
+                        <button type="button" class="summary-rank-tab active" data-rank-tab="all">전체순위</button>
+                        <button type="button" class="summary-rank-tab" data-rank-tab="total">총합순위</button>
+                    </div>
+                    <div class="summary-rank-panel active" data-rank-panel="all" data-month="{{ sheet_name }}">
+                        <table class="summary-table">
+                            <thead>
+                                <tr>
+                                    <th>순위</th>
+                                    <th>날짜</th>
+                                    <th>차번</th>
+                                    <th>운전기사</th>
+                                    <th>차종</th>
+                                    <th>실입금</th>
+                                    <th>영업시간</th>
+                                    <th>연료비</th>
+                                </tr>
+                            </thead>
+                            <tbody id="summaryTableBodyAll-{{ sheet_name }}" class="summary-table-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="summary-rank-panel" data-rank-panel="total" data-month="{{ sheet_name }}">
+                        <table class="summary-table">
+                            <thead>
+                                <tr>
+                                    <th>순위</th>
+                                    <th>운전기사</th>
+                                    <th>차번</th>
+                                    <th>차종</th>
+                                    <th>실입금</th>
+                                    <th>영업시간</th>
+                                    <th>연료비</th>
+                                </tr>
+                            </thead>
+                            <tbody id="summaryTableBodyTotal-{{ sheet_name }}" class="summary-table-body"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
             {% endfor %}
@@ -736,16 +837,172 @@
         const chartInstances = {};
         var summaryDebounceTimer = null;
         var cachedFilterCtx = { sheet: null, tokensKey: '', tokens: [], 차종Idx: 2, 차종OrSet: {}, andTokens: [], 차종OrTokens: [] };
-        var tableRowCache = { sheet: null, rows: [], days: [], searchOk: [], byDay: [] };
+        var tableRowCache = { sheet: null, rows: [], days: [], searchOk: [], passFilter: [], byDay: [] };
         var lastDateRange = { min: 1, max: 31 };
         var SUMMARY_DEBOUNCE_MS = 120;
+        var SALES_PAGE_SIZE = 100;
+        var salesTablePagination = {};
+        var summaryRankTabState = {};
+
+        function getSummaryRankTab(month) {
+            return summaryRankTabState[month] || 'all';
+        }
+
+        function setSummaryRankTab(sheet, mode) {
+            var bar = sheet.querySelector('.summary-rank-tabs');
+            if (!bar) return;
+            var month = bar.getAttribute('data-month');
+            if (!month) return;
+            summaryRankTabState[month] = mode;
+            bar.querySelectorAll('.summary-rank-tab').forEach(function(btn) {
+                btn.classList.toggle('active', btn.getAttribute('data-rank-tab') === mode);
+            });
+            sheet.querySelectorAll('.summary-rank-panel[data-month="' + month + '"]').forEach(function(panel) {
+                panel.classList.toggle('active', panel.getAttribute('data-rank-panel') === mode);
+            });
+        }
+
+        function buildSummaryRankBadge(index) {
+            var rank = index + 1;
+            if (index < 3) {
+                return '<span class="rank-badge rank-' + rank + '">' + rank + '위</span>';
+            }
+            return rank + '위';
+        }
+
+        function renderSummaryAllRankTable(currentSheet, salesData) {
+            var month = getSalesMonthKey(currentSheet);
+            var tableBody = currentSheet.querySelector('#summaryTableBodyAll-' + month);
+            if (!tableBody) return;
+
+            var sorted = salesData.slice().sort(function(a, b) {
+                return (Number(b.실입금) || 0) - (Number(a.실입금) || 0);
+            });
+            var frag = document.createDocumentFragment();
+            sorted.forEach(function(row, index) {
+                var tr = document.createElement('tr');
+                tr.innerHTML =
+                    '<td>' + buildSummaryRankBadge(index) + '</td>' +
+                    '<td>' + row.날짜 + '</td>' +
+                    '<td>' + row.차번 + '</td>' +
+                    '<td>' + (row.이름 || '-') + '</td>' +
+                    '<td>' + (row.차종 || '-') + '</td>' +
+                    '<td>' + Number(row.실입금 || 0).toLocaleString() + '원</td>' +
+                    '<td>' + formatWorkMinutesLabel(row.영업시간) + '</td>' +
+                    '<td>' + Number(row.연료비 || 0).toLocaleString() + '원</td>';
+                frag.appendChild(tr);
+            });
+            tableBody.innerHTML = '';
+            tableBody.appendChild(frag);
+        }
+
+        function buildSummaryTotalRankRows(salesData) {
+            var map = {};
+            salesData.forEach(function(row) {
+                var emp = String(row.사번 || '').trim().replace(/\.0+$/, '');
+                var name = String(row.이름 || '').trim();
+                var car = String(row.차번 || '').trim();
+                var key = emp || name || car;
+                if (!key) return;
+
+                if (!map[key]) {
+                    map[key] = {
+                        이름: name || '-',
+                        차번: car || '-',
+                        차종: String(row.차종 || '').trim() || '-',
+                        실입금: 0,
+                        영업시간: 0,
+                        연료비: 0,
+                        cars: {},
+                        types: {}
+                    };
+                }
+                var agg = map[key];
+                agg.실입금 += Number(row.실입금) || 0;
+                agg.영업시간 += Number(row.영업시간) || 0;
+                agg.연료비 += Number(row.연료비) || 0;
+                if (name && agg.이름 === '-') agg.이름 = name;
+                if (car) agg.cars[car] = 1;
+                if (row.차종) agg.types[row.차종] = 1;
+            });
+
+            return Object.keys(map).map(function(key) {
+                var agg = map[key];
+                var cars = Object.keys(agg.cars);
+                var types = Object.keys(agg.types);
+                if (cars.length === 1) agg.차번 = cars[0];
+                else if (cars.length > 1) agg.차번 = cars.length + '대';
+                if (types.length === 1) agg.차종 = types[0];
+                else if (types.length > 1) agg.차종 = types.length + '종';
+                delete agg.cars;
+                delete agg.types;
+                return agg;
+            }).sort(function(a, b) {
+                return (Number(b.실입금) || 0) - (Number(a.실입금) || 0);
+            });
+        }
+
+        function renderSummaryTotalRankTable(currentSheet, salesData) {
+            var month = getSalesMonthKey(currentSheet);
+            var tableBody = currentSheet.querySelector('#summaryTableBodyTotal-' + month);
+            if (!tableBody) return;
+
+            var sorted = buildSummaryTotalRankRows(salesData);
+            var frag = document.createDocumentFragment();
+            sorted.forEach(function(row, index) {
+                var tr = document.createElement('tr');
+                tr.innerHTML =
+                    '<td>' + buildSummaryRankBadge(index) + '</td>' +
+                    '<td>' + (row.이름 || '-') + '</td>' +
+                    '<td>' + (row.차번 || '-') + '</td>' +
+                    '<td>' + (row.차종 || '-') + '</td>' +
+                    '<td>' + Number(row.실입금 || 0).toLocaleString() + '원</td>' +
+                    '<td>' + formatWorkMinutesLabel(row.영업시간) + '</td>' +
+                    '<td>' + Number(row.연료비 || 0).toLocaleString() + '원</td>';
+                frag.appendChild(tr);
+            });
+            tableBody.innerHTML = '';
+            tableBody.appendChild(frag);
+        }
+
+        function initSummaryRankTabs() {
+            document.querySelectorAll('.summary-rank-tabs').forEach(function(bar) {
+                bar.querySelectorAll('.summary-rank-tab').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        var sheet = bar.closest('.tabs');
+                        if (!sheet) return;
+                        var mode = btn.getAttribute('data-rank-tab') || 'all';
+                        setSummaryRankTab(sheet, mode);
+                    });
+                });
+            });
+        }
 
         function invalidateTableRowCache() {
             tableRowCache.sheet = null;
             tableRowCache.rows = [];
             tableRowCache.days = [];
             tableRowCache.searchOk = [];
+            tableRowCache.passFilter = [];
             tableRowCache.byDay = [];
+        }
+
+        function getSalesPagination(month) {
+            if (!salesTablePagination[month]) {
+                salesTablePagination[month] = { page: 1 };
+            }
+            return salesTablePagination[month];
+        }
+
+        function getSalesSheetFromTableNode(tableOrTbody) {
+            if (!tableOrTbody) return null;
+            return tableOrTbody.closest('.tabs');
+        }
+
+        function getSalesMonthKey(sheet) {
+            if (!sheet) return '';
+            var table = sheet.querySelector('.table[data-month]');
+            return table ? table.getAttribute('data-month') : '';
         }
 
         function ensureTableRowCache(sheet) {
@@ -757,6 +1014,7 @@
             var rows = new Array(n);
             var days = new Array(n);
             var searchOk = new Array(n);
+            var passFilter = new Array(n);
             var byDay = new Array(32);
             for (var d = 1; d <= 31; d++) byDay[d] = [];
             for (var i = 0; i < n; i++) {
@@ -769,12 +1027,14 @@
                 }
                 days[i] = day;
                 searchOk[i] = true;
+                passFilter[i] = true;
                 if (day >= 1 && day <= 31) byDay[day].push(i);
             }
             tableRowCache.sheet = sheet;
             tableRowCache.rows = rows;
             tableRowCache.days = days;
             tableRowCache.searchOk = searchOk;
+            tableRowCache.passFilter = passFilter;
             tableRowCache.byDay = byDay;
             lastDateRange = getDayRangeValues();
         }
@@ -1022,11 +1282,135 @@
             return cachedFilterCtx;
         }
 
-        function applyTableFilter(range, ctx) {
+        function buildPaginationPageList(page, totalPages) {
+            if (totalPages <= 9) {
+                var allPages = [];
+                for (var i = 1; i <= totalPages; i++) allPages.push(i);
+                return allPages;
+            }
+            var pages = [1];
+            if (page > 3) pages.push('...');
+            var start = Math.max(2, page - 1);
+            var end = Math.min(totalPages - 1, page + 1);
+            for (var p = start; p <= end; p++) pages.push(p);
+            if (page < totalPages - 2) pages.push('...');
+            if (totalPages > 1) pages.push(totalPages);
+            return pages;
+        }
+
+        function renderSalesPaginationControls(sheet, page, totalPages, totalRows) {
+            var month = getSalesMonthKey(sheet);
+            var bar = sheet.querySelector('.sales-table-pagination[data-month="' + month + '"]');
+            if (!bar) return;
+
+            var startRow = totalRows === 0 ? 0 : (page - 1) * SALES_PAGE_SIZE + 1;
+            var endRow = Math.min(page * SALES_PAGE_SIZE, totalRows);
+            var info = bar.querySelector('.sales-page-info');
+            if (info) {
+                info.textContent = totalRows
+                    ? (startRow.toLocaleString() + '-' + endRow.toLocaleString() + ' / ' + totalRows.toLocaleString() + '건')
+                    : '0건';
+            }
+
+            var prevBtn = bar.querySelector('[data-action="prev"]');
+            var nextBtn = bar.querySelector('[data-action="next"]');
+            if (prevBtn) prevBtn.disabled = page <= 1;
+            if (nextBtn) nextBtn.disabled = page >= totalPages || totalRows === 0;
+
+            var nums = bar.querySelector('.sales-page-numbers');
+            if (!nums) return;
+            nums.innerHTML = '';
+            if (totalPages <= 1) return;
+
+            buildPaginationPageList(page, totalPages).forEach(function(item) {
+                if (item === '...') {
+                    var span = document.createElement('span');
+                    span.className = 'sales-page-ellipsis';
+                    span.textContent = '...';
+                    nums.appendChild(span);
+                    return;
+                }
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'sales-page-btn' + (item === page ? ' active' : '');
+                btn.textContent = String(item);
+                btn.setAttribute('data-page', String(item));
+                btn.disabled = item === page;
+                nums.appendChild(btn);
+            });
+        }
+
+        function applySalesPagination(sheet) {
+            ensureTableRowCache(sheet);
+            var rows = tableRowCache.rows;
+            var passFilter = tableRowCache.passFilter;
+            var visibleIndices = [];
+            for (var i = 0, n = rows.length; i < n; i++) {
+                if (passFilter[i]) visibleIndices.push(i);
+            }
+
+            var month = getSalesMonthKey(sheet);
+            var state = getSalesPagination(month);
+            var totalRows = visibleIndices.length;
+            var totalPages = Math.max(1, Math.ceil(totalRows / SALES_PAGE_SIZE) || 1);
+            if (state.page > totalPages) state.page = totalPages;
+            if (state.page < 1) state.page = 1;
+
+            var pageStart = (state.page - 1) * SALES_PAGE_SIZE;
+            var pageEnd = pageStart + SALES_PAGE_SIZE;
+            var pageSet = {};
+            for (var j = pageStart; j < pageEnd && j < visibleIndices.length; j++) {
+                pageSet[visibleIndices[j]] = true;
+            }
+
+            for (var r = 0; r < rows.length; r++) {
+                rows[r].style.display = (passFilter[r] && pageSet[r]) ? '' : 'none';
+            }
+
+            renderSalesPaginationControls(sheet, state.page, totalPages, totalRows);
+        }
+
+        function resetSalesTableHorizontalScroll(table) {
+            if (!table) return;
+            var node = table.parentElement;
+            while (node) {
+                if (node.scrollWidth > node.clientWidth + 1) {
+                    node.scrollLeft = 0;
+                }
+                node = node.parentElement;
+            }
+            document.documentElement.scrollLeft = 0;
+            document.body.scrollLeft = 0;
+            if (window.scrollX) {
+                window.scrollTo(0, window.scrollY);
+            }
+        }
+
+        function scrollSalesTableHeadToTop(sheet) {
+            var table = sheet.querySelector('.table');
+            if (!table) return;
+            var thead = table.querySelector('thead');
+            var anchor = thead || table;
+            var targetTop = Math.max(0, window.pageYOffset + anchor.getBoundingClientRect().top);
+            resetSalesTableHorizontalScroll(table);
+            window.scrollTo({ top: targetTop, left: 0, behavior: 'auto' });
+        }
+
+        function goToSalesPage(sheet, page) {
+            var month = getSalesMonthKey(sheet);
+            if (!month) return;
+            var state = getSalesPagination(month);
+            state.page = Math.max(1, parseInt(page, 10) || 1);
+            applySalesPagination(sheet);
+            scrollSalesTableHeadToTop(sheet);
+        }
+
+        function applyTableFilter(range, ctx, resetPage) {
             ensureTableRowCache(ctx.sheet);
             var rows = tableRowCache.rows;
             var days = tableRowCache.days;
             var searchOk = tableRowCache.searchOk;
+            var passFilter = tableRowCache.passFilter;
             var min = range.min;
             var max = range.max;
             var hasTokens = ctx.tokens.length > 0;
@@ -1037,20 +1421,25 @@
                     match = rowMatchesSearch(rows[i].cells, ctx.tokens, ctx.차종Idx, ctx.차종OrSet, ctx.andTokens, ctx.차종OrTokens);
                 }
                 searchOk[i] = match;
-                rows[i].style.display = (match && days[i] >= min && days[i] <= max) ? '' : 'none';
+                passFilter[i] = match && days[i] >= min && days[i] <= max;
             }
             lastDateRange = { min: min, max: max };
+            if (resetPage !== false) {
+                var month = getSalesMonthKey(ctx.sheet);
+                if (month) getSalesPagination(month).page = 1;
+            }
+            applySalesPagination(ctx.sheet);
             updateSalesTableTotals(ctx.sheet);
         }
 
         function updateSalesTableTotals(sheet) {
             if (!sheet) return;
             var totalRow = sheet.querySelector('.sales-table-total-row');
-            var tbody = sheet.querySelector('.table tbody');
-            if (!totalRow || !tbody) return;
+            if (!totalRow) return;
+            ensureTableRowCache(sheet);
 
-            var rows = Array.from(tbody.querySelectorAll('tr')).filter(function(row) {
-                return row.style.display !== 'none';
+            var rows = tableRowCache.rows.filter(function(row, i) {
+                return tableRowCache.passFilter[i];
             });
 
             var dates = {};
@@ -1379,6 +1768,7 @@
             table.classList.add('sales-table-editing');
 
             table.querySelectorAll('tbody tr').forEach(function(row) {
+                if (row.style.display === 'none') return;
                 row.classList.add('sales-row-editing');
                 SALES_EDIT_FIELDS.forEach(function(field) {
                     var values = readSalesRowFieldValues(row);
@@ -1399,6 +1789,7 @@
             table.classList.remove('sales-table-editing');
             table.querySelectorAll('tbody tr').forEach(function(row) {
                 row.classList.remove('sales-row-editing');
+                if (!row.querySelector('.sales-cell-input')) return;
                 var key = salesRowIdentityKey(row);
                 var values = restore && state && state.snapshot ? state.snapshot[key] : readSalesRowFieldValues(row);
                 SALES_EDIT_FIELDS.forEach(function(field) {
@@ -1410,7 +1801,12 @@
             delete salesEditState[month];
             setSalesEditButtons(month, false);
             invalidateTableRowCache();
-            updateSalesTableTotals(table.closest('.tabs'));
+            var sheet = table.closest('.tabs');
+            if (sheet) {
+                var searchInput = sheet.querySelector('.salesFilterInput');
+                var ctx = buildFilterContext(sheet, searchInput ? searchInput.value : '');
+                applyTableFilter(getDayRangeValues(), ctx, false);
+            }
             scheduleSummaryUpdate(true);
         }
 
@@ -1421,6 +1817,7 @@
 
             var updates = [];
             table.querySelectorAll('tbody tr').forEach(function(row) {
+                if (row.style.display === 'none') return;
                 var date = row.getAttribute('data-date') || '';
                 var car = row.getAttribute('data-car') || '';
                 if (!date || !car) return;
@@ -1524,9 +1921,40 @@
             });
         }
 
-        function getSalesRowData(table) {
-            return Array.from(table.querySelectorAll('tbody tr')).filter(function(row) {
-                return row.style.display !== 'none';
+        function isMissingSalesText(value, allowNan) {
+            var text = String(value || '').trim();
+            if (!text || text === '-') return true;
+            if (allowNan !== false && text.toLowerCase() === 'nan') return true;
+            return false;
+        }
+
+        function isIncompleteSalesRow(row) {
+            if (isMissingSalesText(row.차번)) return true;
+            if (isMissingSalesText(row.차종)) return true;
+            if (isMissingSalesText(row.근무유형, false)) return true;
+            if (isMissingSalesText(row.사번, false)) return true;
+            if (isMissingSalesText(row.이름)) return true;
+            if ((Number(row.실입금) || 0) <= 0) return true;
+            if ((Number(row.건수) || 0) <= 0) return true;
+            if (isMissingSalesText(row.출고일시, false)) return true;
+            if (isMissingSalesText(row.입고일시, false)) return true;
+            if ((Number(row.영업시간) || 0) <= 0) return true;
+            if ((Number(row.빈차시간) || 0) <= 0) return true;
+            if ((Number(row.총시간) || 0) <= 0) return true;
+            if ((Number(row.연료비) || 0) <= 0) return true;
+            if ((Number(row.충전량) || 0) <= 0) return true;
+            if ((Number(row.운행거리) || 0) <= 0) return true;
+            if ((Number(row.빈차거리) || 0) <= 0) return true;
+            if ((Number(row.총거리) || 0) <= 0) return true;
+            return false;
+        }
+
+        function getSalesRowData(tableOrTbody) {
+            var sheet = getSalesSheetFromTableNode(tableOrTbody);
+            if (!sheet) return [];
+            ensureTableRowCache(sheet);
+            return tableRowCache.rows.filter(function(row, i) {
+                return tableRowCache.passFilter[i];
             }).map(function(row) {
                 var cells = row.querySelectorAll('td');
                 var editValues = readSalesRowFieldValues(row);
@@ -1539,6 +1967,8 @@
                     이름: cells[5].textContent.trim(),
                     실입금: editValues.실입금,
                     건수: editValues.건수,
+                    출고일시: cells[8].textContent.trim(),
+                    입고일시: cells[9].textContent.trim(),
                     영업시간: editValues.영업시간,
                     빈차시간: editValues.빈차시간,
                     연료비: editValues.연료비,
@@ -1549,6 +1979,8 @@
                     총거리: (editValues.운행거리 || 0) + (editValues.빈차거리 || 0),
                     매칭: cells[18].textContent.trim()
                 };
+            }).filter(function(row) {
+                return !isIncompleteSalesRow(row);
             });
         }
 
@@ -1771,13 +2203,24 @@
             renderScatterChart(currentSheet, getSalesRowData(table));
         }
 
+        function sortIncomeBarChartData(barChartData) {
+            return barChartData.slice().sort(function(a, b) {
+                var dateCmp = String(a.날짜 || '').localeCompare(String(b.날짜 || ''), 'ko', { numeric: true });
+                if (dateCmp !== 0) return dateCmp;
+                var nameA = String(a.이름 || a.차번 || '').trim();
+                var nameB = String(b.이름 || b.차번 || '').trim();
+                return nameA.localeCompare(nameB, 'ko', { sensitivity: 'base' });
+            });
+        }
+
         function renderIncomeBarChart(currentSheet, barChartData) {
             var sheetId = currentSheet.id;
-            var labels = barChartData.map(function(d) {
+            var sortedData = sortIncomeBarChartData(barChartData);
+            var labels = sortedData.map(function(d) {
                 return (d.이름 || d.차번) + '\n' + d.날짜.slice(5);
             });
-            var incomes = barChartData.map(function(d) { return d.실입금; });
-            var workMinutes = barChartData.map(function(d) { return d.영업시간; });
+            var incomes = sortedData.map(function(d) { return d.실입금; });
+            var workMinutes = sortedData.map(function(d) { return d.영업시간; });
             var avgIncome = incomes.length ? incomes.reduce(function(a, b) { return a + b; }, 0) / incomes.length : 0;
             var avgLine = labels.map(function() { return avgIncome; });
 
@@ -1913,17 +2356,9 @@
                 });
             }
 
-            var sorted = salesData.slice().sort(function(a, b) { return b.실입금 - a.실입금; });
-            var tableBody = currentSheet.querySelector('.summary-table-body');
-            var frag = document.createDocumentFragment();
-            sorted.forEach(function(row, index) {
-                var tr = document.createElement('tr');
-                var rankBadge = index < 3 ? '<span class="rank-badge rank-' + (index + 1) + '">' + (index + 1) + '위</span>' : (index + 1) + '위';
-                tr.innerHTML = '<td>' + rankBadge + '</td><td>' + row.날짜 + '</td><td>' + row.차번 + '</td><td>' + (row.이름 || '-') + '</td><td>' + (row.차종 || '-') + '</td><td>' + row.실입금.toLocaleString() + '원</td><td>' + formatWorkMinutesLabel(row.영업시간) + '</td><td>' + row.연료비.toLocaleString() + '원</td>';
-                frag.appendChild(tr);
-            });
-            tableBody.innerHTML = '';
-            tableBody.appendChild(frag);
+            renderSummaryAllRankTable(currentSheet, salesData);
+            renderSummaryTotalRankTable(currentSheet, salesData);
+            setSummaryRankTab(currentSheet, getSummaryRankTab(getSalesMonthKey(currentSheet)));
         }
 
         function parseSalesSortValue(cell, columnIndex) {
@@ -1975,8 +2410,39 @@
             });
             rows.forEach(function(row) { tbody.appendChild(row); });
             invalidateTableRowCache();
-            var activeSheet = document.querySelector('.tabs:not(.hide)');
+            var activeSheet = document.getElementById(tableId).closest('.tabs');
+            if (activeSheet) {
+                var searchInput = activeSheet.querySelector('.salesFilterInput');
+                var ctx = buildFilterContext(activeSheet, searchInput ? searchInput.value : '');
+                applyTableFilter(getDayRangeValues(), ctx, false);
+            }
             refreshSummaryIfActive(activeSheet);
+        }
+
+        function initSalesPaginationControls() {
+            document.querySelectorAll('.sales-table-pagination').forEach(function(bar) {
+                bar.addEventListener('click', function(e) {
+                    var target = e.target;
+                    if (!target || !target.getAttribute) return;
+                    var sheet = bar.closest('.tabs');
+                    if (!sheet) return;
+
+                    var action = target.getAttribute('data-action');
+                    if (action === 'prev' || action === 'next') {
+                        var month = bar.getAttribute('data-month');
+                        var state = getSalesPagination(month);
+                        if (action === 'prev' && state.page > 1) {
+                            goToSalesPage(sheet, state.page - 1);
+                        } else if (action === 'next') {
+                            goToSalesPage(sheet, state.page + 1);
+                        }
+                        return;
+                    }
+
+                    var page = target.getAttribute('data-page');
+                    if (page) goToSalesPage(sheet, page);
+                });
+            });
         }
 
         function initDayRangeSlider() {
@@ -2086,6 +2552,8 @@
             });
             initDayRangeSlider();
             initSalesEditControls();
+            initSalesPaginationControls();
+            initSummaryRankTabs();
             applySalesFilters(true);
             var firstSheet = document.querySelector('.tabs:not(.hide)') || document.querySelector('.tabs');
             if (firstSheet) {

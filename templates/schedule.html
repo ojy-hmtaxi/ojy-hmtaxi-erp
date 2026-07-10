@@ -16,7 +16,7 @@
         border-radius: 0px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         width: 100%;
-        max-width: 1200px;
+        max-width: 1260px;
         margin: 0 auto;
     }
         h1 {
@@ -499,6 +499,271 @@
         .top-nav {
             margin-left: 100px;
         }
+
+        /* 메인 뷰 탭 (통계 · 표 / 캘린더) */
+        .view-tab-buttons {
+            display: flex;
+            margin: 20px 0 10px;
+            gap: 6px;
+            width: 100%;
+        }
+
+        .view-tab-button {
+            flex: 1;
+            padding: 10px 12px;
+            background-color: #b0b0b0;
+            border: none;
+            cursor: pointer;
+            color: #333;
+            font-size: 15px;
+            text-align: center;
+        }
+
+        .view-tab-button.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .view-content { display: none; }
+        .view-content.active { display: block; }
+
+        /* 캘린더 레이아웃 */
+        .calendar-layout {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+            margin-top: 10px;
+        }
+
+        .calendar-sidebar {
+            flex: 0 0 220px;
+            min-width: 220px;
+        }
+
+        .calendar-sidebar input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            box-sizing: border-box;
+            margin-bottom: 8px;
+        }
+
+        .calendar-vehicle-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .calendar-vehicle-table thead th {
+            background-color: #4CAF50;
+            color: #fff;
+            padding: 8px 6px;
+            border: 1px solid #3d9140;
+            text-align: center;
+            font-weight: normal;
+        }
+
+        .calendar-vehicle-table tbody td {
+            border: 1px solid #ddd;
+            padding: 7px 6px;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .calendar-vehicle-table tbody tr:hover td {
+            background-color: #e8f5e9;
+        }
+
+        .calendar-vehicle-table tbody tr.selected td {
+            background-color: #c8e6c9;
+            font-weight: bold;
+        }
+
+        .calendar-vehicle-wrap {
+            max-height: 648px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+        }
+
+        .calendar-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .calendar-title {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .calendar-vehicle-info {
+            border: 1px solid #bbb;
+            padding: 10px 14px;
+            margin-bottom: 12px;
+            font-size: 14px;
+            background: #fafafa;
+        }
+
+        .calendar-board {
+            border: 1px solid #ccc;
+            background: #fff;
+        }
+
+        .calendar-weekdays {
+            display: grid;
+            grid-template-columns: 42px repeat(7, 1fr);
+            background: #e8eef3;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .calendar-weekdays .label-corner {
+            border-right: 1px solid #ccc;
+            background: #e8eef3;
+        }
+
+        .calendar-weekdays span {
+            text-align: center;
+            padding: 8px 4px;
+            font-size: 13px;
+            font-weight: bold;
+            border-right: 1px solid #ccc;
+        }
+
+        .calendar-weekdays span:last-child { border-right: none; }
+        .calendar-weekdays .sat { color: #1565c0; }
+        .calendar-weekdays .sun { color: #d32f2f; }
+
+        .calendar-grid {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .calendar-week {
+            display: grid;
+            grid-template-columns: 42px 1fr;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .calendar-week:last-child {
+            border-bottom: none;
+        }
+
+        .calendar-labels {
+            display: grid;
+            grid-template-rows: repeat(5, 22px);
+            border-right: 1px solid #ccc;
+            background: #fafafa;
+        }
+
+        .shift-label-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 22px;
+            padding: 0 4px;
+            font-size: 11px;
+            color: #555;
+            border-bottom: 1px solid #eee;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        .shift-label-row:last-child {
+            border-bottom: none;
+        }
+
+        .calendar-days {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+        }
+
+        .calendar-day-col {
+            display: grid;
+            grid-template-rows: repeat(5, 22px);
+            border-right: 1px solid #ddd;
+            font-size: 11px;
+            box-sizing: border-box;
+        }
+
+        .calendar-day-col:last-child {
+            border-right: none;
+        }
+
+        .calendar-day-col.empty {
+            background: #f7f7f7;
+        }
+
+        .calendar-day-col .day-num {
+            height: 22px;
+            text-align: right;
+            font-size: 12px;
+            font-weight: bold;
+            padding: 0 6px;
+            border-bottom: 1px solid #eee;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            overflow: hidden;
+        }
+
+        .shift-label-row.label-spacer {
+            background: #fafafa;
+        }
+
+        .calendar-day-col.sat .day-num { color: #1565c0; }
+        .calendar-day-col.sun .day-num { color: #d32f2f; }
+
+        .calendar-shift {
+            display: grid;
+            grid-template-columns: 1fr 18px;
+            gap: 2px;
+            align-items: center;
+            height: 22px;
+            line-height: 1;
+            padding: 0 4px;
+            border-bottom: 1px solid #f0f0f0;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        .calendar-shift:last-child {
+            border-bottom: none;
+        }
+
+        .calendar-shift .shift-info {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 12px;
+        }
+
+        .calendar-shift .shift-status {
+            text-align: center;
+            font-weight: bold;
+            font-size: 12px;
+            font-family: Arial, sans-serif;
+        }
+
+        .calendar-shift .shift-status.status-o { color: #008000; }
+        .calendar-shift .shift-status.status-x { color: #ff0000; }
+        .calendar-shift .shift-status.status-slash { color: #ffa500; }
+        .calendar-shift .shift-status.status-h { color: #8e24aa; }
+        .calendar-shift .shift-status.status-r { color: #00acc1; }
+
+        .calendar-shift.shift-bg-o { background-color: #e8f5e9; }
+        .calendar-shift.shift-bg-x { background-color: #fce4ec; }
+        .calendar-shift.shift-bg-slash { background-color: #fff9c4; }
+        .calendar-shift.shift-bg-r { background-color: #e1f5fe; }
+        .calendar-shift.shift-bg-h { background-color: #f3e5f5; }
+
+        .calendar-empty-msg {
+            padding: 40px 20px;
+            text-align: center;
+            color: #777;
+            border: 1px dashed #ccc;
+        }
     </style>
 {% endblock %}
 
@@ -525,7 +790,18 @@
             <div class="error">{{ error }}</div>
             {% endif %}
 
-            <div style="margin-top: 40px;">
+            <div class="sheet-tab-buttons">
+                {% for sheet_name in dispatch_data.keys() %}
+                <button class="sheet-tab-button {% if loop.first %}active{% endif %}" onclick="openSheetTab(event, 'sheet-{{ sheet_name }}')">{{ sheet_name }}</button>
+                {% endfor %}
+            </div>
+
+            <div class="view-tab-buttons">
+                <button class="view-tab-button active" onclick="openViewTab(event, 'view-stats')">통계 · 표</button>
+                <button class="view-tab-button" onclick="openViewTab(event, 'view-calendar')">캘린더</button>
+            </div>
+
+            <div id="view-stats" class="view-content active">
                 <h2>배차 현황 통계 <span id="selectedMonth" style="color: #4CAF50; font-weight: normal;"></span></h2>
                 {% if dispatch_data %}
                     <div class="stats-container">
@@ -613,16 +889,10 @@
                         </table>
                     </div>
                 {% endif %}
-                <br>    
+                <br>
                 <h2>월간 배차현황</h2>
                 {% if dispatch_data %}
                 <div class="sheet-tabs">
-                    <div class="sheet-tab-buttons">
-                        {% for sheet_name in dispatch_data.keys() %}
-                        <button class="sheet-tab-button {% if loop.first %}active{% endif %}" onclick="openSheetTab(event, 'sheet-{{ sheet_name }}')">{{ sheet_name }}</button>
-                        {% endfor %}
-                    </div>
-                    <!-- 배차 통합 검색 필터 -->
                     <div style="margin-bottom:20px;">
                         <input type="text" id="scheduleUnifiedFilter" placeholder="쉼표(,) 다중 조건 · 차번 / 차종 / 근무(주간·야간·일차·교대·리스) / 사번 / 이름 · 차량 모델명 정확히 구분 (K5 ≠ K5H)" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
                     </div>
@@ -658,10 +928,314 @@
                 </div>
                 {% endif %}
             </div>
+
+            <div id="view-calendar" class="view-content">
+                {% if dispatch_data %}
+                <div class="calendar-layout">
+                    <div class="calendar-sidebar">
+                        <input type="text" id="calendarCarFilter" placeholder="차량번호">
+                        <div class="calendar-vehicle-wrap">
+                            <table class="calendar-vehicle-table">
+                                <thead>
+                                    <tr>
+                                        <th>차번</th>
+                                        <th>차종</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="calendarVehicleList"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="calendar-main">
+                        <div class="calendar-title" id="calendarMonthTitle"></div>
+                        <div class="calendar-vehicle-info" id="calendarVehicleInfo">차량을 선택하세요.</div>
+                        <div class="calendar-board">
+                            <div class="calendar-weekdays">
+                                <span class="label-corner"></span>
+                                <span>월</span>
+                                <span>화</span>
+                                <span>수</span>
+                                <span>목</span>
+                                <span>금</span>
+                                <span class="sat">토</span>
+                                <span class="sun">일</span>
+                            </div>
+                            <div class="calendar-grid" id="calendarGrid"></div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="calendar-empty-msg">배차 데이터가 없습니다. 엑셀 파일을 업로드해 주세요.</div>
+                {% endif %}
+            </div>
         </div>
     </div>
 
+    {% if dispatch_data %}
+    <script type="application/json" id="dispatchDataJson">{{ dispatch_data | tojson }}</script>
+    {% endif %}
+
     <script>
+        var CALENDAR_SHIFT_TYPES = ['주간', '야간', '일차', '리스'];
+        var calendarState = {
+            dispatchData: null,
+            currentSheet: null,
+            selectedCar: null,
+            vehicles: []
+        };
+
+        function openViewTab(evt, viewId) {
+            var viewContents = document.getElementsByClassName('view-content');
+            for (var i = 0; i < viewContents.length; i++) {
+                viewContents[i].classList.remove('active');
+            }
+            var viewButtons = document.getElementsByClassName('view-tab-button');
+            for (var j = 0; j < viewButtons.length; j++) {
+                viewButtons[j].classList.remove('active');
+            }
+            document.getElementById(viewId).classList.add('active');
+            evt.currentTarget.classList.add('active');
+            if (viewId === 'view-calendar') {
+                refreshCalendarView();
+            }
+        }
+
+        function parseSheetMonth(sheetName) {
+            var m = parseInt(String(sheetName).replace(/[^0-9]/g, ''), 10);
+            return isNaN(m) ? 1 : m;
+        }
+
+        function formatEmpId(value) {
+            if (value === null || value === undefined) return '';
+            var s = String(value).trim();
+            if (!s) return '';
+            var num = parseFloat(s);
+            if (!isNaN(num) && isFinite(num) && Math.floor(num) === num) {
+                return String(Math.trunc(num));
+            }
+            return s;
+        }
+
+        function initCalendarData() {
+            var el = document.getElementById('dispatchDataJson');
+            if (!el) return;
+            try {
+                calendarState.dispatchData = JSON.parse(el.textContent);
+            } catch (e) {
+                calendarState.dispatchData = null;
+            }
+        }
+
+        function getActiveSheetName() {
+            var activeBtn = document.querySelector('.sheet-tab-button.active');
+            return activeBtn ? activeBtn.textContent.trim() : null;
+        }
+
+        function buildVehicleList(sheetName) {
+            var sheet = calendarState.dispatchData && calendarState.dispatchData[sheetName];
+            if (!sheet) {
+                calendarState.vehicles = [];
+                return;
+            }
+            var map = {};
+            sheet.data.forEach(function(row) {
+                var carNo = String(row['차량번호'] || '').trim();
+                if (!carNo) return;
+                if (!map[carNo]) {
+                    map[carNo] = { carNo: carNo, carType: String(row['차종'] || '').trim() };
+                }
+            });
+            calendarState.vehicles = Object.keys(map).sort(function(a, b) {
+                return a.localeCompare(b, undefined, { numeric: true });
+            }).map(function(key) { return map[key]; });
+        }
+
+        function renderVehicleList(filterText) {
+            var tbody = document.getElementById('calendarVehicleList');
+            if (!tbody) return;
+            var q = (filterText || '').trim().toLowerCase();
+            tbody.innerHTML = '';
+            var visible = calendarState.vehicles.filter(function(v) {
+                return !q || v.carNo.toLowerCase().indexOf(q) !== -1;
+            });
+            visible.forEach(function(v) {
+                var tr = document.createElement('tr');
+                tr.dataset.carNo = v.carNo;
+                if (calendarState.selectedCar === v.carNo) {
+                    tr.classList.add('selected');
+                }
+                tr.innerHTML = '<td>' + v.carNo + '</td><td>' + (v.carType || '') + '</td>';
+                tr.addEventListener('click', function() {
+                    selectCalendarVehicle(v.carNo);
+                });
+                tbody.appendChild(tr);
+            });
+            if (visible.length === 0) {
+                var emptyTr = document.createElement('tr');
+                emptyTr.innerHTML = '<td colspan="2" style="color:#888;">검색 결과 없음</td>';
+                tbody.appendChild(emptyTr);
+            }
+        }
+
+        function getRowsForVehicle(sheetName, carNo) {
+            var sheet = calendarState.dispatchData && calendarState.dispatchData[sheetName];
+            if (!sheet) return {};
+            var byType = {};
+            sheet.data.forEach(function(row) {
+                if (String(row['차량번호'] || '').trim() === carNo) {
+                    byType[row['근무유형']] = row;
+                }
+            });
+            return byType;
+        }
+
+        function statusSymbol(value) {
+            var v = String(value || '').trim().toLowerCase();
+            if (!v) return { text: '', cls: '', bgCls: '' };
+            if (v === 'o') return { text: 'O', cls: 'status-o', bgCls: 'shift-bg-o' };
+            if (v === 'x') return { text: 'X', cls: 'status-x', bgCls: 'shift-bg-x' };
+            if (v === '/') return { text: '/', cls: 'status-slash', bgCls: 'shift-bg-slash' };
+            if (v === 'h') return { text: 'H', cls: 'status-h', bgCls: 'shift-bg-h' };
+            if (v === 'r') return { text: 'R', cls: 'status-r', bgCls: 'shift-bg-r' };
+            return { text: v.toUpperCase(), cls: '', bgCls: '' };
+        }
+
+        function buildShiftHtml(row, day) {
+            var emptyRow = '<div class="calendar-shift"><span class="shift-info"></span><span class="shift-status"></span></div>';
+            if (!row) return emptyRow;
+            var dayValue = String(row[String(day)] || '').trim();
+            if (!dayValue) return emptyRow;
+
+            var empId = formatEmpId(row['사번']);
+            var driver = String(row['운전기사'] || '').trim();
+            var status = statusSymbol(dayValue);
+            var info = '';
+            if (empId || driver) {
+                info = (empId ? empId + ' ' : '') + driver;
+            }
+            return '<div class="calendar-shift ' + status.bgCls + '">' +
+                '<span class="shift-info">' + info + '</span>' +
+                '<span class="shift-status ' + status.cls + '">' + status.text + '</span>' +
+                '</div>';
+        }
+
+        function renderCalendar(sheetName, carNo) {
+            var grid = document.getElementById('calendarGrid');
+            var titleEl = document.getElementById('calendarMonthTitle');
+            var infoEl = document.getElementById('calendarVehicleInfo');
+            if (!grid || !titleEl || !infoEl) return;
+
+            var month = parseSheetMonth(sheetName);
+            var year = new Date().getFullYear();
+            titleEl.textContent = year + '-' + String(month).padStart(2, '0');
+
+            var vehicle = calendarState.vehicles.find(function(v) { return v.carNo === carNo; });
+            if (vehicle) {
+                infoEl.textContent = '차량번호: 서울33바' + vehicle.carNo + '   차종: ' + (vehicle.carType || '-');
+            } else {
+                infoEl.textContent = '차량을 선택하세요.';
+            }
+
+            var rowsByType = getRowsForVehicle(sheetName, carNo);
+            var daysInMonth = new Date(year, month, 0).getDate();
+            var firstWeekday = (new Date(year, month - 1, 1).getDay() + 6) % 7;
+
+            var weeks = [];
+            var week = [];
+            for (var i = 0; i < firstWeekday; i++) week.push(null);
+            for (var day = 1; day <= daysInMonth; day++) {
+                week.push(day);
+                if (week.length === 7) {
+                    weeks.push(week);
+                    week = [];
+                }
+            }
+            if (week.length > 0) {
+                while (week.length < 7) week.push(null);
+                weeks.push(week);
+            }
+
+            grid.innerHTML = '';
+            weeks.forEach(function(weekDays) {
+                var weekEl = document.createElement('div');
+                weekEl.className = 'calendar-week';
+
+                var labelsEl = document.createElement('div');
+                labelsEl.className = 'calendar-labels';
+                var spacerLabel = document.createElement('div');
+                spacerLabel.className = 'shift-label-row label-spacer';
+                labelsEl.appendChild(spacerLabel);
+                CALENDAR_SHIFT_TYPES.forEach(function(shiftType) {
+                    var label = document.createElement('div');
+                    label.className = 'shift-label-row';
+                    label.textContent = shiftType;
+                    labelsEl.appendChild(label);
+                });
+                weekEl.appendChild(labelsEl);
+
+                var daysEl = document.createElement('div');
+                daysEl.className = 'calendar-days';
+                weekDays.forEach(function(dayNum, colIdx) {
+                    var col = document.createElement('div');
+                    col.className = 'calendar-day-col';
+                    if (dayNum === null) {
+                        col.classList.add('empty');
+                        col.innerHTML = '<div class="day-num"></div>' +
+                            CALENDAR_SHIFT_TYPES.map(function() {
+                                return '<div class="calendar-shift"><span class="shift-info"></span><span class="shift-status"></span></div>';
+                            }).join('');
+                    } else {
+                        var weekday = (new Date(year, month - 1, dayNum).getDay() + 6) % 7;
+                        if (weekday === 5) col.classList.add('sat');
+                        if (weekday === 6) col.classList.add('sun');
+                        var html = '<div class="day-num">' + dayNum + '</div>';
+                        CALENDAR_SHIFT_TYPES.forEach(function(shiftType) {
+                            html += buildShiftHtml(rowsByType[shiftType], dayNum);
+                        });
+                        col.innerHTML = html;
+                    }
+                    daysEl.appendChild(col);
+                });
+                weekEl.appendChild(daysEl);
+                grid.appendChild(weekEl);
+            });
+        }
+
+        function selectCalendarVehicle(carNo) {
+            calendarState.selectedCar = carNo;
+            var filterInput = document.getElementById('calendarCarFilter');
+            renderVehicleList(filterInput ? filterInput.value : '');
+            if (calendarState.currentSheet) {
+                renderCalendar(calendarState.currentSheet, carNo);
+            }
+        }
+
+        function refreshCalendarView() {
+            if (!calendarState.dispatchData) return;
+            var sheetName = calendarState.currentSheet || getActiveSheetName();
+            if (!sheetName) return;
+            calendarState.currentSheet = sheetName;
+            buildVehicleList(sheetName);
+
+            var stillExists = calendarState.vehicles.some(function(v) {
+                return v.carNo === calendarState.selectedCar;
+            });
+            if (!stillExists) {
+                calendarState.selectedCar = calendarState.vehicles.length ? calendarState.vehicles[0].carNo : null;
+            }
+
+            var filterInput = document.getElementById('calendarCarFilter');
+            renderVehicleList(filterInput ? filterInput.value : '');
+            if (calendarState.selectedCar) {
+                renderCalendar(sheetName, calendarState.selectedCar);
+            } else {
+                var grid = document.getElementById('calendarGrid');
+                var infoEl = document.getElementById('calendarVehicleInfo');
+                if (grid) grid.innerHTML = '';
+                if (infoEl) infoEl.textContent = '표시할 차량이 없습니다.';
+            }
+        }
+
         function openSheetTab(evt, sheetName) {
             // 모든 시트 컨텐츠 숨기기
             var sheetContents = document.getElementsByClassName("sheet-content");
@@ -684,6 +1258,12 @@
 
             // 배차 현황 통계 업데이트
             updateDispatchStats(sheetName);
+
+            // 캘린더 뷰 동기화
+            calendarState.currentSheet = evt.currentTarget.textContent.trim();
+            if (document.getElementById('view-calendar').classList.contains('active')) {
+                refreshCalendarView();
+            }
         }
 
         function updateDispatchStats(sheetName) {
@@ -791,14 +1371,26 @@
 
         // 페이지 로드 시 첫 번째 시트의 통계 계산 및 월 표시
         document.addEventListener('DOMContentLoaded', function() {
+            initCalendarData();
             const firstSheet = document.querySelector('.sheet-content');
             if (firstSheet) {
                 updateDispatchStats(firstSheet.id);
-                // 첫 번째 탭 버튼의 텍스트를 가져와서 표시
                 const firstTabButton = document.querySelector('.sheet-tab-button');
                 if (firstTabButton) {
                     document.getElementById('selectedMonth').textContent = '- ' + firstTabButton.textContent;
+                    calendarState.currentSheet = firstTabButton.textContent.trim();
                 }
+            }
+
+            const calendarFilter = document.getElementById('calendarCarFilter');
+            if (calendarFilter) {
+                calendarFilter.addEventListener('input', function() {
+                    renderVehicleList(this.value);
+                });
+            }
+
+            if (calendarState.dispatchData) {
+                refreshCalendarView();
             }
 
             // 배차 통합 검색 필터 이벤트 리스너 추가

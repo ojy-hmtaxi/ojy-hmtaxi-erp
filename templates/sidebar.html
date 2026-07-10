@@ -8,7 +8,7 @@
         bottom: 0;
         width: 200px;
         background-color: #333333;
-        padding-top: 20px;
+        padding-top: 5px;
         z-index: 100;
     }
 
@@ -27,7 +27,7 @@
     .sidebar .app-ver {
         font-size: 12px;
         color: white;
-        margin-top: 0;
+        margin-top: 10px;
         margin-bottom: 0;
     }
 
@@ -37,7 +37,7 @@
         margin: 5px 0;
         transition: all 0.3s;
         text-decoration: none;
-        font-size: 16px;
+        font-size: 14px;
     }
 
     .sidebar .nav-link:hover {
@@ -71,7 +71,7 @@
 <div class="sidebar">
     <div class="logo">
         <img src="{{ url_for('static', filename='logo/logo_HMtaxi.png') }}" alt="Hanmi Taxi">
-        <p class="app-ver">ERP System<br>beta 0.1.3 (2026.07.07)<br>
+        <p class="app-ver">ERP System<br>beta 0.1.4 (2026.07.10)<br>
         <a href="{{ url_for('build_note') }}">빌드 노트 / 안내사항</a>
         </p>
     </div>
@@ -113,7 +113,7 @@
         </li>
         <li class="nav-item">
             <a class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}" href="/settings">
-                설정(준비 중)
+                설정
             </a>
         </li>
         <!-- 관리자 메뉴 -->
