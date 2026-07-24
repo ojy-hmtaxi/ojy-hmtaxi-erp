@@ -126,6 +126,20 @@ def sales_emp_id_display(value):
     return normalize_emp_id(value)
 
 
+@app.template_filter('sales_last_edit_label')
+def sales_last_edit_label(month_data):
+    """월별 수입금 표 마지막 수동 수정 기록 라벨."""
+    if not isinstance(month_data, dict):
+        return ''
+    edit = month_data.get('last_edit') or {}
+    date = str(edit.get('date') or '').strip()
+    time = str(edit.get('time') or '').strip()
+    editor = str(edit.get('editor') or '').strip()
+    if not date and not editor:
+        return ''
+    return f'수정 일시: {date} | {time} | 편집자: {editor}'
+
+
 # 로그인 라우트
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -1030,10 +1044,18 @@ def sales_upload_complete():
 def sales_save():
     payload = request.get_json(silent=True) or {}
     updates = payload.get('updates') or []
-    ok, result = apply_sales_row_updates(updates)
+    ok, result = apply_sales_row_updates(
+        updates,
+        editor_name=_sales_editor_name(),
+    )
     if not ok:
         return jsonify({'success': False, 'error': result}), 400
-    return jsonify({'success': True, 'updated': result})
+    return jsonify({
+        'success': True,
+        'updated': result['updated'],
+        'last_edits': result.get('last_edits', {}),
+        'last_edit': next(iter(result.get('last_edits', {}).values()), None),
+    })
 
 
 @app.route('/accident', methods=['GET', 'POST'])
@@ -2218,7 +2240,32 @@ def _apply_sales_derived_totals(row):
     row['총거리'] = str(round(running_km + empty_km, 2))
 
 
-def apply_sales_row_updates(updates):
+def _sales_editor_name(user=None):
+    user = user or current_user
+    try:
+        if not getattr(user, 'is_authenticated', False):
+            return ''
+    except Exception:
+        return ''
+    name = str(getattr(user, 'name', None) or '').strip()
+    if name:
+        return name
+    return str(getattr(user, 'username', None) or '').strip()
+
+
+def _record_sales_month_last_edit(month_data, editor_name):
+    """월별 수입금 표 수동 수정 메타데이터 저장."""
+    kst = pytz.timezone('Asia/Seoul')
+    now = datetime.now(kst)
+    month_data['last_edit'] = {
+        'date': now.strftime('%Y-%m-%d'),
+        'time': now.strftime('%H:%M'),
+        'editor': editor_name,
+    }
+    return month_data['last_edit']
+
+
+def apply_sales_row_updates(updates, editor_name=None):
     """수입금 표에서 수정한 행을 sales_data.json에 반영 (raw load/save — normalize 생략)."""
     data = _read_sales_data_raw()
     if not data:
@@ -2256,13 +2303,16 @@ def apply_sales_row_updates(updates):
     if updated_count == 0:
         return False, '일치하는 행을 찾지 못했습니다.'
 
+    editor = str(editor_name or _sales_editor_name()).strip() or '알 수 없음'
+    last_edits = {}
     for month_key in updated_months:
         month_data = data.get(month_key)
         if month_data:
             month_data['summary'] = compute_sales_summary(month_data.get('data', []))
+            last_edits[month_key] = _record_sales_month_last_edit(month_data, editor)
 
     save_sales_data(data, normalize=False)
-    return True, updated_count
+    return True, {'updated': updated_count, 'last_edits': last_edits}
 
 
 def _read_sales_data_raw():

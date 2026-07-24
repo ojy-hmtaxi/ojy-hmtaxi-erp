@@ -112,7 +112,16 @@
             margin-bottom: 6px;
         }
         .sales-toolbar-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
             flex-shrink: 0;
+        }
+        .sales-last-edit {
+            font-size: 12px;
+            color: #33691e;
+            white-space: nowrap;
+            font-weight: 600;
         }
         .sales-edit-actions {
             display: flex;
@@ -243,6 +252,55 @@
         .chart-wrapper-income-bar {
             flex: 1 1 100%;
         }
+        .summary-kpi-container {
+            margin-top: 20px;
+        }
+        .summary-kpi-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+        @media (max-width: 960px) {
+            .summary-kpi-cards { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 520px) {
+            .summary-kpi-cards { grid-template-columns: 1fr; }
+        }
+        .summary-kpi-card {
+            padding: 14px 16px;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-left: 4px solid #4CAF50;
+        }
+        .summary-kpi-card[data-kpi="total-fuel"],
+        .summary-kpi-card[data-kpi="avg-fuel"] {
+            border-left-color: #5c6bc0;
+        }
+        .summary-kpi-label {
+            font-size: 12px;
+            color: #666;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .summary-kpi-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #222;
+            margin-bottom: 4px;
+            line-height: 1.3;
+        }
+        .summary-kpi-change {
+            font-size: 12px;
+            color: #888;
+        }
+        .summary-kpi-change .pct {
+            font-weight: 600;
+        }
+        .summary-kpi-change .pct.up-good { color: #2e7d32; }
+        .summary-kpi-change .pct.up-bad { color: #c62828; }
+        .summary-kpi-change .pct.down-good { color: #2e7d32; }
+        .summary-kpi-change .pct.down-bad { color: #c62828; }
+        .summary-kpi-change .pct.neutral { color: #888; }
         .chart-filter-item {
             display: flex;
             flex-direction: column;
@@ -647,6 +705,7 @@
                     <div class="sales-table-toolbar" data-month="{{ sheet_name }}">
                         <div class="sales-toolbar-left">
                             <button type="button" class="sales-edit-btn" data-action="save" disabled>저장</button>
+                            <span class="sales-last-edit" id="salesLastEdit_{{ sheet_name }}">{{ data|sales_last_edit_label }}</span>
                         </div>
                         <span class="sales-edit-status" id="salesEditStatus_{{ sheet_name }}"></span>
                         <div class="sales-edit-actions">
@@ -725,6 +784,32 @@
                     </div>
                 </div>
                 <div id="summary-{{ sheet_name }}" class="tab-content">
+                    <div class="summary-kpi-container-wrapper">
+                        <div class="summary-kpi-container" data-month="{{ sheet_name }}">
+                            <div class="summary-kpi-cards">
+                                <div class="summary-kpi-card" data-kpi="total-income">
+                                    <div class="summary-kpi-label">월 전체 수입금</div>
+                                    <div class="summary-kpi-value">-</div>
+                                    <div class="summary-kpi-change">전월대비 -</div>
+                                </div>
+                                <div class="summary-kpi-card" data-kpi="avg-income">
+                                    <div class="summary-kpi-label">월 평균 수입금</div>
+                                    <div class="summary-kpi-value">-</div>
+                                    <div class="summary-kpi-change">전월대비 -</div>
+                                </div>
+                                <div class="summary-kpi-card" data-kpi="total-fuel">
+                                    <div class="summary-kpi-label">월 전체 연료비</div>
+                                    <div class="summary-kpi-value">-</div>
+                                    <div class="summary-kpi-change">전월대비 -</div>
+                                </div>
+                                <div class="summary-kpi-card" data-kpi="avg-fuel">
+                                    <div class="summary-kpi-label">월 평균 연료비</div>
+                                    <div class="summary-kpi-value">-</div>
+                                    <div class="summary-kpi-change">전월대비 -</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="chart-container">
                         <div class="chart-wrapper chart-wrapper-income-bar">
                             <div class="chart-filter-bar">
@@ -790,8 +875,8 @@
                         </div>
                     </div>
                     <div class="summary-rank-tabs" data-month="{{ sheet_name }}">
-                        <button type="button" class="summary-rank-tab active" data-rank-tab="all">전체순위</button>
-                        <button type="button" class="summary-rank-tab" data-rank-tab="total">총합순위</button>
+                        <button type="button" class="summary-rank-tab active" data-rank-tab="all">일별순위</button>
+                        <button type="button" class="summary-rank-tab" data-rank-tab="total">전체순위</button>
                     </div>
                     <div class="summary-rank-panel active" data-rank-panel="all" data-month="{{ sheet_name }}">
                         <table class="summary-table">
@@ -1644,6 +1729,7 @@
         ];
         var SALES_DERIVED_RECALC_FIELDS = ['영업시간', '빈차시간', '운행거리', '빈차거리'];
         var salesEditState = {};
+        var salesEditStatusTimers = {};
 
         function getSalesTableByMonth(month) {
             return document.getElementById('salesTable_' + month);
@@ -1653,12 +1739,54 @@
             return document.querySelector('.sales-table-toolbar[data-month="' + month + '"]');
         }
 
-        function setSalesEditStatus(month, message, type) {
+        function setSalesEditStatus(month, message, type, autoClearMs) {
             var el = document.getElementById('salesEditStatus_' + month);
             if (!el) return;
+            if (salesEditStatusTimers[month]) {
+                clearTimeout(salesEditStatusTimers[month]);
+                salesEditStatusTimers[month] = null;
+            }
             el.textContent = message || '';
             el.classList.remove('error', 'success');
             if (type) el.classList.add(type);
+            if (autoClearMs && autoClearMs > 0) {
+                salesEditStatusTimers[month] = setTimeout(function() {
+                    salesEditStatusTimers[month] = null;
+                    setSalesEditStatus(month, '');
+                }, autoClearMs);
+            }
+        }
+
+        function setSalesLastEditVisible(month, visible) {
+            var el = document.getElementById('salesLastEdit_' + month);
+            if (!el) return;
+            el.style.display = visible ? '' : 'none';
+        }
+
+        function formatSalesLastEditLabel(edit) {
+            if (!edit) return '';
+            var date = String(edit.date || '').trim();
+            var time = String(edit.time || '').trim();
+            var editor = String(edit.editor || '').trim();
+            if (!date && !editor) return '';
+            return '수정 일시: ' + date + ' | ' + time + ' | 편집자: ' + editor;
+        }
+
+        function resolveSalesLastEditFromResponse(data, month) {
+            if (!data) return null;
+            if (data.last_edits && data.last_edits[month]) return data.last_edits[month];
+            if (data.last_edit) return data.last_edit;
+            if (data.last_edits) {
+                var keys = Object.keys(data.last_edits);
+                if (keys.length) return data.last_edits[keys[0]];
+            }
+            return null;
+        }
+
+        function setSalesLastEdit(month, edit) {
+            var el = document.getElementById('salesLastEdit_' + month);
+            if (!el) return;
+            el.textContent = formatSalesLastEditLabel(edit);
         }
 
         function isAnySalesSheetEditing(excludeMonth) {
@@ -1778,6 +1906,7 @@
             });
 
             setSalesEditButtons(month, true);
+            setSalesLastEditVisible(month, false);
             setSalesEditStatus(month, '수정 모드 · 실입금 / 건수 / 영업시간 / 빈차시간 / 연료비 / 충전량 / 운행거리 / 빈차거리를 편집할 수 있습니다. 총시간·총거리는 자동 계산됩니다.');
         }
 
@@ -1800,6 +1929,7 @@
 
             delete salesEditState[month];
             setSalesEditButtons(month, false);
+            setSalesLastEditVisible(month, true);
             invalidateTableRowCache();
             var sheet = table.closest('.tabs');
             if (sheet) {
@@ -1879,7 +2009,11 @@
                         throw new Error((result.data && result.data.error) || '저장에 실패했습니다.');
                     }
                     exitSalesEditMode(month, false);
-                    setSalesEditStatus(month, result.data.updated + '건 저장되었습니다.', 'success');
+                    var lastEdit = resolveSalesLastEditFromResponse(result.data, month);
+                    if (lastEdit) {
+                        setSalesLastEdit(month, lastEdit);
+                    }
+                    setSalesEditStatus(month, result.data.updated + '건 저장되었습니다.', 'success', 3000);
                 })
                 .catch(function(err) {
                     setSalesEditStatus(month, err.message || '저장에 실패했습니다.', 'error');
@@ -1894,7 +2028,7 @@
 
         function cancelSalesEditMode(month) {
             exitSalesEditMode(month, true);
-            setSalesEditStatus(month, '수정을 취소했습니다.');
+            setSalesEditStatus(month, '수정을 취소했습니다.', null, 3000);
         }
 
         function initSalesEditControls() {
@@ -1949,39 +2083,130 @@
             return false;
         }
 
+        function parseSalesRowFromTr(row) {
+            var cells = row.querySelectorAll('td');
+            var editValues = readSalesRowFieldValues(row);
+            return {
+                날짜: cells[0].textContent.trim(),
+                차번: cells[1].textContent.trim(),
+                차종: cells[2].textContent.trim(),
+                근무유형: cells[3].textContent.trim(),
+                사번: cells[4].textContent.trim(),
+                이름: cells[5].textContent.trim(),
+                실입금: editValues.실입금,
+                건수: editValues.건수,
+                출고일시: cells[8].textContent.trim(),
+                입고일시: cells[9].textContent.trim(),
+                영업시간: editValues.영업시간,
+                빈차시간: editValues.빈차시간,
+                연료비: editValues.연료비,
+                충전량: editValues.충전량,
+                운행거리: editValues.운행거리,
+                빈차거리: editValues.빈차거리,
+                총시간: (editValues.영업시간 || 0) + (editValues.빈차시간 || 0),
+                총거리: (editValues.운행거리 || 0) + (editValues.빈차거리 || 0),
+                매칭: cells[18].textContent.trim()
+            };
+        }
+
+        function getAllCompleteSalesRows(sheet) {
+            var tbody = sheet ? sheet.querySelector('.table tbody') : null;
+            if (!tbody) return [];
+            return Array.from(tbody.querySelectorAll('tr')).map(parseSalesRowFromTr).filter(function(row) {
+                return !isIncompleteSalesRow(row);
+            });
+        }
+
         function getSalesRowData(tableOrTbody) {
             var sheet = getSalesSheetFromTableNode(tableOrTbody);
             if (!sheet) return [];
             ensureTableRowCache(sheet);
             return tableRowCache.rows.filter(function(row, i) {
                 return tableRowCache.passFilter[i];
-            }).map(function(row) {
-                var cells = row.querySelectorAll('td');
-                var editValues = readSalesRowFieldValues(row);
-                return {
-                    날짜: cells[0].textContent.trim(),
-                    차번: cells[1].textContent.trim(),
-                    차종: cells[2].textContent.trim(),
-                    근무유형: cells[3].textContent.trim(),
-                    사번: cells[4].textContent.trim(),
-                    이름: cells[5].textContent.trim(),
-                    실입금: editValues.실입금,
-                    건수: editValues.건수,
-                    출고일시: cells[8].textContent.trim(),
-                    입고일시: cells[9].textContent.trim(),
-                    영업시간: editValues.영업시간,
-                    빈차시간: editValues.빈차시간,
-                    연료비: editValues.연료비,
-                    충전량: editValues.충전량,
-                    운행거리: editValues.운행거리,
-                    빈차거리: editValues.빈차거리,
-                    총시간: (editValues.영업시간 || 0) + (editValues.빈차시간 || 0),
-                    총거리: (editValues.운행거리 || 0) + (editValues.빈차거리 || 0),
-                    매칭: cells[18].textContent.trim()
-                };
-            }).filter(function(row) {
+            }).map(parseSalesRowFromTr).filter(function(row) {
                 return !isIncompleteSalesRow(row);
             });
+        }
+
+        function getSalesMonthKeys() {
+            return Array.from(document.querySelectorAll('.sheet-tab-button')).map(function(btn) {
+                return btn.textContent.trim();
+            });
+        }
+
+        function getPreviousMonthKey(monthKey) {
+            var keys = getSalesMonthKeys();
+            var idx = keys.indexOf(monthKey);
+            if (idx <= 0) return null;
+            return keys[idx - 1];
+        }
+
+        function computeMonthKpiMetrics(rows) {
+            var count = rows.length;
+            var totalIncome = 0;
+            var totalFuel = 0;
+            rows.forEach(function(row) {
+                totalIncome += Number(row.실입금) || 0;
+                totalFuel += Number(row.연료비) || 0;
+            });
+            return {
+                count: count,
+                totalIncome: totalIncome,
+                avgIncome: count ? totalIncome / count : 0,
+                totalFuel: totalFuel,
+                avgFuel: count ? totalFuel / count : 0
+            };
+        }
+
+        function formatKpiChangeSpan(current, previous, higherIsBetter) {
+            if (previous === null || previous === undefined) {
+                return '<span class="pct neutral">-</span>';
+            }
+            if (previous === 0) {
+                if (current === 0) {
+                    return '<span class="pct neutral">0.0%</span>';
+                }
+                return '<span class="pct ' + (higherIsBetter ? 'up-good' : 'up-bad') + '">신규</span>';
+            }
+            var pct = ((current - previous) / previous) * 100;
+            var sign = pct > 0 ? '+' : '';
+            var pctText = sign + pct.toFixed(1) + '%';
+            var cls = 'neutral';
+            if (pct > 0) cls = higherIsBetter ? 'up-good' : 'up-bad';
+            else if (pct < 0) cls = higherIsBetter ? 'down-bad' : 'down-good';
+            return '<span class="pct ' + cls + '">' + pctText + '</span>';
+        }
+
+        function updateSummaryKpiCards(currentSheet) {
+            var month = getSalesMonthKey(currentSheet);
+            var cards = currentSheet.querySelector('.summary-kpi-cards');
+            if (!cards) return;
+
+            var current = computeMonthKpiMetrics(getAllCompleteSalesRows(currentSheet));
+            var prevMonth = getPreviousMonthKey(month);
+            var prevSheet = prevMonth ? document.getElementById(prevMonth) : null;
+            var prev = prevSheet ? computeMonthKpiMetrics(getAllCompleteSalesRows(prevSheet)) : null;
+            var changePrefix = prevMonth ? '전월(' + prevMonth + ')대비 ' : '전월대비 ';
+
+            function updateCard(kpi, valueText, currentValue, prevValue, higherIsBetter) {
+                var card = cards.querySelector('.summary-kpi-card[data-kpi="' + kpi + '"]');
+                if (!card) return;
+                var valueEl = card.querySelector('.summary-kpi-value');
+                var changeEl = card.querySelector('.summary-kpi-change');
+                if (valueEl) valueEl.textContent = valueText;
+                if (changeEl) {
+                    changeEl.innerHTML = changePrefix + formatKpiChangeSpan(
+                        currentValue,
+                        prev ? prevValue : null,
+                        higherIsBetter
+                    );
+                }
+            }
+
+            updateCard('total-income', current.totalIncome.toLocaleString() + '원', current.totalIncome, prev ? prev.totalIncome : null, true);
+            updateCard('avg-income', Math.round(current.avgIncome).toLocaleString() + '원', current.avgIncome, prev ? prev.avgIncome : null, true);
+            updateCard('total-fuel', current.totalFuel.toLocaleString() + '원', current.totalFuel, prev ? prev.totalFuel : null, false);
+            updateCard('avg-fuel', Math.round(current.avgFuel).toLocaleString() + '원', current.avgFuel, prev ? prev.avgFuel : null, false);
         }
 
         var CHART_FILTER_FIELDS = ['차번', '사번', '이름', '차종', '근무유형'];
@@ -2296,6 +2521,7 @@
         function updateSummaryTab(currentSheet) {
             var table = currentSheet.querySelector('.table tbody');
             if (!table) return;
+            updateSummaryKpiCards(currentSheet);
             var salesData = getSalesRowData(table);
             populateChartDropdowns(currentSheet, salesData);
             renderIncomeBarChart(currentSheet, applyChartDropdownFilters(salesData, getChartDropdownFilters(currentSheet)));
@@ -2650,7 +2876,7 @@
                                 labelParts.push(data.csv_filename);
                             }
                             var label = labelParts.length ? labelParts.join(' + ') : '수입금 데이터';
-                            var uploadMessage = '<span style="color:#007bff;font-weight:bold;">' + label + '</span> 업로드 완료 (' + dateStr + ' ' + timeStr + ' | {{ current_user.name }})';
+                            var uploadMessage = '<span style="color:#007bff;font-weight:bold;">' + label + '</span> 파일이 성공적으로 업로드 되었습니다. (업로드 일시: ' + dateStr + ' | ' + timeStr + ' | 업로더: {{ current_user.name }})';
                             var HISTORY_KEY = 'salesUploadHistory';
                             var history = [];
                             try { history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch (err) {}

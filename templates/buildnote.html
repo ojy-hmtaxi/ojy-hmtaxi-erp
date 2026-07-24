@@ -250,7 +250,7 @@
     <div class="buildnote-intro">
         <p>
             <strong>한미운수 ERP</strong>의 버전별 변경·추가 기능과, 수입금 데이터가 어떻게 집계되는지 안내합니다.
-            사이드바에 표시된 버전(<code>beta 0.1.4</code>)을 참고해 주세요.
+            사이드바에 표시된 버전(<code>beta 0.1.5</code>)을 참고해 주세요.
             <strong>수입금 집계 기준</strong> 탭에 T머니 CSV 대조·운전자 분리·.dat 집계 상세가 정리되어 있습니다.
         </p>
     </div>
@@ -261,6 +261,64 @@
     </nav>
 
     <div id="panel-changelog" class="buildnote-panel active" role="tabpanel" aria-labelledby="tab-changelog">
+
+    <article class="buildnote-article">
+        <header class="buildnote-article-header">
+            <div class="buildnote-meta">
+                <span class="buildnote-badge">beta 0.1.5</span>
+                <time datetime="2026-07-24">2026-07-24</time>
+            </div>
+            <h2>beta 0.1.5 — 수입금 KPI·편집 이력 · 설정 계산 · UI 정비</h2>
+        </header>
+        <div class="buildnote-article-body">
+            <p>
+                <strong>수입금 관리</strong> 분석 탭에 월별 KPI·전월 대비를 추가하고, 표 수동 편집 시
+                <strong>수정 일시·편집자</strong>를 기록·표시합니다.
+                <strong>설정</strong> 화면의 기본급 일할 계산과 사이드바·메시지 보드 UI도 보완했습니다.
+            </p>
+
+            <h3>수입금 관리 — 분석 탭 KPI</h3>
+            <ul>
+                <li>분석 탭 상단 <strong>4종 KPI 카드</strong>: 월 전체·평균 수입금, 월 전체·평균 연료비</li>
+                <li><strong>전월 대비</strong> 증감률 표시 (수입↑ 녹색 · 연료↑ 적색, 필터·일자 범위와 연동)</li>
+                <li>순위 탭 이름 정리: <strong>일별순위</strong> · <strong>전체순위</strong></li>
+            </ul>
+
+            <h3>수입금 관리 — 편집 이력</h3>
+            <ul>
+                <li>표 셀 저장 시 월별 <code>last_edit</code> 메타데이터 기록 (날짜 · 시각 · 편집자, KST)</li>
+                <li>저장 버튼 옆 <strong>「수정 일시: … | 편집자: …」</strong> 표시 (편집 모드 중 숨김)</li>
+                <li>저장 API 응답에 <code>last_edits</code> / <code>last_edit</code> 포함, 저장·취소 메시지 3초 후 자동 소거</li>
+            </ul>
+
+            <h3>시스템 설정</h3>
+            <ul>
+                <li><strong>기본급(1일분) 자동 계산</strong> — 월 기본급 ÷ 월력일수 → 일당 기본급·만근미달 일당 연동</li>
+                <li>만근일수·월력일수 입력 필드 <strong>양방향 동기화</strong>, 계산 결과 필드 readonly</li>
+            </ul>
+
+            <h3>공통 UI</h3>
+            <ul>
+                <li>사이드바 폭 <strong>200px → 180px</strong>, 메인 콘텐츠 여백·상단 네비 패딩 조정</li>
+                <li>메시지 보드: <strong>오늘(KST) 작성 글</strong> 하늘색 테두리 강조 (<code>message-today</code>)</li>
+            </ul>
+
+            <h3>운영·분석 (로컬)</h3>
+            <ul>
+                <li><code>Scripts/</code> — T머니 CSV · 주행내역 엑셀 · <code>.dat</code> 상호 대조용 분석 스크립트 추가 (앱 UI 미연동)</li>
+            </ul>
+
+            <div class="buildnote-tags">
+                <span class="buildnote-tag">beta 0.1.5</span>
+                <span class="buildnote-tag">수입금</span>
+                <span class="buildnote-tag">KPI</span>
+                <span class="buildnote-tag">편집이력</span>
+                <span class="buildnote-tag">설정</span>
+                <span class="buildnote-tag">UI</span>
+                <span class="buildnote-tag">메시지보드</span>
+            </div>
+        </div>
+    </article>
 
     <article class="buildnote-article">
         <header class="buildnote-article-header">

@@ -157,6 +157,11 @@
     .settings-input.full {
         width: 100%;
     }
+    .settings-input-readonly {
+        background: #f5f5f5;
+        color: #333;
+        cursor: default;
+    }
     .settings-select {
         padding: 6px 8px;
         border: 1px solid #ccc;
@@ -317,20 +322,20 @@
                     <label>1. 만근일수</label>
                     <input type="number" class="settings-input narrow" value="26" min="0"> 일
                     <span style="color:#888;">( 월력</span>
-                    <input type="number" class="settings-input narrow" value="31" min="1"> 일
+                    <input type="number" id="salaryCalendarDaysFull" class="settings-input narrow" value="31" min="1"> 일
                     <span style="color:#888;">)</span>
                 </div>
             </div>
             <div class="formula-text">
                 <strong>2. 만근미달자의 기본급</strong> : ( 근무일수 + 주휴일수 ) ×
-                <input type="number" class="settings-input" value="27419" style="display:inline-block;width:100px;"> 원
+                <input type="number" id="underfullDailyRate" class="settings-input settings-input-readonly" value="27419" style="display:inline-block;width:100px;" readonly> 원
             </div>
             <div class="inline-fields" style="margin-bottom:14px;">
                 <div class="field-item">
                     <span>→ 기본급(1일분)</span>
-                    <input type="number" class="settings-input" value="850000"> 원 ÷
-                    <input type="number" class="settings-input narrow" value="31" min="1"> 일(월력일수) ＝
-                    <input type="number" class="settings-input" value="27419"> 원
+                    <input type="number" id="baseSalaryMonthly" class="settings-input" value="850000" min="0"> 원 ÷
+                    <input type="number" id="salaryCalendarDaysCalc" class="settings-input narrow" value="31" min="1"> 일(월력일수) ＝
+                    <input type="number" id="dailyBaseSalary" class="settings-input settings-input-readonly" value="27419" readonly> 원
                 </div>
             </div>
             <div class="inline-fields">
@@ -763,6 +768,49 @@ function changeHolidayYear(delta) {
     renderHolidayTable(holidayState.year);
 }
 
+function updateDailyBaseSalary() {
+    var monthlyEl = document.getElementById('baseSalaryMonthly');
+    var daysCalcEl = document.getElementById('salaryCalendarDaysCalc');
+    var dailyEl = document.getElementById('dailyBaseSalary');
+    var underfullEl = document.getElementById('underfullDailyRate');
+    if (!monthlyEl || !daysCalcEl || !dailyEl || !underfullEl) return;
+
+    var monthly = parseFloat(monthlyEl.value) || 0;
+    var days = parseFloat(daysCalcEl.value) || 0;
+    var daily = days > 0 ? Math.floor(monthly / days) : 0;
+
+    dailyEl.value = daily;
+    underfullEl.value = daily;
+}
+
+function syncSalaryCalendarDays(sourceId, targetId) {
+    var source = document.getElementById(sourceId);
+    var target = document.getElementById(targetId);
+    if (!source || !target) return;
+    if (source.value !== target.value) {
+        target.value = source.value;
+    }
+    updateDailyBaseSalary();
+}
+
+function initDailyBaseSalaryCalc() {
+    var monthlyEl = document.getElementById('baseSalaryMonthly');
+    var daysCalcEl = document.getElementById('salaryCalendarDaysCalc');
+    var daysFullEl = document.getElementById('salaryCalendarDaysFull');
+    if (!monthlyEl || !daysCalcEl) return;
+
+    monthlyEl.addEventListener('input', updateDailyBaseSalary);
+    daysCalcEl.addEventListener('input', function() {
+        syncSalaryCalendarDays('salaryCalendarDaysCalc', 'salaryCalendarDaysFull');
+    });
+    if (daysFullEl) {
+        daysFullEl.addEventListener('input', function() {
+            syncSalaryCalendarDays('salaryCalendarDaysFull', 'salaryCalendarDaysCalc');
+        });
+    }
+    updateDailyBaseSalary();
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     var tabBtns = document.querySelectorAll('.settings-tab-btn');
     var tabPanels = {
@@ -787,6 +835,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var yearDown = document.getElementById('holidayYearDown');
     if (yearUp) yearUp.addEventListener('click', function() { changeHolidayYear(1); });
     if (yearDown) yearDown.addEventListener('click', function() { changeHolidayYear(-1); });
+
+    initDailyBaseSalaryCalc();
 });
 
 function addTableRow(tableId) {
