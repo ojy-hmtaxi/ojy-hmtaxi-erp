@@ -123,6 +123,53 @@
             white-space: nowrap;
             font-weight: 600;
         }
+        .edit-result-wrap {
+            flex: 1;
+            min-width: 0;
+            font-size: 12px;
+        }
+        .edit-result-head {
+            padding: 4px 8px;
+            background-color: #e8f5e9;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            color: #33691e;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .edit-result-head .text {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .edit-result-toggle {
+            flex-shrink: 0;
+            cursor: pointer;
+            padding: 2px 6px;
+            color: #2e7d32;
+            user-select: none;
+        }
+        .edit-result-toggle.open {
+            transform: rotate(180deg);
+        }
+        .edit-result-history {
+            display: none;
+            border-top: 1px solid rgba(0,0,0,0.08);
+        }
+        .edit-result-history.open {
+            display: block;
+        }
+        .edit-result-history-item {
+            padding: 4px 8px;
+            background-color: #c8e6c9;
+            border-top: 1px solid rgba(0,0,0,0.06);
+            color: #33691e;
+            font-weight: 600;
+            white-space: nowrap;
+        }
         .sales-edit-actions {
             display: flex;
             flex-direction: row;
@@ -157,6 +204,36 @@
             border: 1px solid #4CAF50;
             box-sizing: border-box;
             font-size: 13px;
+        }
+        .table tbody td.sales-cell-modified-latest {
+            color: #1565c0 !important;
+        }
+        .table tbody td.sales-cell-modified-previous {
+            color: #599eec !important;
+        }
+        .table tbody td.sales-cell-modified-latest[data-edit-tooltip],
+        .table tbody td.sales-cell-modified-previous[data-edit-tooltip] {
+            position: relative;
+            cursor: help;
+        }
+        .table tbody td.sales-cell-modified-latest[data-edit-tooltip]:hover::after,
+        .table tbody td.sales-cell-modified-previous[data-edit-tooltip]:hover::after {
+            content: attr(data-edit-tooltip);
+            position: absolute;
+            left: 50%;
+            bottom: calc(100% + 6px);
+            transform: translateX(-50%);
+            background: rgba(33, 33, 33, 0.95);
+            color: #fff;
+            padding: 5px 8px;
+            font-size: 11px;
+            font-weight: 500;
+            line-height: 1.4;
+            white-space: nowrap;
+            border-radius: 3px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+            z-index: 200;
+            pointer-events: none;
         }
         .table tbody tr.sales-row-editing td {
             background-color: #fffde7 !important;
@@ -619,6 +696,11 @@
 {% endblock %}
 
 {% block content %}
+{% macro sales_edit_td(row, field, month_data, content, attrs='') -%}
+{%- set tier = row|sales_modified_tier(field, month_data) -%}
+{%- set tooltip = row|sales_field_edit_tooltip(field, data) if tier else '' -%}
+<td{% if tier == 'latest' %} class="sales-cell-modified-latest"{% elif tier == 'previous' %} class="sales-cell-modified-previous"{% endif %}{% if tooltip %} title="{{ tooltip }}" data-edit-tooltip="{{ tooltip }}"{% endif %}{% if attrs %} {{ attrs|safe }}{% endif %}>{{ content }}</td>
+{%- endmacro %}
     {{ right_sidebar(messages, current_user) }}
     <div class="custom-container">
         {% if error %}
@@ -702,10 +784,25 @@
                     <div style="margin-bottom:10px;">
                         <input type="text" id="salesUnifiedFilter-sheet-{{ loop.index }}" class="salesFilterInput" placeholder="쉼표(,) 다중 조건 · 날짜 / 차번 / 차종 / 근무(주간·야간·일차·교대·리스) / 사번 / 운전기사 / 매칭(완료·미매칭) · 차량 모델명 정확히 구분 (K5 ≠ K5H)" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
                     </div>
-                    <div class="sales-table-toolbar" data-month="{{ sheet_name }}">
+                    <div class="sales-table-toolbar" data-month="{{ sheet_name }}" data-edit-history='{{ data|sales_edit_history_json }}'>
                         <div class="sales-toolbar-left">
                             <button type="button" class="sales-edit-btn" data-action="save" disabled>저장</button>
-                            <span class="sales-last-edit" id="salesLastEdit_{{ sheet_name }}">{{ data|sales_last_edit_label }}</span>
+                            <div class="edit-result-wrap" id="salesEditHistory_{{ sheet_name }}" data-month="{{ sheet_name }}">
+                                {% set edit_items = data|sales_edit_history_items %}
+                                {% if edit_items %}
+                                <div class="edit-result-head">
+                                    <span class="text">{{ edit_items[0] }}</span>
+                                    {% if edit_items|length > 1 %}
+                                    <span class="edit-result-toggle" title="이전 수정 기록">▼</span>
+                                    {% endif %}
+                                </div>
+                                {% if edit_items|length > 1 %}
+                                <div class="edit-result-history">
+                                    <div class="edit-result-history-item">{{ edit_items[1] }}</div>
+                                </div>
+                                {% endif %}
+                                {% endif %}
+                            </div>
                         </div>
                         <span class="sales-edit-status" id="salesEditStatus_{{ sheet_name }}"></span>
                         <div class="sales-edit-actions">
@@ -752,25 +849,25 @@
                         </thead>
                         <tbody>
                             {% for row in data.data %}
-                            <tr data-day="{{ row.날짜[8:10] if row.날짜 and row.날짜|length >= 10 else '' }}" data-date="{{ row.날짜 }}" data-car="{{ row.차번 }}" data-start="{{ row.영업시작|default('') }}" data-work="{{ row.근무유형|default('') }}" data-emp="{{ row.사번|default('') }}">
+                            <tr data-day="{{ row.날짜[8:10] if row.날짜 and row.날짜|length >= 10 else '' }}" data-date="{{ row.날짜 }}" data-car="{{ row.차번 }}" data-start="{{ row.영업시작|default('') }}" data-work="{{ row.근무유형|default('') }}" data-emp="{{ row.사번|sales_emp_id }}">
                                 <td>{{ row.날짜 }}</td>
                                 <td>{{ row.차번 }}</td>
                                 <td>{{ row.차종 }}</td>
                                 <td>{{ row.근무유형|default('') }}</td>
                                 <td>{{ row.사번|sales_emp_id }}</td>
                                 <td>{{ row.이름 }}</td>
-                                <td>{{ "{:,}".format(row.실입금|int) }}</td>
-                                <td>{{ "{:,}".format((row.건수|default(0))|int) }}</td>
+                                {{ sales_edit_td(row, '실입금', data, "{:,}".format(row.실입금|int)) }}
+                                {{ sales_edit_td(row, '건수', data, "{:,}".format((row.건수|default(0))|int)) }}
                                 <td>{{ row.영업시작|default(row.마감시작|default('')) }}</td>
                                 <td>{{ row.영업종료|default(row.마감종료|default('')) }}</td>
-                                <td data-sort-minutes="{{ (row.영업시간|default(0))|int }}">{{ row|sales_work_minutes }}</td>
-                                <td data-sort-minutes="{{ (row.빈차시간|default(0))|int }}">{{ row.빈차시간|default(0)|sales_minutes }}</td>
-                                <td data-sort-minutes="{{ (row.총시간|default(0))|int }}">{{ row.총시간|default(0)|sales_minutes }}</td>
-                                <td>{{ "{:,}".format(row.연료비|int) }}</td>
-                                <td>{{ row.충전량|default(row.연료L|default('0')) }}</td>
-                                <td>{{ row.운행거리 }}</td>
-                                <td>{{ row.빈차거리|default('0') }}</td>
-                                <td>{{ row.총거리|default('0') }}</td>
+                                {{ sales_edit_td(row, '영업시간', data, row|sales_work_minutes, 'data-sort-minutes="' ~ (row.영업시간|default(0)|int) ~ '"') }}
+                                {{ sales_edit_td(row, '빈차시간', data, row.빈차시간|default(0)|sales_minutes, 'data-sort-minutes="' ~ (row.빈차시간|default(0)|int) ~ '"') }}
+                                {{ sales_edit_td(row, '총시간', data, row.총시간|default(0)|sales_minutes, 'data-sort-minutes="' ~ (row.총시간|default(0)|int) ~ '"') }}
+                                {{ sales_edit_td(row, '연료비', data, "{:,}".format(row.연료비|int)) }}
+                                {{ sales_edit_td(row, '충전량', data, row.충전량|default(row.연료L|default('0'))) }}
+                                {{ sales_edit_td(row, '운행거리', data, row.운행거리) }}
+                                {{ sales_edit_td(row, '빈차거리', data, row.빈차거리|default('0')) }}
+                                {{ sales_edit_td(row, '총거리', data, row.총거리|default('0')) }}
                                 <td class="{% if row.매칭 == '완료' %}match-ok{% else %}match-fail{% endif %}">{{ row.매칭 }}</td>
                             </tr>
                             {% endfor %}
@@ -1728,6 +1825,10 @@
             { key: '빈차거리', idx: 16, parse: parseDistanceFromCell, format: formatDistanceLabel }
         ];
         var SALES_DERIVED_RECALC_FIELDS = ['영업시간', '빈차시간', '운행거리', '빈차거리'];
+        var SALES_FIELD_CELL_IDX = {
+            '실입금': 6, '건수': 7, '영업시간': 10, '빈차시간': 11, '총시간': 12,
+            '연료비': 13, '충전량': 14, '운행거리': 15, '빈차거리': 16, '총거리': 17
+        };
         var salesEditState = {};
         var salesEditStatusTimers = {};
 
@@ -1758,7 +1859,7 @@
         }
 
         function setSalesLastEditVisible(month, visible) {
-            var el = document.getElementById('salesLastEdit_' + month);
+            var el = document.getElementById('salesEditHistory_' + month);
             if (!el) return;
             el.style.display = visible ? '' : 'none';
         }
@@ -1772,21 +1873,158 @@
             return '수정 일시: ' + date + ' | ' + time + ' | 편집자: ' + editor;
         }
 
-        function resolveSalesLastEditFromResponse(data, month) {
-            if (!data) return null;
-            if (data.last_edits && data.last_edits[month]) return data.last_edits[month];
-            if (data.last_edit) return data.last_edit;
-            if (data.last_edits) {
-                var keys = Object.keys(data.last_edits);
-                if (keys.length) return data.last_edits[keys[0]];
-            }
-            return null;
+        function buildSalesEditHistoryItems(history) {
+            if (!history || !history.length) return [];
+            return history.slice(0, 2).map(formatSalesLastEditLabel).filter(function(item) {
+                return !!item;
+            });
         }
 
-        function setSalesLastEdit(month, edit) {
-            var el = document.getElementById('salesLastEdit_' + month);
-            if (!el) return;
-            el.textContent = formatSalesLastEditLabel(edit);
+        function bindSalesEditHistoryToggle(wrap) {
+            if (!wrap || wrap.getAttribute('data-toggle-bound') === '1') return;
+            var toggle = wrap.querySelector('.edit-result-toggle');
+            var historyEl = wrap.querySelector('.edit-result-history');
+            if (!toggle || !historyEl) return;
+            toggle.addEventListener('click', function() {
+                toggle.classList.toggle('open');
+                historyEl.classList.toggle('open');
+            });
+            wrap.setAttribute('data-toggle-bound', '1');
+        }
+
+        function renderSalesEditHistory(month, history) {
+            var wrap = document.getElementById('salesEditHistory_' + month);
+            if (!wrap) return;
+            var items = buildSalesEditHistoryItems(history);
+            if (!items.length) {
+                wrap.innerHTML = '';
+                return;
+            }
+            var hasMore = items.length > 1;
+            wrap.innerHTML =
+                '<div class="edit-result-head">' +
+                '<span class="text">' + items[0] + '</span>' +
+                (hasMore ? '<span class="edit-result-toggle" title="이전 수정 기록">▼</span>' : '') +
+                '</div>' +
+                (hasMore
+                    ? '<div class="edit-result-history"><div class="edit-result-history-item">' + items[1] + '</div></div>'
+                    : '');
+            bindSalesEditHistoryToggle(wrap);
+            setToolbarEditHistory(month, history || []);
+            initSalesModifiedCellTooltipsForMonth(month);
+        }
+
+        function resolveSalesEditHistoryFromResponse(data, month) {
+            if (!data) return [];
+            if (data.edit_histories && data.edit_histories[month]) {
+                return data.edit_histories[month];
+            }
+            if (data.last_edits && data.last_edits[month]) {
+                return [data.last_edits[month]];
+            }
+            if (data.last_edit) {
+                return [data.last_edit];
+            }
+            return [];
+        }
+
+        function parseToolbarEditHistory(toolbar) {
+            if (!toolbar) return [];
+            try {
+                var parsed = JSON.parse(toolbar.getAttribute('data-edit-history') || '[]');
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function initSalesModifiedCellTooltipsForMonth(month) {
+            var toolbar = getSalesEditToolbar(month);
+            var table = getSalesTableByMonth(month);
+            if (!toolbar || !table) return;
+            var history = parseToolbarEditHistory(toolbar);
+            var latestMeta = editMetaFromHistory(history[0]);
+            var previousMeta = editMetaFromHistory(history[1] || history[0]);
+            table.querySelectorAll('td.sales-cell-modified-latest').forEach(function(cell) {
+                if (!cell.getAttribute('data-edit-tooltip')) {
+                    applySalesCellEditTooltip(cell, latestMeta);
+                } else if (!cell.title) {
+                    cell.title = cell.getAttribute('data-edit-tooltip');
+                }
+            });
+            table.querySelectorAll('td.sales-cell-modified-previous').forEach(function(cell) {
+                if (!cell.getAttribute('data-edit-tooltip')) {
+                    applySalesCellEditTooltip(cell, previousMeta);
+                } else if (!cell.title) {
+                    cell.title = cell.getAttribute('data-edit-tooltip');
+                }
+            });
+        }
+
+        function initSalesModifiedCellTooltips() {
+            document.querySelectorAll('.sales-table-toolbar[data-month]').forEach(function(toolbar) {
+                initSalesModifiedCellTooltipsForMonth(toolbar.getAttribute('data-month'));
+            });
+        }
+
+        function setToolbarEditHistory(month, history) {
+            var toolbar = getSalesEditToolbar(month);
+            if (!toolbar) return;
+            toolbar.setAttribute('data-edit-history', JSON.stringify(history || []));
+        }
+
+        function formatSalesFieldEditTooltip(meta) {
+            if (!meta) return '';
+            var editor = String(meta.editor || '').trim();
+            var date = String(meta.date || '').trim();
+            var time = String(meta.time || '').trim();
+            if (!editor && !date) return '';
+            var parts = [];
+            if (editor) parts.push('편집자: ' + editor);
+            if (date || time) parts.push((date + ' ' + time).trim());
+            return parts.join(' | ');
+        }
+
+        function editMetaFromHistory(edit) {
+            if (!edit) return null;
+            return {
+                editor: edit.editor,
+                date: edit.date,
+                time: edit.time
+            };
+        }
+
+        function applySalesCellEditTooltip(cell, meta) {
+            if (!cell) return;
+            var text = formatSalesFieldEditTooltip(meta);
+            if (!text) {
+                cell.removeAttribute('data-edit-tooltip');
+                cell.removeAttribute('title');
+                return;
+            }
+            cell.setAttribute('data-edit-tooltip', text);
+            cell.title = text;
+        }
+
+        function setSalesCellModifiedTier(cell, tier, meta, fallbackMeta) {
+            if (!cell) return;
+            cell.classList.remove('sales-cell-modified', 'sales-cell-modified-latest', 'sales-cell-modified-previous');
+            if (tier === 'latest') {
+                cell.classList.add('sales-cell-modified-latest');
+            } else if (tier === 'previous') {
+                cell.classList.add('sales-cell-modified-previous');
+            }
+            if (tier) {
+                var tooltipMeta = meta || fallbackMeta;
+                if (tooltipMeta) {
+                    applySalesCellEditTooltip(cell, tooltipMeta);
+                } else if (cell.title && !cell.getAttribute('data-edit-tooltip')) {
+                    cell.setAttribute('data-edit-tooltip', cell.title);
+                }
+            } else {
+                cell.removeAttribute('data-edit-tooltip');
+                cell.removeAttribute('title');
+            }
         }
 
         function isAnySalesSheetEditing(excludeMonth) {
@@ -1850,6 +2088,15 @@
             }
         }
 
+        function normalizeSalesEmpId(value) {
+            var text = String(value || '').trim();
+            if (!text) return '';
+            if (/^\d+\.0+$/.test(text)) return text.split('.')[0];
+            var num = parseFloat(text.replace(/,/g, ''));
+            if (!isNaN(num) && num === Math.floor(num)) return String(Math.floor(num));
+            return text;
+        }
+
         function salesRowIdentityKey(row) {
             var date = row.getAttribute('data-date') || '';
             var car = row.getAttribute('data-car') || '';
@@ -1857,9 +2104,83 @@
             if (start) return date + '|' + car + '|' + start;
             var work = (row.getAttribute('data-work') || '').trim();
             if (work) return date + '|' + car + '|' + work;
-            var emp = (row.getAttribute('data-emp') || '').trim();
+            var emp = normalizeSalesEmpId(row.getAttribute('data-emp'));
             if (emp) return date + '|' + car + '|' + emp;
             return date + '|' + car;
+        }
+
+        function fieldChangeIdentityKey(change) {
+            var date = String(change.날짜 || '').trim();
+            var car = String(change.차번 || '').trim();
+            var start = String(change.영업시작 || '').trim().slice(0, 16);
+            if (start) return date + '|' + car + '|' + start;
+            var work = String(change.근무유형 || '').trim();
+            if (work) return date + '|' + car + '|' + work;
+            var emp = normalizeSalesEmpId(change.사번);
+            if (emp) return date + '|' + car + '|' + emp;
+            return date + '|' + car;
+        }
+
+        function salesRowMatchesFieldChange(row, change) {
+            return salesRowIdentityKey(row) === fieldChangeIdentityKey(change);
+        }
+
+        function buildFieldChangesFromUpdates(updates) {
+            return updates.map(function(update) {
+                var fields = [];
+                SALES_EDIT_FIELDS.forEach(function(field) {
+                    if (update[field.key] !== undefined) fields.push(field.key);
+                });
+                if (fields.indexOf('영업시간') >= 0 || fields.indexOf('빈차시간') >= 0) {
+                    if (fields.indexOf('총시간') < 0) fields.push('총시간');
+                }
+                if (fields.indexOf('운행거리') >= 0 || fields.indexOf('빈차거리') >= 0) {
+                    if (fields.indexOf('총거리') < 0) fields.push('총거리');
+                }
+                return {
+                    날짜: update.날짜,
+                    차번: update.차번,
+                    사번: update.사번,
+                    영업시작: update.영업시작,
+                    근무유형: update.근무유형,
+                    fields: fields
+                };
+            });
+        }
+
+        function applySalesModifiedHighlights(month, fieldChanges, editHistory) {
+            if (!fieldChanges || !fieldChanges.length) return;
+            var table = getSalesTableByMonth(month);
+            if (!table) return;
+            var history = Array.isArray(editHistory) ? editHistory : (editHistory ? [editHistory] : parseToolbarEditHistory(getSalesEditToolbar(month)));
+            var latestMeta = editMetaFromHistory(history[0]);
+            var previousMeta = editMetaFromHistory(history[1] || history[0]);
+            table.querySelectorAll('td.sales-cell-modified-latest').forEach(function(cell) {
+                setSalesCellModifiedTier(cell, 'previous', null, previousMeta);
+            });
+            table.querySelectorAll('td.sales-cell-modified-previous').forEach(function(cell) {
+                if (!cell.getAttribute('data-edit-tooltip')) {
+                    applySalesCellEditTooltip(cell, previousMeta);
+                }
+            });
+            fieldChanges.forEach(function(change) {
+                var fields = change.fields || [];
+                if (!fields.length) return;
+                var fieldMeta = change.field_meta || {};
+                table.querySelectorAll('tbody tr').forEach(function(row) {
+                    if (!salesRowMatchesFieldChange(row, change)) return;
+                    fields.forEach(function(field) {
+                        var idx = SALES_FIELD_CELL_IDX[field];
+                        if (idx == null) return;
+                        setSalesCellModifiedTier(
+                            row.cells[idx],
+                            'latest',
+                            fieldMeta[field] || null,
+                            latestMeta
+                        );
+                    });
+                });
+            });
         }
 
         function buildSalesRowSnapshot(table) {
@@ -1968,7 +2289,7 @@
                     차번: car,
                     영업시작: (row.getAttribute('data-start') || '').trim(),
                     근무유형: (row.getAttribute('data-work') || '').trim(),
-                    사번: (row.getAttribute('data-emp') || '').trim()
+                    사번: normalizeSalesEmpId(row.getAttribute('data-emp') || '')
                 };
                 changedFields.forEach(function(field) {
                     update[field.key] = String(after[field.key]);
@@ -2009,10 +2330,13 @@
                         throw new Error((result.data && result.data.error) || '저장에 실패했습니다.');
                     }
                     exitSalesEditMode(month, false);
-                    var lastEdit = resolveSalesLastEditFromResponse(result.data, month);
-                    if (lastEdit) {
-                        setSalesLastEdit(month, lastEdit);
+                    var fieldChanges = result.data.field_changes;
+                    if (!fieldChanges || !fieldChanges.length) {
+                        fieldChanges = buildFieldChangesFromUpdates(updates);
                     }
+                    var editHistory = resolveSalesEditHistoryFromResponse(result.data, month);
+                    applySalesModifiedHighlights(month, fieldChanges, editHistory);
+                    renderSalesEditHistory(month, editHistory);
                     setSalesEditStatus(month, result.data.updated + '건 저장되었습니다.', 'success', 3000);
                 })
                 .catch(function(err) {
@@ -2032,6 +2356,9 @@
         }
 
         function initSalesEditControls() {
+            document.querySelectorAll('.edit-result-wrap[data-month]').forEach(bindSalesEditHistoryToggle);
+            initSalesModifiedCellTooltips();
+
             document.addEventListener('input', function(e) {
                 if (!e.target.classList.contains('sales-cell-input')) return;
                 var fieldKey = e.target.getAttribute('data-field') || '';

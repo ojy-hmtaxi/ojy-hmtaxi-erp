@@ -126,18 +126,124 @@ def sales_emp_id_display(value):
     return normalize_emp_id(value)
 
 
+@app.template_filter('sales_modified')
+def sales_modified_cell(row, field):
+    """수입금 행에서 수동 수정된 필드인지 여부."""
+    if not isinstance(row, dict):
+        return False
+    field_edits = row.get('_field_edits') or {}
+    if isinstance(field_edits, dict) and field in field_edits:
+        return True
+    return field in (row.get('_modified_fields') or [])
+
+
+def _sales_month_edit_history(month_data):
+    """월별 수입금 수정 이력 (최대 2건, last_edit 호환)."""
+    if not isinstance(month_data, dict):
+        return []
+    history = month_data.get('edit_history')
+    if isinstance(history, list) and history:
+        return history[:2]
+    legacy = month_data.get('last_edit')
+    if isinstance(legacy, dict) and (legacy.get('date') or legacy.get('editor')):
+        return [legacy]
+    return []
+
+
+@app.template_filter('sales_modified_tier')
+def sales_modified_tier(row, field, month_data):
+    """수동 수정 필드의 강조 단계 — latest(최근) / previous(이전)."""
+    if not isinstance(row, dict) or not sales_modified_cell(row, field):
+        return ''
+    field_edits = row.get('_field_edits') or {}
+    meta = field_edits.get(field) if isinstance(field_edits, dict) else None
+    history = _sales_month_edit_history(month_data)
+    if not isinstance(meta, dict):
+        return 'previous' if history else 'latest'
+    session_id = str(meta.get('session_id') or '').strip()
+    if not session_id:
+        return 'previous' if len(history) > 1 else 'latest'
+    latest_id = str((history[0] or {}).get('id') or '').strip() if history else ''
+    prev_id = str((history[1] or {}).get('id') or '').strip() if len(history) > 1 else ''
+    if session_id and latest_id and session_id == latest_id:
+        return 'latest'
+    if session_id and prev_id and session_id == prev_id:
+        return 'previous'
+    if session_id and latest_id:
+        return 'previous'
+    return 'latest'
+
+
+def _format_sales_edit_tooltip(meta):
+    """편집자·일시 툴팁 문자열."""
+    if not isinstance(meta, dict):
+        return ''
+    editor = str(meta.get('editor') or '').strip()
+    date = str(meta.get('date') or '').strip()
+    time = str(meta.get('time') or '').strip()
+    if not editor and not date:
+        return ''
+    parts = []
+    if editor:
+        parts.append('편집자: ' + editor)
+    if date or time:
+        parts.append((date + ' ' + time).strip())
+    return ' | '.join(parts)
+
+
+@app.template_filter('sales_field_edit_tooltip')
+def sales_field_edit_tooltip(row, field, month_data=None):
+    """수동 수정 셀 툴팁 — 편집자·일시."""
+    if not isinstance(row, dict) or not sales_modified_cell(row, field):
+        return ''
+    field_edits = row.get('_field_edits') or {}
+    meta = field_edits.get(field) if isinstance(field_edits, dict) else None
+    tooltip = _format_sales_edit_tooltip(meta)
+    if tooltip:
+        return tooltip
+    history = _sales_month_edit_history(month_data)
+    if not history:
+        return ''
+    if isinstance(meta, dict):
+        session_id = str(meta.get('session_id') or '').strip()
+        if session_id:
+            for edit in history:
+                if str((edit or {}).get('id') or '').strip() == session_id:
+                    matched = _format_sales_edit_tooltip(edit)
+                    if matched:
+                        return matched
+    tier = sales_modified_tier(row, field, month_data) if month_data else 'latest'
+    edit = history[1] if tier == 'previous' and len(history) > 1 else history[0]
+    return _format_sales_edit_tooltip(edit)
+
+
+@app.template_filter('sales_edit_history_json')
+def sales_edit_history_json(month_data):
+    """월별 수정 이력 JSON (툴팁 초기화용)."""
+    import json
+    return json.dumps(_sales_month_edit_history(month_data), ensure_ascii=False)
+
+
+@app.template_filter('sales_edit_history_items')
+def sales_edit_history_items(month_data):
+    """월별 수입금 수정 이력 라벨 목록 (최대 2건)."""
+    items = []
+    for edit in _sales_month_edit_history(month_data):
+        if not isinstance(edit, dict):
+            continue
+        date = str(edit.get('date') or '').strip()
+        time = str(edit.get('time') or '').strip()
+        editor = str(edit.get('editor') or '').strip()
+        if date or editor:
+            items.append(f'수정 일시: {date} | {time} | 편집자: {editor}')
+    return items
+
+
 @app.template_filter('sales_last_edit_label')
 def sales_last_edit_label(month_data):
     """월별 수입금 표 마지막 수동 수정 기록 라벨."""
-    if not isinstance(month_data, dict):
-        return ''
-    edit = month_data.get('last_edit') or {}
-    date = str(edit.get('date') or '').strip()
-    time = str(edit.get('time') or '').strip()
-    editor = str(edit.get('editor') or '').strip()
-    if not date and not editor:
-        return ''
-    return f'수정 일시: {date} | {time} | 편집자: {editor}'
+    items = sales_edit_history_items(month_data)
+    return items[0] if items else ''
 
 
 # 로그인 라우트
@@ -207,127 +313,214 @@ def logout():
     flash('로그아웃되었습니다.', 'info')
     return redirect(url_for('login'))
 
-# 기존 라우트들에 @login_required 데코레이터 추가
-@app.route('/', methods=['GET', 'POST'])
-@login_required
-def calculate_salary():
-    # lease_data.json에서 월별 실입금 및 연료비 데이터 합산
-    total_income = 0
-    total_fuel_cost = 0
-    monthly_incomes = {}
-    monthly_fuel_costs = {}
-    
+DASHBOARD_MONTH_ORDER = [
+    '01월', '02월', '03월', '04월', '05월', '06월',
+    '07월', '08월', '09월', '10월', '11월', '12월',
+]
+DASHBOARD_DISPATCH_CATEGORIES = ['주간', '야간', '일차', '교대', '리스']
+
+
+def _dashboard_available_years():
+    """대시보드 연도 필터 — 배차·사고·수입금 데이터에서 사용 가능한 연도."""
+    years = set()
+    for store in (load_dispatch_data_store(), load_accident_data_store()):
+        for key in (store or {}).keys():
+            if str(key).isdigit() and len(str(key)) == 4:
+                years.add(int(key))
+    sales_data = _read_sales_data_raw()
+    if sales_data:
+        for month_data in sales_data.values():
+            for row in month_data.get('data', []):
+                date = str(row.get('날짜', '')).strip()
+                if len(date) >= 4 and date[:4].isdigit():
+                    years.add(int(date[:4]))
+    if not years:
+        years.add(datetime.now().year)
+    return sorted(years, reverse=True)
+
+
+def _resolve_dashboard_year():
+    years = _dashboard_available_years()
+    selected = request.args.get('year', type=int)
+    if not selected or selected not in years:
+        selected = _default_dispatch_year([str(y) for y in years])
+    return years, selected
+
+
+def _parse_dashboard_amount(amount_str):
+    if not amount_str or amount_str in ('', '-'):
+        return 0
     try:
-        lease_data_path = os.path.join(app.config['DATA_FOLDER'], 'lease_data.json')
-        if os.path.exists(lease_data_path):
-            with open(lease_data_path, 'r', encoding='utf-8') as f:
-                lease_data = json.load(f)
-                
-                for month, month_data in lease_data.items():
-                    if 'data' in month_data:
-                        month_income_total = 0
-                        month_fuel_total = 0
-                        for driver_data in month_data['data']:
-                            try:
-                                income = int(driver_data.get('실입금', '0'))
-                                fuel_cost = int(driver_data.get('연료비', '0'))
-                                month_income_total += income
-                                month_fuel_total += fuel_cost
-                            except (ValueError, TypeError):
-                                continue
-                        monthly_incomes[month] = month_income_total
-                        monthly_fuel_costs[month] = month_fuel_total
-                        total_income += month_income_total
-                        total_fuel_cost += month_fuel_total
-    except Exception as e:
-        print(f"lease_data.json 읽기 오류: {e}")
-        total_income = 0
-        total_fuel_cost = 0
-        monthly_incomes = {}
-        monthly_fuel_costs = {}
-    
-    # 월 평균 수입금 계산
-    monthly_avg_income = 0
-    if monthly_incomes:
-        monthly_avg_income = total_income // len(monthly_incomes)
-    
-    # 현재 선택된 월 (기본값: 현재 월)
-    import datetime
-    current_month = f"{datetime.datetime.now().month:02d}월"
-    selected_month = request.args.get('month', current_month)
+        return int(str(amount_str).replace(',', ''))
+    except (ValueError, TypeError):
+        return 0
+
+
+def _build_dashboard_sales_monthly(year, month_order=None):
+    """수입금 JSON 행 날짜 기준 — 선택 연도의 월별 실입금·연료비."""
+    month_order = month_order or DASHBOARD_MONTH_ORDER
+    monthly_incomes = {month: 0 for month in month_order}
+    monthly_fuel_costs = {month: 0 for month in month_order}
+    sales_data = _read_sales_data_raw()
+    if not sales_data:
+        return monthly_incomes, monthly_fuel_costs
+    year_prefix = str(year)
+    for month_data in sales_data.values():
+        for row in month_data.get('data', []):
+            date = str(row.get('날짜', '')).strip()
+            if not date.startswith(year_prefix):
+                continue
+            month_key = f'{date[5:7]}월' if len(date) >= 7 else ''
+            if month_key not in monthly_incomes:
+                continue
+            try:
+                monthly_incomes[month_key] += int(row.get('실입금') or 0)
+                monthly_fuel_costs[month_key] += int(row.get('연료비') or 0)
+            except (ValueError, TypeError):
+                continue
+    return monthly_incomes, monthly_fuel_costs
+
+
+def _build_dashboard_dispatch_metrics(dispatch_data, month_order=None):
+    month_order = month_order or DASHBOARD_MONTH_ORDER
+    categories = DASHBOARD_DISPATCH_CATEGORIES
+    dispatch_stats = {}
+    driver_counts = {}
+    driver_counts_by_category = {}
+    for month in month_order:
+        cat_counts = {cat: 0 for cat in categories}
+        drivers = set()
+        cat_drivers = {cat: set() for cat in categories}
+        month_rows = (dispatch_data or {}).get(month, {}).get('data', [])
+        for row in month_rows:
+            cat = row.get('근무유형', '')
+            name = str(row.get('운전기사', '')).strip()
+            if cat in categories:
+                for day in range(1, 32):
+                    val = str(row.get(str(day), '')).strip()
+                    if _dispatch_val_matches(val, 'o') or val == '/' or _dispatch_val_matches(val, 'H'):
+                        cat_counts[cat] += 1
+                if name:
+                    cat_drivers[cat].add(name)
+            if name:
+                drivers.add(name)
+        dispatch_stats[month] = cat_counts
+        driver_counts[month] = len(drivers)
+        driver_counts_by_category[month] = {cat: len(cat_drivers[cat]) for cat in categories}
+    return dispatch_stats, driver_counts, driver_counts_by_category
+
+
+def _build_dashboard_accident_summary(year, month_order=None):
+    month_order = month_order or DASHBOARD_MONTH_ORDER
+    accident_data = load_accident_data(year) or {}
+    at_fault = accident_data.get('at_fault', [])
+    not_at_fault = accident_data.get('not_at_fault', [])
+    total_at_fault = len(at_fault)
+    total_not_at_fault = len(not_at_fault)
+    total_at_fault_repair = sum(_parse_dashboard_amount(a.get('수리지급', 0)) for a in at_fault)
+    total_not_at_fault_payment = sum(_parse_dashboard_amount(a.get('금액', 0)) for a in not_at_fault)
+    unresolved_at_fault = sum(1 for a in at_fault if str(a.get('처리여부', '')).strip() == '미결')
+    unresolved_not_at_fault = sum(1 for a in not_at_fault if str(a.get('처리여부', '')).strip() == '미결')
+    unpaid_at_fault_estimate = sum(_parse_dashboard_amount(a.get('견적', 0)) for a in at_fault)
+    unpaid_not_at_fault_estimate = sum(_parse_dashboard_amount(a.get('피해견적', 0)) for a in not_at_fault)
+    accident_stats_by_month = build_accident_stats_by_month(at_fault, not_at_fault, month_order)
+    return {
+        'total_at_fault': total_at_fault,
+        'total_not_at_fault': total_not_at_fault,
+        'total_at_fault_repair': total_at_fault_repair,
+        'total_not_at_fault_payment': total_not_at_fault_payment,
+        'unresolved_at_fault': unresolved_at_fault,
+        'unresolved_not_at_fault': unresolved_not_at_fault,
+        'unpaid_at_fault_estimate': unpaid_at_fault_estimate,
+        'unpaid_not_at_fault_estimate': unpaid_not_at_fault_estimate,
+        'accident_stats_by_month': accident_stats_by_month,
+    }
+
+
+def _build_dashboard_income_card_metrics(monthly_incomes, monthly_fuel_costs, selected_month, month_order=None):
+    month_order = month_order or DASHBOARD_MONTH_ORDER
+    total_income = sum(monthly_incomes.values())
+    total_fuel_cost = sum(monthly_fuel_costs.values())
+    active_months = [m for m in month_order if monthly_incomes.get(m, 0) > 0 or monthly_fuel_costs.get(m, 0) > 0]
+    month_count = len(active_months) or len(month_order)
+    monthly_avg_income = total_income // month_count if month_count else 0
     current_month_income = monthly_incomes.get(selected_month, 0)
     current_month_fuel_cost = monthly_fuel_costs.get(selected_month, 0)
-    
-    # 이전 달 수입금 및 연료비 계산
-    month_order = ['01월', '02월', '03월', '04월', '05월', '06월', '07월', '08월', '09월', '10월', '11월', '12월']
     try:
         current_index = month_order.index(selected_month)
         previous_month = month_order[current_index - 1] if current_index > 0 else month_order[-1]
         previous_month_income = monthly_incomes.get(previous_month, 0)
         previous_month_fuel_cost = monthly_fuel_costs.get(previous_month, 0)
-        
-        # 수입금 변화량과 변화율 계산
         income_diff = current_month_income - previous_month_income
         income_diff_percent = round((income_diff / previous_month_income) * 100, 2) if previous_month_income > 0 else 0
-        
-        # 연료비 변화량과 변화율 계산
         fuel_diff = current_month_fuel_cost - previous_month_fuel_cost
         fuel_diff_percent = round((fuel_diff / previous_month_fuel_cost) * 100, 2) if previous_month_fuel_cost > 0 else 0
-    except:
-        previous_month_income = 0
-        previous_month_fuel_cost = 0
-        income_diff = 0
-        income_diff_percent = 0
-        fuel_diff = 0
-        fuel_diff_percent = 0
-    
-    # 이전 달 대비 변화율 계산 (간단한 예시)
-    income_change = 0
-    income_percent = 0
-    if len(monthly_incomes) >= 2:
-        months = list(monthly_incomes.keys())
-        if len(months) >= 2:
-            current_month = months[-1]
-            previous_month = months[-2]
-            current_income = monthly_incomes.get(current_month, 0)
-            previous_income = monthly_incomes.get(previous_month, 0)
-            
-            if previous_income > 0:
-                income_change = current_income - previous_income
-                income_percent = round((income_change / previous_income) * 100, 2)
-    
-    # 월별 배차 현황 통계
-    dispatch_data_path = os.path.join(app.config['DATA_FOLDER'], 'dispatch_data.json')
-    dispatch_stats = {}  # {월: {카테고리: 운행수}}
-    categories = ['주간', '야간', '일차', '교대', '리스']
-    month_order = ['01월', '02월', '03월', '04월', '05월', '06월', '07월', '08월', '09월', '10월', '11월', '12월']
-    driver_counts = {}  # {월: 운전기사수}
-    driver_counts_by_category = {}  # {월: {카테고리: 기사수}}
-    dispatch_data = load_dispatch_data()
-    if dispatch_data:
-        for month in month_order:
-            month_data = dispatch_data.get(month, {}).get('data', [])
-            cat_counts = {cat: 0 for cat in categories}
-            drivers = set()
-            cat_drivers = {cat: set() for cat in categories}  # 각 카테고리별 기사 집합
-            for row in month_data:
-                cat = row.get('근무유형', '')
-                if cat in categories:
-                    for day in range(1, 32):
-                        val = str(row.get(str(day), '')).strip()
-                        if _dispatch_val_matches(val, 'o') or val == '/' or _dispatch_val_matches(val, 'H'):
-                            cat_counts[cat] += 1
-                    # 근무유형별 기사 집계
-                    name = row.get('운전기사', '').strip()
-                    if name:
-                        cat_drivers[cat].add(name)
-                # 전체 운전기사 집계
-                name = row.get('운전기사', '').strip()
-                if name:
-                    drivers.add(name)
-            dispatch_stats[month] = cat_counts
-            driver_counts[month] = len(drivers)
-            driver_counts_by_category[month] = {cat: len(cat_drivers[cat]) for cat in categories}
+    except ValueError:
+        income_diff = income_diff_percent = fuel_diff = fuel_diff_percent = 0
+    income_change = income_percent = 0
+    if len(month_order) >= 2:
+        last_month = month_order[-1]
+        prev_month = month_order[-2]
+        last_income = monthly_incomes.get(last_month, 0)
+        prev_income = monthly_incomes.get(prev_month, 0)
+        if prev_income > 0:
+            income_change = last_income - prev_income
+            income_percent = round((income_change / prev_income) * 100, 2)
+    return {
+        'total_income': total_income,
+        'total_fuel_cost': total_fuel_cost,
+        'monthly_avg_income': monthly_avg_income,
+        'current_month_income': current_month_income,
+        'current_month_fuel_cost': current_month_fuel_cost,
+        'income_diff': income_diff,
+        'income_diff_percent': income_diff_percent,
+        'fuel_diff': fuel_diff,
+        'fuel_diff_percent': fuel_diff_percent,
+        'income_change': income_change,
+        'income_percent': income_percent,
+    }
+
+
+# 기존 라우트들에 @login_required 데코레이터 추가
+@app.route('/', methods=['GET', 'POST'])
+@login_required
+def calculate_salary():
+    month_order = DASHBOARD_MONTH_ORDER
+    dashboard_years, selected_year = _resolve_dashboard_year()
+
+    monthly_incomes, monthly_fuel_costs = _build_dashboard_sales_monthly(selected_year, month_order)
+    income_metrics = _build_dashboard_income_card_metrics(
+        monthly_incomes, monthly_fuel_costs,
+        request.args.get('month', f'{datetime.now().month:02d}월'),
+        month_order,
+    )
+    total_income = income_metrics['total_income']
+    total_fuel_cost = income_metrics['total_fuel_cost']
+    monthly_avg_income = income_metrics['monthly_avg_income']
+    selected_month = request.args.get('month', f'{datetime.now().month:02d}월')
+    current_month_income = income_metrics['current_month_income']
+    current_month_fuel_cost = income_metrics['current_month_fuel_cost']
+    income_diff = income_metrics['income_diff']
+    income_diff_percent = income_metrics['income_diff_percent']
+    fuel_diff = income_metrics['fuel_diff']
+    fuel_diff_percent = income_metrics['fuel_diff_percent']
+    income_change = income_metrics['income_change']
+    income_percent = income_metrics['income_percent']
+
+    dispatch_data = load_dispatch_data(selected_year)
+    dispatch_stats, driver_counts, driver_counts_by_category = _build_dashboard_dispatch_metrics(
+        dispatch_data, month_order,
+    )
+    accident_summary = _build_dashboard_accident_summary(selected_year, month_order)
+    total_at_fault = accident_summary['total_at_fault']
+    total_not_at_fault = accident_summary['total_not_at_fault']
+    total_at_fault_repair = accident_summary['total_at_fault_repair']
+    total_not_at_fault_payment = accident_summary['total_not_at_fault_payment']
+    unresolved_at_fault = accident_summary['unresolved_at_fault']
+    unresolved_not_at_fault = accident_summary['unresolved_not_at_fault']
+    unpaid_at_fault_estimate = accident_summary['unpaid_at_fault_estimate']
+    unpaid_not_at_fault_estimate = accident_summary['unpaid_not_at_fault_estimate']
+    accident_stats_by_month = accident_summary['accident_stats_by_month']
 
     if request.method == 'POST':
         if 'excel_file' in request.files:
@@ -394,86 +587,14 @@ def calculate_salary():
                                             driver_counts=driver_counts,
                                             monthly_incomes=monthly_incomes,
                                             monthly_fuel_costs=monthly_fuel_costs,
-                                            accident_stats_by_month=empty_accident_stats)
+                                            accident_stats_by_month=empty_accident_stats,
+                                            dashboard_years=dashboard_years,
+                                            selected_year=selected_year,
+                                            driver_counts_by_category=driver_counts_by_category)
                     
                     session['salary_data'] = salary_data
                     session['salary_calculated'] = True
-                    
-                    # 사고현황 통계 계산
-                    accident_data_path = os.path.join(app.config['DATA_FOLDER'], 'accident_data.json')
-                    total_at_fault = 0
-                    total_not_at_fault = 0
-                    total_at_fault_repair = 0
-                    total_not_at_fault_payment = 0
-                    unresolved_at_fault = 0
-                    unresolved_not_at_fault = 0
-                    unpaid_at_fault_estimate = 0
-                    unpaid_not_at_fault_estimate = 0
-                    if os.path.exists(accident_data_path):
-                        with open(accident_data_path, 'r', encoding='utf-8') as f:
-                            accident_data = json.load(f)
-                            at_fault = accident_data.get('at_fault', [])
-                            not_at_fault = accident_data.get('not_at_fault', [])
-                            total_at_fault = len(at_fault)
-                            total_not_at_fault = len(not_at_fault)
-                            # 가해보상금(수리): '수리지급'의 총합
-                            def parse_amount(amount_str):
-                                if not amount_str or amount_str == '' or amount_str == '-':
-                                    return 0
-                                try:
-                                    return int(str(amount_str).replace(',', ''))
-                                except:
-                                    return 0
-                            total_at_fault_repair = sum(parse_amount(a.get('수리지급', 0)) for a in at_fault)
-                            # 피해보상금: '금액'의 총합
-                            total_not_at_fault_payment = sum(parse_amount(a.get('금액', 0)) for a in not_at_fault)
-                            for a in at_fault:
-                                # 미결 가해사고
-                                if a.get('처리여부', '').strip() == '미결':
-                                    unresolved_at_fault += 1
-                                # 미지급 가해보상금(견적)
-                                try:
-                                    unpaid_at_fault_estimate += int(str(a.get('견적', 0)).replace(',', ''))
-                                except:
-                                    pass
-                            for a in not_at_fault:
-                                # 미결 피해사고
-                                if a.get('처리여부', '').strip() == '미결':
-                                    unresolved_not_at_fault += 1
-                                # 미입금 피해보상금(피해견적)
-                                try:
-                                    unpaid_not_at_fault_estimate += int(str(a.get('피해견적', 0)).replace(',', ''))
-                                except:
-                                    pass
-                            # 월별 사고 통계 (라인차트용) + 사고원인별 분포
-                            accident_stats_by_month = {m: {'at_fault': 0, 'at_fault_causes': {}, 'not_at_fault': 0, 'not_at_fault_causes': {}} for m in month_order}
-                            for a in at_fault:
-                                dt = a.get('사고일시', '')
-                                if dt and '/' in dt:
-                                    try:
-                                        mm = dt.strip().split('/')[0].zfill(2)
-                                        month_key = f'{mm}월'
-                                        if month_key in accident_stats_by_month:
-                                            accident_stats_by_month[month_key]['at_fault'] += 1
-                                            cause = (a.get('사고원인', '') or '').strip() or '기타'
-                                            accident_stats_by_month[month_key]['at_fault_causes'][cause] = accident_stats_by_month[month_key]['at_fault_causes'].get(cause, 0) + 1
-                                    except:
-                                        pass
-                            for a in not_at_fault:
-                                dt = a.get('사고일시', '')
-                                if dt and '/' in dt:
-                                    try:
-                                        mm = dt.strip().split('/')[0].zfill(2)
-                                        month_key = f'{mm}월'
-                                        if month_key in accident_stats_by_month:
-                                            accident_stats_by_month[month_key]['not_at_fault'] += 1
-                                            cause = (a.get('사고원인', '') or '').strip() or '기타'
-                                            accident_stats_by_month[month_key]['not_at_fault_causes'][cause] = accident_stats_by_month[month_key]['not_at_fault_causes'].get(cause, 0) + 1
-                                    except:
-                                        pass
-                    else:
-                        accident_stats_by_month = {m: {'at_fault': 0, 'at_fault_causes': {}, 'not_at_fault': 0, 'not_at_fault_causes': {}} for m in month_order}
-                    
+
                     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
                     return render_template('index.html', 
                                         salary_data=salary_data,
@@ -504,7 +625,10 @@ def calculate_salary():
                                         driver_counts=driver_counts,
                                         monthly_incomes=monthly_incomes,
                                         monthly_fuel_costs=monthly_fuel_costs,
-                                        accident_stats_by_month=accident_stats_by_month)
+                                        accident_stats_by_month=accident_stats_by_month,
+                                        dashboard_years=dashboard_years,
+                                        selected_year=selected_year,
+                                        driver_counts_by_category=driver_counts_by_category)
                 except Exception as e:
                     empty_accident_stats = {m: {'at_fault': 0, 'at_fault_causes': {}, 'not_at_fault': 0, 'not_at_fault_causes': {}} for m in month_order}
                     return render_template('index.html',
@@ -525,91 +649,15 @@ def calculate_salary():
                                         driver_counts=driver_counts,
                                         monthly_incomes=monthly_incomes,
                                         monthly_fuel_costs=monthly_fuel_costs,
-                                        accident_stats_by_month=empty_accident_stats)
+                                        accident_stats_by_month=empty_accident_stats,
+                                        dashboard_years=dashboard_years,
+                                        selected_year=selected_year,
+                                        driver_counts_by_category=driver_counts_by_category)
     
     # GET 요청이거나 세션에 저장된 데이터가 있는 경우
     salary_data = session.get('salary_data', None)
     calculated = session.get('salary_calculated', False)
-    
-    # 사고현황 통계 계산
-    accident_data_path = os.path.join(app.config['DATA_FOLDER'], 'accident_data.json')
-    total_at_fault = 0
-    total_not_at_fault = 0
-    total_at_fault_repair = 0
-    total_not_at_fault_payment = 0
-    unresolved_at_fault = 0
-    unresolved_not_at_fault = 0
-    unpaid_at_fault_estimate = 0
-    unpaid_not_at_fault_estimate = 0
-    if os.path.exists(accident_data_path):
-        with open(accident_data_path, 'r', encoding='utf-8') as f:
-            accident_data = json.load(f)
-            at_fault = accident_data.get('at_fault', [])
-            not_at_fault = accident_data.get('not_at_fault', [])
-            total_at_fault = len(at_fault)
-            total_not_at_fault = len(not_at_fault)
-            # 가해보상금(수리): '수리지급'의 총합
-            def parse_amount(amount_str):
-                if not amount_str or amount_str == '' or amount_str == '-':
-                    return 0
-                try:
-                    return int(str(amount_str).replace(',', ''))
-                except:
-                    return 0
-            total_at_fault_repair = sum(parse_amount(a.get('수리지급', 0)) for a in at_fault)
-            # 피해보상금: '금액'의 총합
-            total_not_at_fault_payment = sum(parse_amount(a.get('금액', 0)) for a in not_at_fault)
-            for a in at_fault:
-                # 미결 가해사고
-                if a.get('처리여부', '').strip() == '미결':
-                    unresolved_at_fault += 1
-                # 미지급 가해보상금(견적)
-                try:
-                    unpaid_at_fault_estimate += int(str(a.get('견적', 0)).replace(',', ''))
-                except:
-                    pass
-            for a in not_at_fault:
-                # 미결 피해사고
-                if a.get('처리여부', '').strip() == '미결':
-                    unresolved_not_at_fault += 1
-                # 미입금 피해보상금(피해견적)
-                try:
-                    unpaid_not_at_fault_estimate += int(str(a.get('피해견적', 0)).replace(',', ''))
-                except:
-                    pass
-    
-    # 월별 사고 현황 통계 (라인차트용) + 사고원인별 분포
-    accident_stats_by_month = {}
-    for m in month_order:
-        accident_stats_by_month[m] = {'at_fault': 0, 'at_fault_causes': {}, 'not_at_fault': 0, 'not_at_fault_causes': {}}
-    if os.path.exists(accident_data_path):
-        with open(accident_data_path, 'r', encoding='utf-8') as f:
-            accident_data = json.load(f)
-            for a in accident_data.get('at_fault', []):
-                dt = a.get('사고일시', '')
-                if dt and '/' in dt:
-                    try:
-                        mm = dt.strip().split('/')[0].zfill(2)
-                        month_key = f'{mm}월'
-                        if month_key in accident_stats_by_month:
-                            accident_stats_by_month[month_key]['at_fault'] += 1
-                            cause = (a.get('사고원인', '') or '').strip() or '기타'
-                            accident_stats_by_month[month_key]['at_fault_causes'][cause] = accident_stats_by_month[month_key]['at_fault_causes'].get(cause, 0) + 1
-                    except:
-                        pass
-            for a in accident_data.get('not_at_fault', []):
-                dt = a.get('사고일시', '')
-                if dt and '/' in dt:
-                    try:
-                        mm = dt.strip().split('/')[0].zfill(2)
-                        month_key = f'{mm}월'
-                        if month_key in accident_stats_by_month:
-                            accident_stats_by_month[month_key]['not_at_fault'] += 1
-                            cause = (a.get('사고원인', '') or '').strip() or '기타'
-                            accident_stats_by_month[month_key]['not_at_fault_causes'][cause] = accident_stats_by_month[month_key]['not_at_fault_causes'].get(cause, 0) + 1
-                    except:
-                        pass
-    
+
     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
     return render_template('index.html',
                         salary_data=salary_data,
@@ -641,7 +689,9 @@ def calculate_salary():
                         driver_counts_by_category=driver_counts_by_category,
                         monthly_incomes=monthly_incomes,
                         monthly_fuel_costs=monthly_fuel_costs,
-                        accident_stats_by_month=accident_stats_by_month)
+                        accident_stats_by_month=accident_stats_by_month,
+                        dashboard_years=dashboard_years,
+                        selected_year=selected_year)
 
 @app.route('/schedule', methods=['GET', 'POST'])
 @login_required
@@ -662,53 +712,41 @@ def schedule():
                 print(f"파일 저장 완료: {filepath}")
                 
                 try:
-                    # 시트별 데이터 처리
-                    sheet_names = ['01월', '02월', '03월', '04월', '05월', '06월', 
-                                 '07월', '08월', '09월', '10월', '11월', '12월']
-                    dispatch_data = OrderedDict()
-                    
-                    for sheet in sheet_names:
-                        try:
-                            df = pd.read_excel(filepath, sheet_name=sheet)
-                            # 데이터 전처리
-                            processed_data = []
-                            for _, row in df.iterrows():
-                                row_dict = {}
-                                for col in df.columns:
-                                    val = row[col]
-                                    row_dict[str(col)] = str(val) if pd.notna(val) else ''
-                                processed_data.append(enrich_dispatch_record(row_dict))
-                            
-                            dispatch_data[sheet] = normalize_dispatch_sheet({
-                                'headers': [str(col) for col in df.columns],
-                                'data': processed_data,
-                            })
-                        except:
-                            continue
-                    
+                    view_year = request.form.get('view_year', type=int)
+                    dispatch_year = extract_dispatch_year_from_filename(filename)
+                    dispatch_data = parse_dispatch_excel(filepath)
                     if not dispatch_data:
-                        return render_template('schedule.html', 
-                                            error="엑셀 파일에서 읽을 수 있는 시트가 없습니다.")
-                    
-                    # 파일로 저장
-                    save_dispatch_data(dispatch_data)
-                    
-                    # UploadRecord 데이터베이스 저장
+                        return render_template(
+                            'schedule.html',
+                            **_schedule_page_context(
+                                selected_year=view_year,
+                                error="엑셀 파일에서 읽을 수 있는 시트가 없습니다.",
+                            ),
+                        )
+
+                    save_dispatch_data(dispatch_data, year=dispatch_year)
+                    remarks_by_date, remarks_year = parse_dispatch_remarks_excel(filepath)
+                    save_dispatch_remarks(remarks_by_date, remarks_year or dispatch_year)
+
                     flask_url = url_for('uploaded_file', filename=os.path.basename(filepath), _external=True)
                     record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='schedule')
                     db.session.add(record)
                     db.session.commit()
-                    
-                    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
-                    return render_template('schedule.html', dispatch_data=dispatch_data, messages=messages, current_user=current_user)
+
+                    if view_year:
+                        return redirect(url_for('schedule', year=view_year))
+                    return redirect(url_for('schedule'))
                 except Exception as e:
-                    return render_template('schedule.html', 
-                                        error=f"엑셀 파일 처리 중 오류가 발생했습니다: {str(e)}")
-    
-    # GET 요청이거나 저장된 데이터가 있는 경우
-    dispatch_data = load_dispatch_data()
-    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
-    return render_template('schedule.html', dispatch_data=dispatch_data, messages=messages, current_user=current_user)
+                    view_year = request.form.get('view_year', type=int)
+                    return render_template(
+                        'schedule.html',
+                        **_schedule_page_context(
+                            selected_year=view_year,
+                            error=f"엑셀 파일 처리 중 오류가 발생했습니다: {str(e)}",
+                        ),
+                    )
+
+    return render_template('schedule.html', **_schedule_page_context())
 
 @app.route('/pay_lease', methods=['GET', 'POST'])
 @login_required
@@ -1054,7 +1092,9 @@ def sales_save():
         'success': True,
         'updated': result['updated'],
         'last_edits': result.get('last_edits', {}),
+        'edit_histories': result.get('edit_histories', {}),
         'last_edit': next(iter(result.get('last_edits', {}).values()), None),
+        'field_changes': result.get('field_changes', []),
     })
 
 
@@ -1066,6 +1106,7 @@ def accident():
     print(f"현재 사용자: {current_user.username if current_user else 'None'}")
     if request.method == 'POST':
         print("POST 요청 받음")
+        view_year = request.form.get('view_year', type=int)
         if 'excel_file' not in request.files:
             flash('파일이 선택되지 않았습니다.', 'error')
             return redirect(request.url)
@@ -1134,7 +1175,8 @@ def accident():
                 }
                 
                 # 파일로 저장 
-                save_accident_data(accident_data)
+                accident_year = extract_dispatch_year_from_filename(filename)
+                save_accident_data(accident_data, year=accident_year)
                 
                 # 업로드 정보 저장
                 kst = pytz.timezone('Asia/Seoul')
@@ -1152,28 +1194,24 @@ def accident():
             except Exception as e:
                 flash(f'파일 처리 중 오류 발생: {e}', 'error')
                 
+            if view_year:
+                return redirect(url_for('accident', year=view_year))
             return redirect(url_for('accident'))
 
-    accident_data = load_accident_data()
+    page_ctx = _accident_page_context()
     messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
     upload_info = {
         'filename': session.get('last_accident_file'),
         'upload_time': session.get('upload_time'),
         'uploader_name': session.get('uploader_name')
     }
-    month_order = ['01월', '02월', '03월', '04월', '05월', '06월', '07월', '08월', '09월', '10월', '11월', '12월']
-    at_fault_rows = accident_data.get('at_fault', []) if accident_data else []
-    not_at_fault_rows = accident_data.get('not_at_fault', []) if accident_data else []
-    accident_stats_by_month = build_accident_stats_by_month(at_fault_rows, not_at_fault_rows, month_order)
 
     return render_template(
         'accident.html',
-        accident_data=accident_data,
         messages=messages,
         current_user=current_user,
         upload_info=upload_info,
-        month_order=month_order,
-        accident_stats_by_month=accident_stats_by_month,
+        **page_ctx,
     )
 
 @app.route('/add_message', methods=['POST'])
@@ -1293,6 +1331,11 @@ DISPATCH_HEADER_RENAME = {
     '결근일수': '결근일',
 }
 DISPATCH_LEGACY_STAT_KEYS = ('인정일수', '근무일수', '승무일수', '결근일수')
+DISPATCH_MONTH_SHEET_NAMES = [
+    '01월', '02월', '03월', '04월', '05월', '06월',
+    '07월', '08월', '09월', '10월', '11월', '12월',
+]
+DISPATCH_MONTH_SHEET_RE = re.compile(r'^\d{2}월$')
 
 _dispatch_data_cache = {'path': None, 'mtime': None, 'data': None}
 _vehicle_lookup_cache = {}
@@ -1304,6 +1347,136 @@ def invalidate_dispatch_caches():
     _dispatch_data_cache['mtime'] = None
     _dispatch_data_cache['data'] = None
     _vehicle_lookup_cache.clear()
+
+
+def extract_dispatch_year_from_filename(filename):
+    match = re.search(r'(\d{4})', filename or '')
+    return int(match.group(1)) if match else datetime.now().year
+
+
+def _is_dispatch_month_store(data):
+    if not isinstance(data, dict) or not data:
+        return False
+    return any(DISPATCH_MONTH_SHEET_RE.match(str(key)) for key in data.keys())
+
+
+def _default_dispatch_year(year_keys):
+    keys = [str(key) for key in year_keys]
+    if not keys:
+        return datetime.now().year
+    current = str(datetime.now().year)
+    if current in keys:
+        return int(current)
+    return int(sorted(keys, reverse=True)[0])
+
+
+def _infer_legacy_dispatch_year():
+    remarks_path = os.path.join(app.config['DATA_FOLDER'], 'dispatch_remarks.json')
+    if os.path.exists(remarks_path):
+        try:
+            with open(remarks_path, 'r', encoding='utf-8') as f:
+                raw = json.loads(f.read().strip() or '{}')
+            if isinstance(raw, dict):
+                if 'by_date' in raw and raw.get('year'):
+                    return int(raw['year'])
+                legacy_years = [int(key) for key in raw.keys() if str(key).isdigit() and len(str(key)) == 4]
+                if len(legacy_years) == 1:
+                    return legacy_years[0]
+        except Exception:
+            pass
+    return datetime.now().year
+
+
+def _coerce_dispatch_store(raw):
+    if not raw or not isinstance(raw, dict):
+        return OrderedDict()
+    if _is_dispatch_month_store(raw):
+        year = str(_infer_legacy_dispatch_year())
+        return OrderedDict({year: OrderedDict(raw)})
+    store = OrderedDict()
+    for year_key, year_data in raw.items():
+        if isinstance(year_data, dict):
+            store[str(year_key)] = OrderedDict(year_data) if not isinstance(year_data, OrderedDict) else year_data
+    return store
+
+
+def _coerce_dispatch_remarks_store(raw):
+    if not raw or not isinstance(raw, dict):
+        return {}
+    if 'by_date' in raw:
+        year = raw.get('year') or datetime.now().year
+        try:
+            year = int(year)
+        except (TypeError, ValueError):
+            year = datetime.now().year
+        return {str(year): {'by_date': raw.get('by_date') or {}}}
+    if raw and all(str(key).isdigit() and len(str(key)) == 4 for key in raw.keys()):
+        store = {}
+        for year_key, payload in raw.items():
+            if isinstance(payload, dict) and 'by_date' in payload:
+                store[str(year_key)] = {'by_date': payload.get('by_date') or {}}
+            else:
+                store[str(year_key)] = {'by_date': payload or {}}
+        return store
+    if raw:
+        year = datetime.now().year
+        try:
+            year = int(next(iter(raw.keys()))[:4])
+        except (ValueError, TypeError, StopIteration):
+            pass
+        return {str(year): {'by_date': raw}}
+    return {}
+
+
+def parse_dispatch_excel(file_path):
+    """배차관리 엑셀 월별 시트 파싱."""
+    dispatch_data = OrderedDict()
+    for sheet in DISPATCH_MONTH_SHEET_NAMES:
+        try:
+            df = pd.read_excel(file_path, sheet_name=sheet)
+            processed_data = []
+            for _, row in df.iterrows():
+                row_dict = {}
+                for col in df.columns:
+                    val = row[col]
+                    row_dict[str(col)] = str(val) if pd.notna(val) else ''
+                processed_data.append(enrich_dispatch_record(row_dict))
+            dispatch_data[sheet] = normalize_dispatch_sheet({
+                'headers': [str(col) for col in df.columns],
+                'data': processed_data,
+            })
+        except Exception:
+            continue
+    return dispatch_data
+
+
+def _schedule_page_context(selected_year=None, error=None):
+    store = load_dispatch_data_store()
+    years = sorted([int(year_key) for year_key in store.keys()], reverse=True) if store else []
+    if selected_year is None:
+        query_year = request.args.get('year', type=int)
+        if query_year and query_year in years:
+            selected_year = query_year
+        elif years:
+            selected_year = years[0]
+        else:
+            selected_year = datetime.now().year
+    elif years and selected_year not in years:
+        selected_year = years[0]
+    dispatch_data = load_dispatch_data(selected_year) if store else None
+    dispatch_remarks = load_dispatch_remarks(selected_year)
+    messages = Message.query.options(joinedload(Message.author)).order_by(Message.timestamp.desc()).limit(100).all()
+    ctx = {
+        'dispatch_data': dispatch_data,
+        'dispatch_remarks': dispatch_remarks,
+        'dispatch_years': years,
+        'selected_dispatch_year': selected_year if years else None,
+        'messages': messages,
+        'current_user': current_user,
+    }
+    if error:
+        ctx['error'] = error
+    return ctx
 
 
 def _dispatch_data_is_normalized(data):
@@ -1393,22 +1566,118 @@ def normalize_dispatch_data(data):
     )
 
 
-def save_dispatch_data(data):
+def save_dispatch_data(data, year=None):
     print("=== save_dispatch_data 함수 시작 ===")
     filepath = os.path.join(app.config['DATA_FOLDER'], 'dispatch_data.json')
     print(f"JSON 저장 경로: {filepath}")
-    data = normalize_dispatch_data(data)
+    if year is None:
+        year = datetime.now().year
+    store = load_dispatch_data_store() or OrderedDict()
+    store[str(year)] = normalize_dispatch_data(data)
     with open(filepath, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        json.dump(store, f, ensure_ascii=False, indent=2)
     invalidate_dispatch_caches()
     print("JSON 파일 저장 완료")
 
 
-def load_dispatch_data():
-    """저장된 배차 데이터를 불러옴 (프로세스 내 캐시)."""
+def parse_dispatch_remarks_excel(file_path):
+    """배차관리 엑셀 [비고] 시트에서 날짜별 대체·결근·비고 텍스트 추출."""
+    try:
+        df = pd.read_excel(file_path, sheet_name='비고')
+    except Exception:
+        return {}, None
+    df.columns = [str(c).strip() for c in df.columns]
+    if '날짜' not in df.columns:
+        return {}, None
+
+    def _remark_cell(row, col_name):
+        if col_name not in df.columns:
+            return ''
+        val = row.get(col_name)
+        if pd.isna(val):
+            return ''
+        return str(val).strip()
+
+    by_date = {}
+    year_from_file = None
+    fname = os.path.basename(file_path)
+    year_match = re.search(r'(\d{4})', fname)
+    if year_match:
+        year_from_file = int(year_match.group(1))
+
+    for _, row in df.iterrows():
+        d = row.get('날짜')
+        if pd.isna(d):
+            continue
+        if hasattr(d, 'strftime'):
+            date_str = d.strftime('%Y-%m-%d')
+        else:
+            date_str = str(pd.Timestamp(d))[:10]
+        if not date_str or len(date_str) < 10:
+            continue
+        if year_from_file is None:
+            try:
+                year_from_file = int(date_str[:4])
+            except (ValueError, TypeError):
+                pass
+        by_date[date_str] = {
+            '대체': _remark_cell(row, '대체'),
+            '결근': _remark_cell(row, '결근'),
+            '비고': _remark_cell(row, '비고'),
+        }
+    return by_date, year_from_file
+
+
+def save_dispatch_remarks(by_date, year=None):
+    if year is None and by_date:
+        try:
+            year = int(next(iter(by_date.keys()))[:4])
+        except (ValueError, TypeError, StopIteration):
+            year = datetime.now().year
+    elif year is None:
+        year = datetime.now().year
+    store = load_dispatch_remarks_store()
+    store[str(year)] = {'by_date': by_date or {}}
+    filepath = os.path.join(app.config['DATA_FOLDER'], 'dispatch_remarks.json')
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(store, f, ensure_ascii=False, indent=2)
+
+
+def load_dispatch_remarks_store():
+    filepath = os.path.join(app.config['DATA_FOLDER'], 'dispatch_remarks.json')
+    if not os.path.exists(filepath):
+        return {}
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+            if not content:
+                return {}
+            raw = json.loads(content)
+            return _coerce_dispatch_remarks_store(raw)
+    except Exception:
+        pass
+    return {}
+
+
+def load_dispatch_remarks(year=None):
+    store = load_dispatch_remarks_store()
+    if not store:
+        fallback_year = year or datetime.now().year
+        return {'year': fallback_year, 'by_date': {}}
+    if year is None:
+        year = _default_dispatch_year(store.keys())
+    payload = store.get(str(year), {})
+    return {
+        'year': int(year),
+        'by_date': payload.get('by_date') or {},
+    }
+
+
+def load_dispatch_data_store():
+    """년도별 배차 데이터 전체 저장소 로드."""
     filepath = os.path.join(app.config['DATA_FOLDER'], 'dispatch_data.json')
     if not os.path.exists(filepath):
-        return None
+        return OrderedDict()
 
     try:
         mtime = os.path.getmtime(filepath)
@@ -1427,21 +1696,44 @@ def load_dispatch_data():
             content = f.read().strip()
             if not content:
                 print("dispatch_data.json 파일이 비어있습니다.")
-                return None
+                return OrderedDict()
             raw = json.loads(content)
             if not isinstance(raw, dict):
-                return raw
-            data = OrderedDict(raw) if not isinstance(raw, OrderedDict) else raw
-            if not _dispatch_data_is_normalized(data):
-                data = normalize_dispatch_data(data)
-            _dispatch_data_cache.update({'path': filepath, 'mtime': mtime, 'data': data})
-            return data
+                return OrderedDict()
+            store = _coerce_dispatch_store(raw)
+            changed = _is_dispatch_month_store(raw)
+            normalized_store = OrderedDict()
+            for year_key, year_data in store.items():
+                if not _dispatch_data_is_normalized(year_data):
+                    normalized_store[str(year_key)] = normalize_dispatch_data(year_data)
+                    changed = True
+                else:
+                    normalized_store[str(year_key)] = year_data
+            if changed:
+                with open(filepath, 'w', encoding='utf-8') as wf:
+                    json.dump(normalized_store, wf, ensure_ascii=False, indent=2)
+                try:
+                    mtime = os.path.getmtime(filepath)
+                except OSError:
+                    mtime = None
+            _dispatch_data_cache.update({'path': filepath, 'mtime': mtime, 'data': normalized_store})
+            return normalized_store
     except json.JSONDecodeError as e:
         print(f"dispatch_data.json JSON 파싱 오류: {e}")
-        return None
+        return OrderedDict()
     except Exception as e:
         print(f"dispatch_data.json 읽기 오류: {e}")
+        return OrderedDict()
+
+
+def load_dispatch_data(year=None):
+    """저장된 배차 데이터를 불러옴 (프로세스 내 캐시)."""
+    store = load_dispatch_data_store()
+    if not store:
         return None
+    if year is None:
+        year = _default_dispatch_year(store.keys())
+    return store.get(str(year))
 
 def save_lease_data(data):
     print("=== save_lease_data 함수 시작 ===")
@@ -1619,7 +1911,7 @@ def build_vehicle_lookup(dispatch_month: str | None = None):
                 if not replaced:
                     bucket.append(entry)
 
-    events, _ = load_car_maintenance_events()
+    events = load_all_car_maintenance_events()
     for event in events:
         suffix = extract_car_suffix(event.get('차번', ''))
         if not suffix or suffix in suffixes:
@@ -1634,31 +1926,29 @@ def build_vehicle_lookup(dispatch_month: str | None = None):
             'source': 'maintenance',
         }]
 
-    driver_data = load_driver_data()
-    if driver_data and driver_data.get('list'):
-        for driver in driver_data['list']:
-            for key in ('차번', '차량번호', '배정차량'):
-                suffix = extract_car_suffix(driver.get(key, ''))
-                if not suffix:
-                    continue
-                if suffix not in suffixes:
-                    suffixes[suffix] = [{
-                        '차량번호': driver.get(key, ''),
-                        '차번': suffix,
-                        '사번': normalize_emp_id(driver.get('사번', '')),
-                        '이름': str(driver.get('이름', '') or ''),
-                        '차종': str(driver.get('차종', '') or ''),
-                        '근무유형': str(driver.get('근무유형', '') or ''),
-                        'source': 'driver',
-                    }]
-                else:
-                    for entry in suffixes[suffix]:
-                        if not entry.get('사번') and driver.get('사번'):
-                            entry['사번'] = normalize_emp_id(driver.get('사번'))
-                        if not entry.get('이름') and driver.get('이름'):
-                            entry['이름'] = str(driver.get('이름'))
-                        if not entry.get('차종') and driver.get('차종'):
-                            entry['차종'] = str(driver.get('차종'))
+    for driver in load_all_driver_records():
+        for key in ('차번', '차량번호', '배정차량'):
+            suffix = extract_car_suffix(driver.get(key, ''))
+            if not suffix:
+                continue
+            if suffix not in suffixes:
+                suffixes[suffix] = [{
+                    '차량번호': driver.get(key, ''),
+                    '차번': suffix,
+                    '사번': normalize_emp_id(driver.get('사번', '')),
+                    '이름': str(driver.get('이름', '') or ''),
+                    '차종': str(driver.get('차종', '') or ''),
+                    '근무유형': str(driver.get('근무유형', '') or ''),
+                    'source': 'driver',
+                }]
+            else:
+                for entry in suffixes[suffix]:
+                    if not entry.get('사번') and driver.get('사번'):
+                        entry['사번'] = normalize_emp_id(driver.get('사번'))
+                    if not entry.get('이름') and driver.get('이름'):
+                        entry['이름'] = str(driver.get('이름'))
+                    if not entry.get('차종') and driver.get('차종'):
+                        entry['차종'] = str(driver.get('차종'))
 
     lookup = {'suffixes': suffixes}
     _vehicle_lookup_cache[cache_key] = lookup
@@ -1735,16 +2025,18 @@ def _sales_row_matches_update(row, item) -> bool:
         return False
 
     start = str(item.get('영업시작') or '').strip()[:16]
-    if start:
-        return str(row.get('영업시작') or '').strip()[:16] == start
-
-    work = str(item.get('근무유형') or '').strip()
-    if work:
-        return str(row.get('근무유형') or '').strip() == work
+    row_start = str(row.get('영업시작') or '').strip()[:16]
+    if start and row_start:
+        return row_start == start
 
     emp = normalize_emp_id(item.get('사번', ''))
     if emp:
         return normalize_emp_id(row.get('사번', '')) == emp
+
+    work = str(item.get('근무유형') or '').strip()
+    row_work = str(row.get('근무유형') or '').strip()
+    if work and row_work:
+        return row_work == work
 
     return sales_record_key(row) == sales_record_key({
         '날짜': item.get('날짜', ''),
@@ -2240,13 +2532,91 @@ def _apply_sales_derived_totals(row):
     row['총거리'] = str(round(running_km + empty_km, 2))
 
 
+def _sales_edit_value_equal(field, old_val, new_val):
+    try:
+        return (
+            _normalize_sales_edit_field(field, old_val)
+            == _normalize_sales_edit_field(field, new_val)
+        )
+    except (ValueError, TypeError):
+        return str(old_val or '').strip() == str(new_val or '').strip()
+
+
+def _mark_sales_row_modified(row, fields):
+    if not fields:
+        return
+    existing = set(row.get('_modified_fields') or [])
+    existing.update(fields)
+    row['_modified_fields'] = sorted(existing)
+
+
+def _mark_sales_row_field_edits(row, fields, edit_entry):
+    """필드별 수정 세션·편집자 메타데이터 저장."""
+    if not fields or not edit_entry:
+        return
+    existing = row.get('_field_edits') or {}
+    if not isinstance(existing, dict):
+        existing = {}
+    meta_base = {
+        'session_id': str(edit_entry.get('id') or '').strip(),
+        'editor': str(edit_entry.get('editor') or '').strip(),
+        'date': str(edit_entry.get('date') or '').strip(),
+        'time': str(edit_entry.get('time') or '').strip(),
+    }
+    for field in fields:
+        existing[field] = dict(meta_base)
+    row['_field_edits'] = existing
+    _mark_sales_row_modified(row, fields)
+
+
+def _apply_sales_row_field_updates(row, item, edit_entry=None):
+    """수동 편집 필드를 행에 반영하고 이번 저장에서 변경된 필드 목록을 반환."""
+    changed = []
+    for field in SALES_EDITABLE_FIELDS:
+        if field in item:
+            new_val = _normalize_sales_edit_field(field, item[field])
+        elif field == '영업시간' and '영업분' in item:
+            new_val = _normalize_sales_edit_field('영업시간', item['영업분'])
+        else:
+            continue
+        old_val = row.get(field, '')
+        if not _sales_edit_value_equal(field, old_val, new_val):
+            changed.append(field)
+        row[field] = new_val
+    _apply_sales_derived_totals(row)
+    row.pop('영업분', None)
+    derived = []
+    if '영업시간' in changed or '빈차시간' in changed:
+        derived.append('총시간')
+    if '운행거리' in changed or '빈차거리' in changed:
+        derived.append('총거리')
+    all_changed = changed + derived
+    if all_changed and edit_entry:
+        _mark_sales_row_field_edits(row, all_changed, edit_entry)
+    elif all_changed:
+        _mark_sales_row_modified(row, all_changed)
+    return all_changed
+
+
 def _sales_editor_name(user=None):
+    """수입금 수동 수정 편집자 표시명 — DB name 우선, 없으면 username."""
     user = user or current_user
     try:
         if not getattr(user, 'is_authenticated', False):
             return ''
     except Exception:
         return ''
+    try:
+        user_id = user.get_id()
+        if user_id:
+            db_user = User.query.get(int(user_id))
+            if db_user:
+                name = str(db_user.name or '').strip()
+                if name:
+                    return name
+                return str(db_user.username or '').strip()
+    except Exception:
+        pass
     name = str(getattr(user, 'name', None) or '').strip()
     if name:
         return name
@@ -2254,15 +2624,30 @@ def _sales_editor_name(user=None):
 
 
 def _record_sales_month_last_edit(month_data, editor_name):
-    """월별 수입금 표 수동 수정 메타데이터 저장."""
+    """월별 수입금 표 수동 수정 메타데이터 저장 (최근 2건)."""
     kst = pytz.timezone('Asia/Seoul')
     now = datetime.now(kst)
-    month_data['last_edit'] = {
+    entry = {
+        'id': now.strftime('%Y%m%d%H%M%S%f'),
         'date': now.strftime('%Y-%m-%d'),
         'time': now.strftime('%H:%M'),
         'editor': editor_name,
     }
-    return month_data['last_edit']
+    history = list(month_data.get('edit_history') or [])
+    if not history:
+        legacy = month_data.get('last_edit')
+        if isinstance(legacy, dict) and (legacy.get('date') or legacy.get('editor')):
+            legacy_entry = dict(legacy)
+            if not legacy_entry.get('id'):
+                legacy_entry['id'] = (
+                    str(legacy_entry.get('date') or '').replace('-', '')
+                    + str(legacy_entry.get('time') or '').replace(':', '')
+                )
+            history.append(legacy_entry)
+    history.insert(0, entry)
+    month_data['edit_history'] = history[:2]
+    month_data['last_edit'] = month_data['edit_history'][0]
+    return entry
 
 
 def apply_sales_row_updates(updates, editor_name=None):
@@ -2275,6 +2660,8 @@ def apply_sales_row_updates(updates, editor_name=None):
 
     updated_count = 0
     updated_months = set()
+    field_changes = []
+    month_edit_entries = {}
     for item in updates:
         month = str(item.get('month') or item.get('월') or '').strip()
         date = str(item.get('날짜', '')).strip()
@@ -2286,33 +2673,58 @@ def apply_sales_row_updates(updates, editor_name=None):
         if not month_data:
             continue
 
+        item_matched = False
         for row in month_data.get('data', []):
             if not _sales_row_matches_update(row, item):
                 continue
-            for field in SALES_EDITABLE_FIELDS:
-                if field in item:
-                    row[field] = _normalize_sales_edit_field(field, item[field])
-                elif field == '영업시간' and '영업분' in item:
-                    row['영업시간'] = _normalize_sales_edit_field('영업시간', item['영업분'])
-            _apply_sales_derived_totals(row)
-            row.pop('영업분', None)
-            updated_count += 1
-            updated_months.add(month)
+            item_matched = True
+            changed = _apply_sales_row_field_updates(row, item)
+            if changed:
+                if month not in month_edit_entries:
+                    editor = str(editor_name or _sales_editor_name()).strip() or '알 수 없음'
+                    month_edit_entries[month] = _record_sales_month_last_edit(month_data, editor)
+                _mark_sales_row_field_edits(row, changed, month_edit_entries[month])
+                field_meta = {}
+                field_edits = row.get('_field_edits') or {}
+                if isinstance(field_edits, dict):
+                    for field_name in changed:
+                        if field_name in field_edits:
+                            field_meta[field_name] = field_edits[field_name]
+                field_changes.append({
+                    'month': month,
+                    '날짜': date,
+                    '차번': car,
+                    '사번': normalize_emp_id(item.get('사번', '')),
+                    '영업시작': str(item.get('영업시작') or '').strip()[:16],
+                    '근무유형': str(item.get('근무유형') or '').strip(),
+                    'fields': changed,
+                    'field_meta': field_meta,
+                })
+                updated_count += 1
+                updated_months.add(month)
             break
+        if not item_matched:
+            return False, '일치하는 행을 찾지 못했습니다.'
 
     if updated_count == 0:
-        return False, '일치하는 행을 찾지 못했습니다.'
+        return False, '변경된 항목이 없습니다.'
 
-    editor = str(editor_name or _sales_editor_name()).strip() or '알 수 없음'
     last_edits = {}
+    edit_histories = {}
     for month_key in updated_months:
         month_data = data.get(month_key)
         if month_data:
             month_data['summary'] = compute_sales_summary(month_data.get('data', []))
-            last_edits[month_key] = _record_sales_month_last_edit(month_data, editor)
+            last_edits[month_key] = month_data.get('last_edit')
+            edit_histories[month_key] = _sales_month_edit_history(month_data)
 
     save_sales_data(data, normalize=False)
-    return True, {'updated': updated_count, 'last_edits': last_edits}
+    return True, {
+        'updated': updated_count,
+        'last_edits': last_edits,
+        'edit_histories': edit_histories,
+        'field_changes': field_changes,
+    }
 
 
 def _read_sales_data_raw():
@@ -2603,21 +3015,17 @@ def migrate_legacy_map_files(default_year_prefix=ACCIDENT_DEFAULT_YEAR_PREFIX):
 
 
 def migrate_accident_data_file():
-    filepath = os.path.join(app.config['DATA_FOLDER'], 'accident_data.json')
-    if not os.path.exists(filepath):
+    store = load_accident_data_store()
+    if not store:
         return
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            content = f.read().strip()
-        if not content:
-            return
-        data = json.loads(content)
-    except Exception as e:
-        print(f'accident_data 마이그레이션 스킵: {e}')
-        return
-    if normalize_accident_data(data):
+    changed = False
+    for payload in store.values():
+        if normalize_accident_data(payload):
+            changed = True
+    if changed:
+        filepath = os.path.join(app.config['DATA_FOLDER'], 'accident_data.json')
         with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+            json.dump(store, f, ensure_ascii=False, indent=2)
         print('accident_data.json 사고번호 형식 마이그레이션 완료')
 
 
@@ -2628,272 +3036,231 @@ def init_accident_migrations():
         migrate_accident_data_file()
 
 
-def save_accident_data(data):
-    print("=== save_accident_data 함수 시작 ===")
-    normalize_accident_data(data)
-    # 요약 데이터 생성
-    if data and ('at_fault' in data or 'not_at_fault' in data):
-        at_fault_data = data.get('at_fault', [])
-        not_at_fault_data = data.get('not_at_fault', [])
-        
-        # 기본 통계
-        total_count = len(at_fault_data) + len(not_at_fault_data)
-        at_fault_count = len(at_fault_data)
-        not_at_fault_count = len(not_at_fault_data)
-        at_fault_pending_count = sum(1 for a in at_fault_data if a.get('처리여부', '') == '미결')
-        not_at_fault_pending_count = sum(1 for a in not_at_fault_data if a.get('처리여부', '') == '미결')
-        
-        # 금액 통계
-        def parse_amount(amount_str):
-            if not amount_str or amount_str == '' or amount_str == '-':
-                return 0
-            try:
-                return int(str(amount_str).replace(',', ''))
-            except:
-                return 0
-        
-        at_fault_total_repair = sum(parse_amount(a.get('수리지급', 0)) for a in at_fault_data)
-        at_fault_total_treatment = sum(parse_amount(a.get('치료지급', 0)) for a in at_fault_data)
-        not_at_fault_total_damage = sum(parse_amount(a.get('피해견적', 0)) for a in not_at_fault_data)
-        not_at_fault_total_payment = sum(parse_amount(a.get('금액', 0)) for a in not_at_fault_data)
-        
-        # 기사별 통계
-        driver_stats = {}
-        for accident in at_fault_data:
-            driver_name = accident.get('기사명', '')
-            if driver_name:
-                if driver_name not in driver_stats:
-                    driver_stats[driver_name] = {
-                        'name': driver_name,
-                        'at_fault_count': 0,
-                        'repair_payment': 0,
-                        'treatment_payment': 0,
-                        'not_at_fault_count': 0,
-                        'damage_estimate': 0
-                    }
-                driver_stats[driver_name]['at_fault_count'] += 1
-                driver_stats[driver_name]['repair_payment'] += parse_amount(accident.get('수리지급', 0))
-                driver_stats[driver_name]['treatment_payment'] += parse_amount(accident.get('치료지급', 0))
-        
-        for accident in not_at_fault_data:
-            driver_name = accident.get('기사명', '')
-            if driver_name:
-                if driver_name not in driver_stats:
-                    driver_stats[driver_name] = {
-                        'name': driver_name,
-                        'at_fault_count': 0,
-                        'repair_payment': 0,
-                        'treatment_payment': 0,
-                        'not_at_fault_count': 0,
-                        'damage_estimate': 0
-                    }
-                driver_stats[driver_name]['not_at_fault_count'] += 1
-                driver_stats[driver_name]['damage_estimate'] += parse_amount(accident.get('피해견적', 0))
-        
-        # 차량별 통계
-        vehicle_stats = {}
-        for accident in at_fault_data:
-            vehicle_number = accident.get('차번', '')
-            if vehicle_number:
-                if vehicle_number not in vehicle_stats:
-                    vehicle_stats[vehicle_number] = {
-                        'number': vehicle_number,
-                        'at_fault_count': 0,
-                        'not_at_fault_count': 0,
-                        'damage_estimate': 0
-                    }
-                vehicle_stats[vehicle_number]['at_fault_count'] += 1
-        
-        for accident in not_at_fault_data:
-            vehicle_number = accident.get('차번', '')
-            if vehicle_number:
-                if vehicle_number not in vehicle_stats:
-                    vehicle_stats[vehicle_number] = {
-                        'number': vehicle_number,
-                        'at_fault_count': 0,
-                        'not_at_fault_count': 0,
-                        'damage_estimate': 0
-                    }
-                vehicle_stats[vehicle_number]['not_at_fault_count'] += 1
-                vehicle_stats[vehicle_number]['damage_estimate'] += parse_amount(accident.get('피해견적', 0))
-        
-        # 금액 포맷팅
-        def format_amount(amount):
-            return f"{amount:,}" if amount > 0 else "0"
-        
-        for driver in driver_stats.values():
-            driver['repair_payment'] = format_amount(driver['repair_payment'])
-            driver['treatment_payment'] = format_amount(driver['treatment_payment'])
-            driver['damage_estimate'] = format_amount(driver['damage_estimate'])
-        
-        for vehicle in vehicle_stats.values():
-            vehicle['damage_estimate'] = format_amount(vehicle['damage_estimate'])
+def _is_accident_payload(data):
+    return isinstance(data, dict) and ('at_fault' in data or 'not_at_fault' in data)
 
-        chart_stats = build_accident_chart_stats(at_fault_data, not_at_fault_data)
-        
-        # 요약 데이터 추가
-        data['summary'] = {
-            'total_count': total_count,
-            'at_fault_count': at_fault_count,
-            'not_at_fault_count': not_at_fault_count,
-            'at_fault_pending_count': at_fault_pending_count,
-            'not_at_fault_pending_count': not_at_fault_pending_count,
-            'at_fault_total_repair': format_amount(at_fault_total_repair),
-            'at_fault_total_treatment': format_amount(at_fault_total_treatment),
-            'not_at_fault_total_damage': format_amount(not_at_fault_total_damage),
-            'not_at_fault_total_payment': format_amount(not_at_fault_total_payment),
-            'driver_stats': list(driver_stats.values()),
-            'vehicle_stats': list(vehicle_stats.values()),
-            'type_chart': chart_stats['type_chart'],
-            'district_chart': chart_stats['district_chart'],
-        }
-    
+
+def _coerce_accident_store(raw):
+    if not raw or not isinstance(raw, dict):
+        return {}
+    if _is_accident_payload(raw):
+        return {str(datetime.now().year): raw}
+    store = {}
+    for year_key, payload in raw.items():
+        if isinstance(payload, dict) and _is_accident_payload(payload):
+            store[str(year_key)] = payload
+    return store
+
+
+def load_accident_data_store():
+    filepath = os.path.join(app.config['DATA_FOLDER'], 'accident_data.json')
+    if not os.path.exists(filepath):
+        return {}
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+            if not content:
+                return {}
+            raw = json.loads(content)
+            store = _coerce_accident_store(raw)
+            if _is_accident_payload(raw):
+                with open(filepath, 'w', encoding='utf-8') as wf:
+                    json.dump(store, wf, ensure_ascii=False, indent=2)
+            return store
+    except Exception as e:
+        print(f'accident_data.json 읽기 오류: {e}')
+        return {}
+
+
+def _enrich_accident_payload(data):
+    if not data:
+        return data
+    normalize_accident_data(data)
+    if not ('at_fault' in data or 'not_at_fault' in data):
+        return data
+
+    at_fault_data = data.get('at_fault', [])
+    not_at_fault_data = data.get('not_at_fault', [])
+
+    total_count = len(at_fault_data) + len(not_at_fault_data)
+    at_fault_count = len(at_fault_data)
+    not_at_fault_count = len(not_at_fault_data)
+    at_fault_pending_count = sum(1 for a in at_fault_data if a.get('처리여부', '') == '미결')
+    not_at_fault_pending_count = sum(1 for a in not_at_fault_data if a.get('처리여부', '') == '미결')
+
+    def parse_amount(amount_str):
+        if not amount_str or amount_str == '' or amount_str == '-':
+            return 0
+        try:
+            return int(str(amount_str).replace(',', ''))
+        except Exception:
+            return 0
+
+    at_fault_total_repair = sum(parse_amount(a.get('수리지급', 0)) for a in at_fault_data)
+    at_fault_total_treatment = sum(parse_amount(a.get('치료지급', 0)) for a in at_fault_data)
+    not_at_fault_total_damage = sum(parse_amount(a.get('피해견적', 0)) for a in not_at_fault_data)
+    not_at_fault_total_payment = sum(parse_amount(a.get('금액', 0)) for a in not_at_fault_data)
+
+    driver_stats = {}
+    for accident in at_fault_data:
+        driver_name = accident.get('기사명', '')
+        if driver_name:
+            if driver_name not in driver_stats:
+                driver_stats[driver_name] = {
+                    'name': driver_name,
+                    'at_fault_count': 0,
+                    'repair_payment': 0,
+                    'treatment_payment': 0,
+                    'not_at_fault_count': 0,
+                    'damage_estimate': 0,
+                }
+            driver_stats[driver_name]['at_fault_count'] += 1
+            driver_stats[driver_name]['repair_payment'] += parse_amount(accident.get('수리지급', 0))
+            driver_stats[driver_name]['treatment_payment'] += parse_amount(accident.get('치료지급', 0))
+
+    for accident in not_at_fault_data:
+        driver_name = accident.get('기사명', '')
+        if driver_name:
+            if driver_name not in driver_stats:
+                driver_stats[driver_name] = {
+                    'name': driver_name,
+                    'at_fault_count': 0,
+                    'repair_payment': 0,
+                    'treatment_payment': 0,
+                    'not_at_fault_count': 0,
+                    'damage_estimate': 0,
+                }
+            driver_stats[driver_name]['not_at_fault_count'] += 1
+            driver_stats[driver_name]['damage_estimate'] += parse_amount(accident.get('피해견적', 0))
+
+    vehicle_stats = {}
+    for accident in at_fault_data:
+        vehicle_number = accident.get('차번', '')
+        if vehicle_number:
+            if vehicle_number not in vehicle_stats:
+                vehicle_stats[vehicle_number] = {
+                    'number': vehicle_number,
+                    'at_fault_count': 0,
+                    'not_at_fault_count': 0,
+                    'damage_estimate': 0,
+                }
+            vehicle_stats[vehicle_number]['at_fault_count'] += 1
+
+    for accident in not_at_fault_data:
+        vehicle_number = accident.get('차번', '')
+        if vehicle_number:
+            if vehicle_number not in vehicle_stats:
+                vehicle_stats[vehicle_number] = {
+                    'number': vehicle_number,
+                    'at_fault_count': 0,
+                    'not_at_fault_count': 0,
+                    'damage_estimate': 0,
+                }
+            vehicle_stats[vehicle_number]['not_at_fault_count'] += 1
+            vehicle_stats[vehicle_number]['damage_estimate'] += parse_amount(accident.get('피해견적', 0))
+
+    def format_amount(amount):
+        return f"{amount:,}" if amount > 0 else "0"
+
+    for driver in driver_stats.values():
+        driver['repair_payment'] = format_amount(driver['repair_payment'])
+        driver['treatment_payment'] = format_amount(driver['treatment_payment'])
+        driver['damage_estimate'] = format_amount(driver['damage_estimate'])
+
+    for vehicle in vehicle_stats.values():
+        vehicle['damage_estimate'] = format_amount(vehicle['damage_estimate'])
+
+    chart_stats = build_accident_chart_stats(at_fault_data, not_at_fault_data)
+    data['summary'] = {
+        'total_count': total_count,
+        'at_fault_count': at_fault_count,
+        'not_at_fault_count': not_at_fault_count,
+        'at_fault_pending_count': at_fault_pending_count,
+        'not_at_fault_pending_count': not_at_fault_pending_count,
+        'at_fault_total_repair': format_amount(at_fault_total_repair),
+        'at_fault_total_treatment': format_amount(at_fault_total_treatment),
+        'not_at_fault_total_damage': format_amount(not_at_fault_total_damage),
+        'not_at_fault_total_payment': format_amount(not_at_fault_total_payment),
+        'driver_stats': list(driver_stats.values()),
+        'vehicle_stats': list(vehicle_stats.values()),
+        'type_chart': chart_stats['type_chart'],
+        'district_chart': chart_stats['district_chart'],
+    }
+    return data
+
+
+def load_accident_data_merged():
+    store = load_accident_data_store()
+    merged = {'at_fault': [], 'not_at_fault': []}
+    for payload in store.values():
+        merged['at_fault'].extend(payload.get('at_fault', []))
+        merged['not_at_fault'].extend(payload.get('not_at_fault', []))
+    return merged
+
+
+def find_accident_in_all_years(accident_no, list_type='at_fault'):
+    merged = load_accident_data_merged()
+    key = 'at_fault' if list_type == 'at_fault' else 'not_at_fault'
+    return find_accident_by_no(merged.get(key, []), accident_no)
+
+
+def _accident_page_context(selected_year=None):
+    store = load_accident_data_store()
+    years = sorted([int(year_key) for year_key in store.keys()], reverse=True) if store else []
+
+    if selected_year is None:
+        query_year = request.args.get('year', type=int)
+        if not query_year and request.method == 'POST':
+            query_year = request.form.get('view_year', type=int)
+        if query_year and query_year in years:
+            selected_year = query_year
+        elif years:
+            selected_year = years[0]
+        else:
+            selected_year = datetime.now().year
+    elif years and selected_year not in years:
+        selected_year = years[0]
+
+    accident_data = load_accident_data(selected_year if store else None)
+    month_order = ['01월', '02월', '03월', '04월', '05월', '06월', '07월', '08월', '09월', '10월', '11월', '12월']
+    at_fault_rows = accident_data.get('at_fault', []) if accident_data else []
+    not_at_fault_rows = accident_data.get('not_at_fault', []) if accident_data else []
+    accident_stats_by_month = build_accident_stats_by_month(at_fault_rows, not_at_fault_rows, month_order)
+
+    return {
+        'accident_data': accident_data,
+        'accident_years': years,
+        'selected_accident_year': selected_year if years else None,
+        'month_order': month_order,
+        'accident_stats_by_month': accident_stats_by_month,
+    }
+
+
+def save_accident_data(data, year=None):
+    print("=== save_accident_data 함수 시작 ===")
+    if year is None:
+        year = datetime.now().year
+    enriched = _enrich_accident_payload(data)
+    store = load_accident_data_store()
+    store[str(year)] = enriched
     filepath = os.path.join(app.config['DATA_FOLDER'], 'accident_data.json')
     print(f"JSON 저장 경로: {filepath}")
     with open(filepath, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        json.dump(store, f, ensure_ascii=False, indent=2)
     print("JSON 파일 저장 완료")
 
 
-def load_accident_data():
+def load_accident_data(year=None):
     """저장된 사고 데이터를 불러옴"""
-    filepath = os.path.join(app.config['DATA_FOLDER'], 'accident_data.json')
-    if os.path.exists(filepath):
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                content = f.read().strip()
-                if content:  # 파일이 비어있지 않은 경우에만 파싱
-                    data = json.loads(content)
-                    normalize_accident_data(data)
-                else:
-                    print(f"accident_data.json 파일이 비어있습니다.")
-                    return None
-        except json.JSONDecodeError as e:
-            print(f"accident_data.json JSON 파싱 오류: {e}")
-            return None
-        except Exception as e:
-            print(f"accident_data.json 읽기 오류: {e}")
-            return None
-            
-        # 요약 데이터 생성
-        if data and ('at_fault' in data or 'not_at_fault' in data):
-            at_fault_data = data.get('at_fault', [])
-            not_at_fault_data = data.get('not_at_fault', [])
-            
-            # 기본 통계
-            total_count = len(at_fault_data) + len(not_at_fault_data)
-            at_fault_count = len(at_fault_data)
-            not_at_fault_count = len(not_at_fault_data)
-            at_fault_pending_count = sum(1 for a in at_fault_data if a.get('처리여부', '') == '미결')
-            not_at_fault_pending_count = sum(1 for a in not_at_fault_data if a.get('처리여부', '') == '미결')
-            
-            # 금액 통계
-            def parse_amount(amount_str):
-                if not amount_str or amount_str == '' or amount_str == '-':
-                    return 0
-                try:
-                    return int(str(amount_str).replace(',', ''))
-                except:
-                    return 0
-            
-            at_fault_total_repair = sum(parse_amount(a.get('수리지급', 0)) for a in at_fault_data)
-            at_fault_total_treatment = sum(parse_amount(a.get('치료지급', 0)) for a in at_fault_data)
-            not_at_fault_total_damage = sum(parse_amount(a.get('피해견적', 0)) for a in not_at_fault_data)
-            not_at_fault_total_payment = sum(parse_amount(a.get('금액', 0)) for a in not_at_fault_data)
-            
-            # 기사별 통계
-            driver_stats = {}
-            for accident in at_fault_data:
-                driver_name = accident.get('기사명', '')
-                if driver_name:
-                    if driver_name not in driver_stats:
-                        driver_stats[driver_name] = {
-                            'name': driver_name,
-                            'at_fault_count': 0,
-                            'repair_payment': 0,
-                            'treatment_payment': 0,
-                            'not_at_fault_count': 0,
-                            'damage_estimate': 0
-                        }
-                    driver_stats[driver_name]['at_fault_count'] += 1
-                    driver_stats[driver_name]['repair_payment'] += parse_amount(accident.get('수리지급', 0))
-                    driver_stats[driver_name]['treatment_payment'] += parse_amount(accident.get('치료지급', 0))
-            
-            for accident in not_at_fault_data:
-                driver_name = accident.get('기사명', '')
-                if driver_name:
-                    if driver_name not in driver_stats:
-                        driver_stats[driver_name] = {
-                            'name': driver_name,
-                            'at_fault_count': 0,
-                            'repair_payment': 0,
-                            'treatment_payment': 0,
-                            'not_at_fault_count': 0,
-                            'damage_estimate': 0
-                        }
-                    driver_stats[driver_name]['not_at_fault_count'] += 1
-                    driver_stats[driver_name]['damage_estimate'] += parse_amount(accident.get('피해견적', 0))
-            
-            # 차량별 통계
-            vehicle_stats = {}
-            for accident in at_fault_data:
-                vehicle_number = accident.get('차번', '')
-                if vehicle_number:
-                    if vehicle_number not in vehicle_stats:
-                        vehicle_stats[vehicle_number] = {
-                            'number': vehicle_number,
-                            'at_fault_count': 0,
-                            'not_at_fault_count': 0,
-                            'damage_estimate': 0
-                        }
-                    vehicle_stats[vehicle_number]['at_fault_count'] += 1
-            
-            for accident in not_at_fault_data:
-                vehicle_number = accident.get('차번', '')
-                if vehicle_number:
-                    if vehicle_number not in vehicle_stats:
-                        vehicle_stats[vehicle_number] = {
-                            'number': vehicle_number,
-                            'at_fault_count': 0,
-                            'not_at_fault_count': 0,
-                            'damage_estimate': 0
-                        }
-                    vehicle_stats[vehicle_number]['not_at_fault_count'] += 1
-                    vehicle_stats[vehicle_number]['damage_estimate'] += parse_amount(accident.get('피해견적', 0))
-            
-            # 금액 포맷팅
-            def format_amount(amount):
-                return f"{amount:,}" if amount > 0 else "0"
-            
-            for driver in driver_stats.values():
-                driver['repair_payment'] = format_amount(driver['repair_payment'])
-                driver['treatment_payment'] = format_amount(driver['treatment_payment'])
-                driver['damage_estimate'] = format_amount(driver['damage_estimate'])
-            
-            for vehicle in vehicle_stats.values():
-                vehicle['damage_estimate'] = format_amount(vehicle['damage_estimate'])
-
-            chart_stats = build_accident_chart_stats(at_fault_data, not_at_fault_data)
-            
-            # 요약 데이터 추가
-            data['summary'] = {
-                'total_count': total_count,
-                'at_fault_count': at_fault_count,
-                'not_at_fault_count': not_at_fault_count,
-                'at_fault_pending_count': at_fault_pending_count,
-                'not_at_fault_pending_count': not_at_fault_pending_count,
-                'at_fault_total_repair': format_amount(at_fault_total_repair),
-                'at_fault_total_treatment': format_amount(at_fault_total_treatment),
-                'not_at_fault_total_damage': format_amount(not_at_fault_total_damage),
-                'not_at_fault_total_payment': format_amount(not_at_fault_total_payment),
-                'driver_stats': list(driver_stats.values()),
-                'vehicle_stats': list(vehicle_stats.values()),
-                'type_chart': chart_stats['type_chart'],
-                'district_chart': chart_stats['district_chart'],
-            }
-        
-        return data
-    return None
+    store = load_accident_data_store()
+    if not store:
+        return None
+    if year is None:
+        year = _default_dispatch_year(store.keys())
+    data = store.get(str(year))
+    if not data:
+        return None
+    return _enrich_accident_payload(data)
 
 @app.route('/map')
 @login_required
@@ -2923,34 +3290,149 @@ def normalize_driver_data(data):
     return data
 
 
-def save_driver_data(data):
+def save_driver_data(data, year=None):
     print("=== save_driver_data 함수 시작 ===")
     filepath = os.path.join(app.config['DATA_FOLDER'], 'driver_data.json')
     print(f"JSON 저장 경로: {filepath}")
-    data = normalize_driver_data(data)
+    if year is None:
+        year = datetime.now().year
+    store = load_driver_data_store()
+    store[str(year)] = normalize_driver_data(data)
     with open(filepath, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        json.dump(store, f, ensure_ascii=False, indent=2)
     print("JSON 파일 저장 완료")
 
 
-def load_driver_data():
-    filepath = os.path.join(app.config['DATA_FOLDER'], 'driver_data.json')
-    if os.path.exists(filepath):
+def _coerce_driver_store(raw):
+    if not raw or not isinstance(raw, dict):
+        return {}
+    if 'list' in raw:
+        year = raw.get('year') or datetime.now().year
         try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                content = f.read().strip()
-                if content:  # 파일이 비어있지 않은 경우에만 파싱
-                    return normalize_driver_data(json.loads(content))
-                else:
-                    print(f"driver_data.json 파일이 비어있습니다.")
-                    return None
-        except json.JSONDecodeError as e:
-            print(f"driver_data.json JSON 파싱 오류: {e}")
-            return None
-        except Exception as e:
-            print(f"driver_data.json 읽기 오류: {e}")
-            return None
+            year = int(year)
+        except (TypeError, ValueError):
+            year = datetime.now().year
+        return {str(year): normalize_driver_data(raw)}
+    store = {}
+    for year_key, payload in raw.items():
+        if isinstance(payload, dict) and 'list' in payload:
+            store[str(year_key)] = normalize_driver_data(payload)
+    return store
+
+
+def load_driver_data_store():
+    filepath = os.path.join(app.config['DATA_FOLDER'], 'driver_data.json')
+    if not os.path.exists(filepath):
+        return {}
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+            if not content:
+                print("driver_data.json 파일이 비어있습니다.")
+                return {}
+            raw = json.loads(content)
+            store = _coerce_driver_store(raw)
+            if 'list' in raw:
+                with open(filepath, 'w', encoding='utf-8') as wf:
+                    json.dump(store, wf, ensure_ascii=False, indent=2)
+            return store
+    except json.JSONDecodeError as e:
+        print(f"driver_data.json JSON 파싱 오류: {e}")
+        return {}
+    except Exception as e:
+        print(f"driver_data.json 읽기 오류: {e}")
+        return {}
+
+
+def load_driver_data(year=None):
+    store = load_driver_data_store()
+    if not store:
+        return None
+    if year is None:
+        year = _default_dispatch_year(store.keys())
+    payload = store.get(str(year))
+    if not payload:
+        return None
+    return normalize_driver_data(payload)
+
+
+def load_all_driver_records():
+    store = load_driver_data_store()
+    records = []
+    for payload in store.values():
+        data = normalize_driver_data(payload)
+        records.extend(data.get('list', []))
+    return records
+
+
+def find_driver_by_emp_id(driver_id):
+    target = normalize_emp_id(driver_id)
+    for driver in load_all_driver_records():
+        if normalize_emp_id(driver.get('사번', '')) == target:
+            return driver
     return None
+
+
+def _driver_page_context(selected_year=None):
+    store = load_driver_data_store()
+    years = sorted([int(year_key) for year_key in store.keys()], reverse=True) if store else []
+
+    if selected_year is None:
+        query_year = request.args.get('year', type=int)
+        if not query_year and request.method == 'POST':
+            query_year = request.form.get('view_year', type=int)
+        if query_year and query_year in years:
+            selected_year = query_year
+        elif years:
+            selected_year = years[0]
+        else:
+            selected_year = datetime.now().year
+    elif years and selected_year not in years:
+        selected_year = years[0]
+
+    return {
+        'driver_data': load_driver_data(selected_year if store else None),
+        'driver_years': years,
+        'selected_driver_year': selected_year if years else None,
+    }
+
+
+def _coerce_maintenance_store(raw):
+    if not raw or not isinstance(raw, dict):
+        return {}
+    if 'events' in raw:
+        year = raw.get('year') or datetime.now().year
+        try:
+            year = int(year)
+        except (TypeError, ValueError):
+            year = datetime.now().year
+        return {str(year): {'events': raw.get('events') or []}}
+    store = {}
+    for year_key, payload in raw.items():
+        if isinstance(payload, dict) and 'events' in payload:
+            store[str(year_key)] = {'events': payload.get('events') or []}
+        elif isinstance(payload, list):
+            store[str(year_key)] = {'events': payload}
+    return store
+
+
+def load_car_maintenance_events_store():
+    filepath = os.path.join(app.config['DATA_FOLDER'], 'car_maintenance_data.json')
+    if not os.path.exists(filepath):
+        return {}
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+            if not content:
+                return {}
+            raw = json.loads(content)
+            store = _coerce_maintenance_store(raw)
+            if 'events' in raw:
+                with open(filepath, 'w', encoding='utf-8') as wf:
+                    json.dump(store, wf, ensure_ascii=False, indent=2)
+            return store
+    except (json.JSONDecodeError, Exception):
+        return {}
 
 
 def save_car_maintenance_events(events, year=None):
@@ -2959,33 +3441,86 @@ def save_car_maintenance_events(events, year=None):
             year = int(events[0].get('date', '')[:4])
         except (ValueError, TypeError):
             year = datetime.now().year
+    elif year is None:
+        year = datetime.now().year
+    store = load_car_maintenance_events_store()
+    store[str(year)] = {'events': _normalize_maintenance_events(events or [])}
     filepath = os.path.join(app.config['DATA_FOLDER'], 'car_maintenance_data.json')
     with open(filepath, 'w', encoding='utf-8') as f:
-        json.dump({'year': year, 'events': events}, f, ensure_ascii=False, indent=2)
+        json.dump(store, f, ensure_ascii=False, indent=2)
 
 
-def load_car_maintenance_events():
-    filepath = os.path.join(app.config['DATA_FOLDER'], 'car_maintenance_data.json')
-    if os.path.exists(filepath):
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                content = f.read().strip()
-                if content:
-                    data = json.loads(content)
-                    events = data.get('events', [])
-                    year = data.get('year')
-                    if year is None and events:
-                        try:
-                            year = int(events[0].get('date', '')[:4])
-                        except (ValueError, TypeError):
-                            year = datetime.now().year
-                    elif year is None:
-                        year = datetime.now().year
-                    return events, year
-                return [], datetime.now().year
-        except (json.JSONDecodeError, Exception):
-            return [], datetime.now().year
-    return [], datetime.now().year
+def load_car_maintenance_events(year=None):
+    store = load_car_maintenance_events_store()
+    if not store:
+        return [], datetime.now().year
+    if year is None:
+        year = _default_dispatch_year(store.keys())
+    payload = store.get(str(year), {})
+    events = _normalize_maintenance_events(payload.get('events') or [])
+    return events, int(year)
+
+
+def load_all_car_maintenance_events():
+    store = load_car_maintenance_events_store()
+    events = []
+    for payload in store.values():
+        events.extend(_normalize_maintenance_events(payload.get('events') or []))
+    return events
+
+
+def _build_car_maintenance_context(selected_year=None, requested_month=None):
+    store = load_car_maintenance_events_store()
+    years = sorted([int(year_key) for year_key in store.keys()], reverse=True) if store else []
+
+    if selected_year is None:
+        query_year = request.args.get('year', type=int)
+        if not query_year and request.method == 'POST':
+            query_year = request.form.get('view_year', type=int)
+        if query_year and query_year in years:
+            selected_year = query_year
+        elif years:
+            selected_year = years[0]
+        else:
+            selected_year = datetime.now().year
+    elif years and selected_year not in years:
+        selected_year = years[0]
+
+    events, maintenance_year = load_car_maintenance_events(selected_year if store else None)
+    maintenance_headers = []
+    maintenance_table_data = []
+    maintenance_available_months = []
+    maintenance_selected_month = None
+
+    if events:
+        maintenance_available_months = [f'{maintenance_year}-{m:02d}' for m in range(1, 13)]
+        if requested_month is None:
+            requested_month = request.args.get('month')
+            if not requested_month and request.method == 'POST':
+                requested_month = request.form.get('view_month')
+        if requested_month and requested_month in maintenance_available_months:
+            maintenance_selected_month = requested_month
+        else:
+            dates_with_data = sorted(set(e.get('date', '')[:7] for e in events if e.get('date')), reverse=True)
+            maintenance_selected_month = dates_with_data[0] if dates_with_data else maintenance_available_months[0]
+        if maintenance_selected_month and maintenance_selected_month in maintenance_available_months:
+            maintenance_headers, maintenance_table_data = build_maintenance_table(events, maintenance_selected_month)
+
+    maintenance_stats = build_maintenance_stats(events, maintenance_selected_month) if (events and maintenance_selected_month) else None
+    maintenance_calendar_data = build_maintenance_calendar(events, maintenance_selected_month) if (events and maintenance_selected_month) else {}
+    maintenance_memo_data = build_maintenance_memo_data(events, maintenance_selected_month) if (events and maintenance_selected_month) else {}
+
+    return {
+        'maintenance_headers': maintenance_headers,
+        'maintenance_table_data': maintenance_table_data,
+        'maintenance_available_months': maintenance_available_months,
+        'maintenance_selected_month': maintenance_selected_month,
+        'maintenance_stats': maintenance_stats,
+        'maintenance_calendar_data': maintenance_calendar_data,
+        'maintenance_memo_data': maintenance_memo_data,
+        'maintenance_years': years,
+        'selected_maintenance_year': selected_year if years else None,
+    }
 
 
 def _find_col_key(col_map, *candidates):
@@ -3001,26 +3536,99 @@ def _find_col_key(col_map, *candidates):
     return None
 
 
-def _maintenance_symbol(row, col_map):
-    """엑셀 행에서 정비 마킹 컬럼(예방정비○, 일반정비△, 사고수리□, 검사!, 명일 정비예정m) 확인 후 기호 반환."""
-    symbol_cols = [
-        ('예방정비', '○', ['예방정비']),
-        ('일반정비', '△', ['일반정비']),
-        ('사고수리', '□', ['사고수리']),
-        ('검사', '!', ['검사']),
-        ('명일_정비예정', 'm', ['명일_정비예정', '명일 정비예정']),
+def _cell_has_value(val):
+    if pd.isna(val):
+        return False
+    return bool(str(val).strip())
+
+
+def _extract_maintenance_categories(row, col_map):
+    """엑셀 행에서 정비 유형(예방·일반·사고·검사·엔진·미션·교체·펑크·명일) 목록 반환."""
+    categories = []
+    checks = [
+        ('예방', ['예방정비'], lambda v: '○' in str(v)),
+        ('일반', ['일반정비'], lambda v: '△' in str(v)),
+        ('사고', ['사고수리'], lambda v: '□' in str(v)),
+        ('검사', ['검사'], lambda v: '!' in str(v)),
+        ('엔진', ['엔진오일(L)', '엔진오일'], lambda v: _cell_has_value(v)),
+        ('미션', ['미션오일(L)', '미션오일'], lambda v: _cell_has_value(v)),
+        ('교체', ['타이어_교체'], lambda v: _cell_has_value(v)),
+        ('펑크', ['타이어_펑크'], lambda v: _cell_has_value(v)),
+        ('명일', ['명일_정비예정', '명일 정비예정'], lambda v: 'm' in str(v).lower()),
     ]
-    for col_name, symbol, candidates in symbol_cols:
+    for cat_name, candidates, predicate in checks:
         key = _find_col_key(col_map, *candidates)
         if key is None:
             continue
         val = row.get(key)
         if pd.isna(val):
             continue
-        s = str(val).strip()
-        if not s:
-            continue
-        if symbol in s or (col_name == '검사' and '!' in s) or ('명일' in col_name and 'm' in s.lower()):
+        if predicate(val):
+            categories.append(cat_name)
+    return categories
+
+
+MAINTENANCE_CATEGORY_SYMBOL = {
+    '예방': '○',
+    '일반': '△',
+    '사고': '□',
+    '검사': '!',
+    '명일': 'm',
+}
+MAINTENANCE_SYMBOL_CATEGORY = {v: k for k, v in MAINTENANCE_CATEGORY_SYMBOL.items()}
+MAINTENANCE_CALENDAR_CATEGORIES = ['예방', '일반', '사고', '검사', '엔진', '미션', '교체', '펑크', '명일']
+
+
+def _normalize_maintenance_symbol(symbol):
+    """저장된 symbol 값을 표준 기호로 정규화."""
+    if symbol is None:
+        return ''
+    s = str(symbol).strip()
+    if not s:
+        return ''
+    symbol_map = {
+        '○': '○', 'o': '○', 'O': '○',
+        '△': '△',
+        '□': '□',
+        '!': '!',
+        'm': 'm', 'M': 'm',
+    }
+    if s in symbol_map:
+        return symbol_map[s]
+    if '○' in s:
+        return '○'
+    if '△' in s:
+        return '△'
+    if '□' in s:
+        return '□'
+    if '!' in s:
+        return '!'
+    if 'm' in s.lower():
+        return 'm'
+    return s
+
+
+def _normalize_maintenance_events(events):
+    """레거시 events에 category/symbol 보정 적용."""
+    if not events:
+        return events
+    normalized = []
+    for e in events:
+        item = dict(e)
+        symbol = _normalize_maintenance_symbol(item.get('symbol', ''))
+        item['symbol'] = symbol
+        category = item.get('category') or MAINTENANCE_SYMBOL_CATEGORY.get(symbol, '')
+        if category:
+            item['category'] = category
+        normalized.append(item)
+    return normalized
+
+
+def _maintenance_symbol(row, col_map):
+    """엑셀 행에서 정비 마킹 컬럼(예방정비○, 일반정비△, 사고수리□, 검사!, 명일 정비예정m) 확인 후 기호 반환."""
+    for cat in _extract_maintenance_categories(row, col_map):
+        symbol = MAINTENANCE_CATEGORY_SYMBOL.get(cat)
+        if symbol:
             return symbol
     return None
 
@@ -3039,8 +3647,29 @@ def _norm_cell_str(val):
     return str(val).strip()
 
 
+def _extract_maintenance_details(row, col_map):
+    """엑셀 행에서 메모판용 상세 값 추출."""
+
+    def detail_val(*candidates):
+        key = _find_col_key(col_map, *candidates)
+        if key is None:
+            return ''
+        raw = row.get(key)
+        if pd.isna(raw):
+            return ''
+        return _norm_cell_str(raw)
+
+    return {
+        '엔진오일': detail_val('엔진오일(L)', '엔진오일'),
+        '미션오일': detail_val('미션오일(L)', '미션오일'),
+        '타이어_교체': detail_val('타이어_교체'),
+        '타이어_펑크': detail_val('타이어_펑크'),
+        '기타사항': detail_val('기타사항'),
+    }
+
+
 def parse_maintenance_excel(file_path):
-    """차량정비 엑셀 1월~12월 시트를 모두 파싱해 이벤트 리스트 반환. 엔진오일/미션오일/타이어_교체/타이어_펑크 컬럼은 사용하지 않음."""
+    """차량정비 엑셀 1월~12월 시트를 모두 파싱해 이벤트 리스트 반환."""
     fname = os.path.basename(file_path)
     year_match = re.search(r'(\d{4})', fname)
     year_from_file = int(year_match.group(1)) if year_match else datetime.now().year
@@ -3069,22 +3698,28 @@ def parse_maintenance_excel(file_path):
                 if not date_str or len(date_str) < 10:
                     continue
                 차번 = _norm_cell_str(row.get('차번'))
+                if not 차번:
+                    continue
                 차종 = _norm_cell_str(row.get('차종'))
                 등록일자 = row.get('등록일자')
                 if pd.notna(등록일자) and hasattr(등록일자, 'strftime'):
                     등록일자 = 등록일자.strftime('%Y-%m-%d')
                 else:
                     등록일자 = _norm_cell_str(등록일자)
-                symbol = _maintenance_symbol(row.to_dict(), col_map)
-                if not symbol:
+                categories = _extract_maintenance_categories(row.to_dict(), col_map)
+                if not categories:
                     continue
-                events.append({
-                    'date': date_str,
-                    '차번': 차번,
-                    '차종': 차종,
-                    '등록일자': 등록일자,
-                    'symbol': symbol
-                })
+                details = _extract_maintenance_details(row.to_dict(), col_map)
+                for category in categories:
+                    events.append({
+                        'date': date_str,
+                        '차번': 차번,
+                        '차종': 차종,
+                        '등록일자': 등록일자,
+                        'category': category,
+                        'symbol': MAINTENANCE_CATEGORY_SYMBOL.get(category, ''),
+                        **details,
+                    })
             except Exception:
                 continue
     if not events:
@@ -3128,7 +3763,8 @@ def build_maintenance_stats(events, year_month):
     ym = year_month
     vehicles = set()
     vehicles_by_차종 = {}
-    count_예방정비 = count_일반정비 = count_사고수리 = count_검사 = count_명일정비 = 0
+    category_counts = {cat: 0 for cat in MAINTENANCE_CALENDAR_CATEGORIES}
+    total_maintenance = 0
     for e in events:
         if not e.get('date', '').startswith(ym):
             continue
@@ -3138,17 +3774,12 @@ def build_maintenance_stats(events, year_month):
         if 차종 not in vehicles_by_차종:
             vehicles_by_차종[차종] = set()
         vehicles_by_차종[차종].add(key)
-        s = e.get('symbol', '')
-        if s == '○':
-            count_예방정비 += 1
-        elif s == '△':
-            count_일반정비 += 1
-        elif s == '□':
-            count_사고수리 += 1
-        elif s == '!':
-            count_검사 += 1
-        elif s == 'm':
-            count_명일정비 += 1
+        category = e.get('category') or MAINTENANCE_SYMBOL_CATEGORY.get(
+            _normalize_maintenance_symbol(e.get('symbol', '')), ''
+        )
+        if category in category_counts:
+            category_counts[category] += 1
+            total_maintenance += 1
     by_차종 = [(차종, len(s)) for 차종, s in vehicles_by_차종.items()]
     by_차종.sort(key=lambda x: -x[1])
     month_label = ym.split('-')[1] if len(ym) >= 7 else ''
@@ -3156,12 +3787,95 @@ def build_maintenance_stats(events, year_month):
         'month_label': month_label,
         'total_vehicles': len(vehicles),
         'by_차종': by_차종,
-        '예방정비': count_예방정비,
-        '일반정비': count_일반정비,
-        '사고수리': count_사고수리,
-        '검사': count_검사,
-        '명일정비': count_명일정비,
+        'total_maintenance': total_maintenance,
+        '예방정비': category_counts['예방'],
+        '일반정비': category_counts['일반'],
+        '사고수리': category_counts['사고'],
+        '검사': category_counts['검사'],
+        '명일정비': category_counts['명일'],
+        '엔진오일': category_counts['엔진'],
+        '미션오일': category_counts['미션'],
+        '타이어교체': category_counts['교체'],
+        '타이어펑크': category_counts['펑크'],
     }
+
+
+def build_maintenance_calendar(events, year_month):
+    """해당 월(YYYY-MM) 정비 이벤트를 날짜·유형별 차번 목록으로 집계."""
+    if not events or not year_month:
+        return {}
+    ym = year_month
+    try:
+        year_str, month_str = ym.split('-')
+        year_num, month_num = int(year_str), int(month_str)
+        days_in_month = calendar.monthrange(year_num, month_num)[1]
+    except (ValueError, TypeError):
+        return {}
+    day_map = {
+        str(day): {cat: [] for cat in MAINTENANCE_CALENDAR_CATEGORIES}
+        for day in range(1, days_in_month + 1)
+    }
+    seen = set()
+    for e in events:
+        if not e.get('date', '').startswith(ym):
+            continue
+        try:
+            day = int(e['date'].split('-')[2])
+        except (IndexError, ValueError):
+            continue
+        if day < 1 or day > days_in_month:
+            continue
+        category = e.get('category') or MAINTENANCE_SYMBOL_CATEGORY.get(_normalize_maintenance_symbol(e.get('symbol', '')), '')
+        if category not in MAINTENANCE_CALENDAR_CATEGORIES:
+            continue
+        car_no = (e.get('차번') or '').strip()
+        if not car_no:
+            continue
+        dedupe_key = (day, category, car_no)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        day_map[str(day)][category].append(car_no)
+    for day_key in day_map:
+        for category in MAINTENANCE_CALENDAR_CATEGORIES:
+            day_map[day_key][category].sort(key=lambda x: (len(x), x))
+    return day_map
+
+
+def build_maintenance_memo_data(events, year_month):
+    """해당 월 날짜별 차량 정비 상세(오일·타이어·기타사항) 목록."""
+    if not events or not year_month:
+        return {}
+    ym = year_month
+    memo_map = {}
+    seen = set()
+    for e in events:
+        if not e.get('date', '').startswith(ym):
+            continue
+        try:
+            day = str(int(e['date'].split('-')[2]))
+        except (IndexError, ValueError):
+            continue
+        car_no = (e.get('차번') or '').strip()
+        if not car_no:
+            continue
+        dedupe_key = (day, car_no)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        memo_map.setdefault(day, []).append({
+            '차번': car_no,
+            '차종': e.get('차종', '') or '',
+            '등록일자': e.get('등록일자', '') or '',
+            '엔진오일': e.get('엔진오일', '') or '',
+            '미션오일': e.get('미션오일', '') or '',
+            '타이어_교체': e.get('타이어_교체', '') or '',
+            '타이어_펑크': e.get('타이어_펑크', '') or '',
+            '기타사항': e.get('기타사항', '') or '',
+        })
+    for day_key in memo_map:
+        memo_map[day_key].sort(key=lambda x: (len(x['차번']), x['차번']))
+    return memo_map
 
 
 @app.route('/driver', methods=['GET', 'POST'])
@@ -3174,12 +3888,25 @@ def driver():
     required_columns = DRIVER_DATA_COLUMNS
     if request.method == 'POST':
         print("POST 요청 받음")
+        view_year = request.form.get('view_year', type=int)
         if 'excel_file' not in request.files:
-            return render_template('driver.html', error='파일이 선택되지 않았습니다.', driver_data=load_driver_data(), messages=messages, current_user=current_user)
+            return render_template(
+                'driver.html',
+                error='파일이 선택되지 않았습니다.',
+                messages=messages,
+                current_user=current_user,
+                **_driver_page_context(selected_year=view_year),
+            )
         file = request.files['excel_file']
         print(f"파일명: {file.filename}")
         if file.filename == '':
-            return render_template('driver.html', error='파일이 선택되지 않았습니다.', driver_data=load_driver_data(), messages=messages, current_user=current_user)
+            return render_template(
+                'driver.html',
+                error='파일이 선택되지 않았습니다.',
+                messages=messages,
+                current_user=current_user,
+                **_driver_page_context(selected_year=view_year),
+            )
         if file and allowed_file(file.filename):
             filename = file.filename.replace('/', '').replace('\\', '')
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -3192,39 +3919,54 @@ def driver():
                 missing = [col for col in required_columns if col not in df.columns]
                 if missing:
                     error_msg = '다음 필수 컬럼이 누락되었습니다: ' + ', '.join(missing)
-                    return render_template('driver.html', error=error_msg, driver_data=load_driver_data(), messages=messages, current_user=current_user)
+                    return render_template(
+                        'driver.html',
+                        error=error_msg,
+                        messages=messages,
+                        current_user=current_user,
+                        **_driver_page_context(selected_year=view_year),
+                    )
                 for col in required_columns:
                     if col not in df.columns:
                         df[col] = ''
-                # 기사관리 날짜 컬럼별 포맷 지정
                 date_cols = ['갱신시작', '갱신마감', '입사일자', '퇴사일자']
                 for col in date_cols:
                     if col in df.columns:
                         try:
                             df[col] = pd.to_datetime(df[col], format='%Y-%m-%d', errors='coerce').dt.strftime('%Y-%m-%d').fillna('')
-                        except:
+                        except Exception:
                             df[col] = df[col].astype(str).str.strip()
-                kst = pytz.timezone('Asia/Seoul')
-                upload_time = pd.Timestamp.now(tz=kst).strftime('%Y-%m-%d %H:%M:%S')
                 driver_list = df[required_columns].fillna('').astype(str).to_dict('records')
                 driver_data = normalize_driver_data({
                     'list': driver_list,
                     'columns': required_columns,
                 })
-                # 파일로 저장 
-                save_driver_data(driver_data)
-                # UploadRecord 데이터베이스 저장
+                driver_year = extract_dispatch_year_from_filename(filename)
+                save_driver_data(driver_data, year=driver_year)
                 flask_url = url_for('uploaded_file', filename=os.path.basename(file_path), _external=True)
                 record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type='driver')
                 db.session.add(record)
                 db.session.commit()
-                return render_template('driver.html', driver_data=driver_data, messages=messages, current_user=current_user)
+                if view_year:
+                    return redirect(url_for('driver', year=view_year))
+                return redirect(url_for('driver'))
             except Exception as e:
-                return render_template('driver.html', error=f'파일 처리 중 오류: {str(e)}', driver_data=load_driver_data(), messages=messages, current_user=current_user)
+                return render_template(
+                    'driver.html',
+                    error=f'파일 처리 중 오류: {str(e)}',
+                    messages=messages,
+                    current_user=current_user,
+                    **_driver_page_context(selected_year=view_year),
+                )
         else:
-            return render_template('driver.html', error='허용되지 않은 파일 형식입니다.', driver_data=load_driver_data(), messages=messages, current_user=current_user)
-    # GET 요청
-    return render_template('driver.html', driver_data=load_driver_data(), messages=messages, current_user=current_user)
+            return render_template(
+                'driver.html',
+                error='허용되지 않은 파일 형식입니다.',
+                messages=messages,
+                current_user=current_user,
+                **_driver_page_context(selected_year=view_year),
+            )
+    return render_template('driver.html', messages=messages, current_user=current_user, **_driver_page_context())
 
 @app.route('/car', methods=['GET', 'POST'])
 @login_required
@@ -3248,50 +3990,59 @@ def car():
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(file_path)
         try:
+            view_year = request.form.get('view_year', type=int)
+            view_month = request.form.get('view_month')
             if upload_type == 'car_maintenance':
                 events, year_from_file, parse_err = parse_maintenance_excel(file_path)
                 if parse_err:
-                    return render_template('car.html', error=parse_err, car_data=car_data, messages=messages, current_user=current_user,
-                        maintenance_headers=[], maintenance_table_data=[], maintenance_available_months=[], maintenance_selected_month=None,
-                        repair_headers=[], repair_table_data=[], repair_available_months=[], repair_selected_month=None, repair_stats=None)
+                    return render_template(
+                        'car.html',
+                        error=parse_err,
+                        car_data=car_data,
+                        messages=messages,
+                        current_user=current_user,
+                        **_build_car_maintenance_context(selected_year=view_year, requested_month=view_month),
+                        repair_headers=[],
+                        repair_table_data=[],
+                        repair_available_months=[],
+                        repair_selected_month=None,
+                        repair_stats=None,
+                    )
                 save_car_maintenance_events(events, year_from_file)
             flask_url = url_for('uploaded_file', filename=os.path.basename(file_path), _external=True)
             record = UploadRecord(filename=filename, uploader=current_user.name, github_url=flask_url, upload_type=upload_type)
             db.session.add(record)
             db.session.commit()
+            if upload_type == 'car_maintenance':
+                if view_year and view_month:
+                    return redirect(url_for('car', year=view_year, month=view_month))
+                if view_year:
+                    return redirect(url_for('car', year=view_year))
+                return redirect(url_for('car'))
         except Exception as e:
-            return render_template('car.html', error=f'파일 처리 중 오류: {str(e)}', car_data=car_data, messages=messages, current_user=current_user,
-                maintenance_headers=[], maintenance_table_data=[], maintenance_available_months=[], maintenance_selected_month=None,
-                repair_headers=[], repair_table_data=[], repair_available_months=[], repair_selected_month=None, repair_stats=None)
-    # GET 또는 POST 성공 후: 차량정비 월별 테이블용 데이터 (1월~12월 시트에 맞춰 12개 월 버튼 표시)
-    events, maintenance_year = load_car_maintenance_events()
-    maintenance_headers = []
-    maintenance_table_data = []
-    maintenance_available_months = []
-    maintenance_selected_month = None
-    if events:
-        maintenance_available_months = [f'{maintenance_year}-{m:02d}' for m in range(1, 13)]
-        # URL에 month가 있으면 사용, 없으면 데이터가 있는 월 중 가장 최근 월을 기본 선택
-        requested_month = request.args.get('month')
-        if requested_month and requested_month in maintenance_available_months:
-            maintenance_selected_month = requested_month
-        else:
-            dates_with_data = sorted(set(e.get('date', '')[:7] for e in events if e.get('date')), reverse=True)
-            maintenance_selected_month = dates_with_data[0] if dates_with_data else (maintenance_available_months[0] if maintenance_available_months else None)
-            if not maintenance_selected_month and maintenance_available_months:
-                maintenance_selected_month = maintenance_available_months[0]
-        if maintenance_selected_month and maintenance_selected_month in maintenance_available_months:
-            maintenance_headers, maintenance_table_data = build_maintenance_table(events, maintenance_selected_month)
-    maintenance_stats = build_maintenance_stats(events, maintenance_selected_month) if (events and maintenance_selected_month) else None
+            view_year = request.form.get('view_year', type=int)
+            view_month = request.form.get('view_month')
+            return render_template(
+                'car.html',
+                error=f'파일 처리 중 오류: {str(e)}',
+                car_data=car_data,
+                messages=messages,
+                current_user=current_user,
+                **_build_car_maintenance_context(selected_year=view_year, requested_month=view_month),
+                repair_headers=[],
+                repair_table_data=[],
+                repair_available_months=[],
+                repair_selected_month=None,
+                repair_stats=None,
+            )
+    maintenance_ctx = _build_car_maintenance_context()
     repair_headers = []
     repair_table_data = []
     repair_available_months = []
     repair_selected_month = None
     repair_stats = None
     return render_template('car.html', car_data=car_data, messages=messages, current_user=current_user,
-        maintenance_headers=maintenance_headers, maintenance_table_data=maintenance_table_data,
-        maintenance_available_months=maintenance_available_months, maintenance_selected_month=maintenance_selected_month,
-        maintenance_stats=maintenance_stats,
+        **maintenance_ctx,
         repair_headers=repair_headers, repair_table_data=repair_table_data,
         repair_available_months=repair_available_months, repair_selected_month=repair_selected_month,
         repair_stats=repair_stats)
@@ -3299,13 +4050,7 @@ def car():
 @app.route('/driver/profile/<driver_id>')
 @login_required
 def driver_profile(driver_id):
-    driver_data = load_driver_data()
-    driver_info = None
-    if driver_data and 'list' in driver_data:
-        for d in driver_data['list']:
-            if normalize_emp_id(d.get('사번', '')) == normalize_emp_id(driver_id):
-                driver_info = d
-                break
+    driver_info = find_driver_by_emp_id(driver_id)
     if not driver_info:
         return '<h3>운전기사 정보를 찾을 수 없습니다.</h3>'
     
@@ -3523,12 +4268,7 @@ def driver_profile(driver_id):
         '''
     
     # 사고 데이터 로드 및 요약
-    accident_data = None
-    try:
-        with open('data/accident_data.json', 'r', encoding='utf-8') as f:
-            accident_data = json.load(f)
-    except:
-        accident_data = None
+    accident_data = load_accident_data_merged()
     accident_summary = ''
     if accident_data:
         name = driver_info.get('이름','')
@@ -3699,14 +4439,12 @@ def driver_profile(driver_id):
 @app.route('/accident/print/<type>/<accident_no>')
 @login_required
 def accident_print(type, accident_no):
-    accident_data = load_accident_data()
-    driver_data = load_driver_data()
     lease_data = load_lease_data()
 
     source_list_name = 'at_fault' if type == 'at_fault' else 'not_at_fault'
     template = 'accident_print_gahae.html' if type == 'at_fault' else 'accident_print_pihae.html'
 
-    accident_info = find_accident_by_no(accident_data.get(source_list_name, []), accident_no)
+    accident_info = find_accident_in_all_years(accident_no, source_list_name)
     
     if not accident_info:
         return '해당 사고 정보를 찾을 수 없습니다.', 404
@@ -3716,8 +4454,8 @@ def accident_print(type, accident_no):
 
     driver_name = context.get('기사명')
     driver_info = {}
-    if driver_name and driver_data:
-        driver_info = next((d for d in driver_data.get('list', []) if d.get('이름') == driver_name), {})
+    if driver_name:
+        driver_info = next((d for d in load_all_driver_records() if d.get('이름') == driver_name), {})
     
     context.update(driver_info)
     

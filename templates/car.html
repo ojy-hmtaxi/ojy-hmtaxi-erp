@@ -283,22 +283,55 @@
     .maintenance-schedule-wrap .mark-accident { color: #cc0000; font-weight: bold; }
     .maintenance-schedule-wrap .mark-inspection { color: #e67e00; font-weight: bold; }
     .maintenance-schedule-wrap .mark-next { color: #6633cc; font-weight: bold; }
+    .maintenance-schedule-wrap .mark-engine { color: #774500; font-weight: bold; }
+    .maintenance-schedule-wrap .mark-mission { color: #1000a3; font-weight: bold; }
+    .maintenance-schedule-wrap .mark-tire-replace { color: #02bdad; font-weight: bold; }
+    .maintenance-schedule-wrap .mark-tire-puncture { color: #c628b9; font-weight: bold; }
     /* 정비 현황 통계 */
     .maintenance-stats-wrap,
     .repair-stats-wrap { margin-bottom: 24px; }
     .maintenance-stats-wrap h2,
     .repair-stats-wrap h2 { margin-bottom: 10px; color: #333; }
     .maintenance-stats-wrap .stats-container,
-    .repair-stats-wrap .stats-container { overflow-x: auto; margin-bottom: 16px; }
+    .repair-stats-wrap .stats-container {
+        overflow-x: auto;
+        margin-bottom: 16px;
+        width: 100%;
+        box-sizing: border-box;
+        --stats-table-gap: 16px;
+    }
     .maintenance-stats-wrap .stats-tables-row,
-    .repair-stats-wrap .stats-tables-row { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+    .repair-stats-wrap .stats-tables-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--stats-table-gap);
+        align-items: flex-start;
+        width: 100%;
+    }
+    .maintenance-stats-wrap .stats-tables-row > .stats-table,
+    .repair-stats-wrap .stats-tables-row > .stats-table {
+        flex: 1 1 0;
+        min-width: 0;
+        width: 100%;
+    }
+    .maintenance-stats-wrap .stats-type-group {
+        display: flex;
+        flex: 2 1 0;
+        gap: var(--stats-table-gap);
+        align-items: flex-start;
+        min-width: 0;
+    }
+    .maintenance-stats-wrap .stats-type-group .stats-table {
+        flex: 1 1 0;
+        min-width: 0;
+        width: 100%;
+    }
     .maintenance-stats-wrap .stats-table,
     .repair-stats-wrap .stats-table {
-        width: auto;
-        min-width: 320px;
         border-collapse: collapse;
         border: 1px solid #ddd;
         font-size: 13px;
+        table-layout: fixed;
     }
     .maintenance-stats-wrap .stats-table th,
     .maintenance-stats-wrap .stats-table td,
@@ -326,6 +359,250 @@
     .maintenance-stats-wrap .stats-table .mark-accident { color: #cc0000; }
     .maintenance-stats-wrap .stats-table .mark-inspection { color: #e67e00; }
     .maintenance-stats-wrap .stats-table .mark-next { color: #6633cc; }
+    .maintenance-stats-wrap .stats-table .mark-engine { color: #774500; }
+    .maintenance-stats-wrap .stats-table .mark-mission { color: #1000a3; }
+    .maintenance-stats-wrap .stats-table .mark-tire-replace { color: #02bdad; }
+    .maintenance-stats-wrap .stats-table .mark-tire-puncture { color: #c628b9; }
+    /* 정비 뷰 탭 (통계 · 표 / 캘린더) */
+    .maintenance-sheet-tabs .view-tab-buttons {
+        display: flex;
+        margin: 0 0 12px;
+        gap: 6px;
+        width: 100%;
+    }
+    .maintenance-sheet-tabs .view-tab-button {
+        flex: 1;
+        padding: 10px 12px;
+        background-color: #b0b0b0;
+        border: none;
+        cursor: pointer;
+        color: #333;
+        font-size: 15px;
+        text-align: center;
+    }
+    .maintenance-sheet-tabs .view-tab-button.active {
+        background-color: #4CAF50;
+        color: white;
+    }
+    .maintenance-sheet-tabs .view-content { display: none; }
+    .maintenance-sheet-tabs .view-content.active { display: block; }
+    /* 정비 캘린더 */
+    .maint-calendar-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin: 4px 0 12px;
+        color: #333;
+    }
+    .maint-calendar-layout {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+    }
+    .maint-calendar-board {
+        flex: 0 0 66.666%;
+        max-width: 66.666%;
+        border: 1px solid #ddd;
+        background: #fff;
+    }
+    .maint-calendar-memo {
+        flex: 1;
+        min-width: 0;
+        border: 1px solid #ddd;
+        background: #fff;
+        min-height: 420px;
+        display: flex;
+        flex-direction: column;
+    }
+    .maint-calendar-memo-title {
+        padding: 10px 12px;
+        font-weight: 600;
+        font-size: 14px;
+        border-bottom: 1px solid #eee;
+        background: #f9f9f9;
+        color: #333;
+    }
+    .maint-calendar-memo-body {
+        flex: 1;
+        padding: 12px;
+        overflow-y: auto;
+        font-size: 13px;
+        line-height: 1.5;
+        color: #333;
+    }
+    .maint-calendar-memo-placeholder {
+        color: #888;
+        margin: 0;
+    }
+    .maint-memo-vehicle {
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
+        background: #fafafa;
+    }
+    .maint-memo-vehicle:last-child {
+        margin-bottom: 0;
+    }
+    .maint-memo-vehicle-head {
+        font-weight: 700;
+        margin-bottom: 6px;
+        color: #222;
+    }
+    .maint-memo-vehicle-head .memo-car-no {
+        color: #0066cc;
+        margin-right: 6px;
+    }
+    .maint-memo-vehicle-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+    .maint-memo-vehicle-list li {
+        padding: 2px 0;
+        color: #444;
+    }
+    .maint-memo-vehicle-list .memo-empty {
+        color: #aaa;
+    }
+    .maint-calendar-day.has-data {
+        cursor: pointer;
+    }
+    .maint-calendar-day.has-data:hover {
+        background: #f5fbff;
+    }
+    .maint-calendar-day.selected {
+        background: #f6fff6;
+    }
+    .maint-calendar-day.selected::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        box-shadow: inset 0 0 0 2px #4CAF50;
+        pointer-events: none;
+        z-index: 10;
+    }
+    .maint-calendar-weekdays {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        background: #f0f0f0;
+        border-bottom: 1px solid #ddd;
+    }
+    .maint-calendar-weekdays span {
+        padding: 8px 4px;
+        text-align: center;
+        font-weight: 600;
+        font-size: 13px;
+        border-right: 1px solid #ddd;
+    }
+    .maint-calendar-weekdays span:last-child { border-right: none; }
+    .maint-calendar-weekdays .sat { color: #1565c0; }
+    .maint-calendar-weekdays .sun { color: #d32f2f; }
+    .maint-calendar-grid { display: block; }
+    .maint-calendar-week {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        border-bottom: 1px solid #ddd;
+    }
+    .maint-calendar-week:last-child { border-bottom: none; }
+    .maint-calendar-day:not(.empty) {
+        height: 166px;
+        min-height: 166px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+    }
+    .maint-calendar-day {
+        border-right: 1px solid #ddd;
+        vertical-align: top;
+        font-size: 10px;
+        background: #fff;
+        position: relative;
+    }
+    .maint-calendar-day:last-child { border-right: none; }
+    .maint-calendar-day.empty {
+        background: #fafafa;
+        min-height: 40px;
+    }
+    .maint-calendar-day .day-num {
+        font-weight: 700;
+        font-size: 12px;
+        padding: 4px 6px;
+        border-bottom: 1px solid #eee;
+        background: #f9f9f9;
+    }
+    .maint-calendar-day.sat .day-num { color: #1565c0; }
+    .maint-calendar-day.sun .day-num { color: #d32f2f; }
+    .maint-calendar-day-body {
+        flex: 1;
+        min-height: 0;
+        padding: 3px 4px 5px;
+        overflow-y: auto;
+    }
+    .maint-calendar-cars {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        line-height: 1.35;
+    }
+    .maint-calendar-cat-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px 5px;
+    }
+    .maint-calendar-car {
+        font-weight: 700;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+    .maint-calendar-car.cat-예방 { color: #0066cc; }
+    .maint-calendar-car.cat-일반 { color: #008000; }
+    .maint-calendar-car.cat-사고 { color: #cc0000; }
+    .maint-calendar-car.cat-검사 { color: #e67e00; }
+    .maint-calendar-car.cat-엔진 { color: #774500; }
+    .maint-calendar-car.cat-미션 { color: #1000a3; }
+    .maint-calendar-car.cat-교체 { color: #02bdad; }
+    .maint-calendar-car.cat-펑크 { color: #c628b9; }
+    .maint-calendar-car.cat-명일 { color: #6633cc; }
+    .maint-year-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+    .maint-year-toolbar label {
+        font-size: 14px;
+        font-weight: 600;
+        color: #333;
+    }
+    .maint-year-toolbar select {
+        min-width: 110px;
+        padding: 6px 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 14px;
+        background: #fff;
+        color: #333;
+    }
+    .maint-calendar-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 12px;
+        margin-bottom: 10px;
+        font-size: 12px;
+        color: #666;
+    }
+    .maint-calendar-legend span {
+        font-weight: 600;
+    }
+    .maint-calendar-legend .cat-예방 { color: #0066cc; }
+    .maint-calendar-legend .cat-일반 { color: #008000; }
+    .maint-calendar-legend .cat-사고 { color: #cc0000; }
+    .maint-calendar-legend .cat-검사 { color: #e67e00; }
+    .maint-calendar-legend .cat-엔진 { color: #774500; }    
+    .maint-calendar-legend .cat-미션 { color: #1000a3; }
+    .maint-calendar-legend .cat-교체 { color: #02bdad; }
+    .maint-calendar-legend .cat-펑크 { color: #c628b9; }    
+    .maint-calendar-legend .cat-명일 { color: #6633cc; }
 </style>
 {% endblock %}
 
@@ -345,6 +622,12 @@
         <div class="car-tab-panel active" id="tabPanelMaintenance">
             <div class="excel-upload">
                 <form method="POST" enctype="multipart/form-data" id="uploadFormMaintenance" class="upload-form">
+                    {% if selected_maintenance_year %}
+                    <input type="hidden" name="view_year" value="{{ selected_maintenance_year }}">
+                    {% endif %}
+                    {% if maintenance_selected_month %}
+                    <input type="hidden" name="view_month" value="{{ maintenance_selected_month }}">
+                    {% endif %}
                     <div class="form-group">
                         <label for="excel_file_maintenance">엑셀 파일 선택:</label>
                         <input type="file" id="excel_file_maintenance" name="excel_file_maintenance" accept=".xlsx,.xls" required>
@@ -376,6 +659,15 @@
 
     {% if maintenance_available_months %}
     <div class="maintenance-schedule-wrap" id="maintenanceScheduleSection">
+        {% if maintenance_years %}
+        <div class="maint-year-toolbar">
+            <select id="maintYearSelect" data-base-url="{{ url_for('car') }}">
+                {% for year in maintenance_years %}
+                <option value="{{ year }}" {% if year == selected_maintenance_year %}selected{% endif %}>{{ year }}년</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
         {% if maintenance_stats %}
         <div class="maintenance-stats-wrap">
             <h2>정비 현황 통계 <span style="color:#4CAF50;font-weight:normal;">- {{ maintenance_stats.month_label }}월</span></h2>
@@ -401,6 +693,7 @@
                             {% endfor %}
                         </tbody>
                     </table>
+                    <div class="stats-type-group">
                     <table class="stats-table">
                         <thead>
                             <tr>
@@ -409,6 +702,10 @@
                             </tr>
                         </thead>
                         <tbody>
+                            <tr>
+                                <td>전체 정비 수</td>
+                                <td class="num {% if maintenance_stats.total_maintenance > 0 %}stat-positive{% endif %}">{{ maintenance_stats.total_maintenance }}</td>
+                            </tr>
                             <tr>
                                 <td><span class="mark-prevent">예방정비</span> (○)</td>
                                 <td class="num {% if maintenance_stats.예방정비 > 0 %}stat-positive{% endif %}">{{ maintenance_stats.예방정비 }}</td>
@@ -431,6 +728,33 @@
                             </tr>
                         </tbody>
                     </table>
+                    <table class="stats-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>수량</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="mark-engine">엔진오일</span></td>
+                                <td class="num {% if maintenance_stats.엔진오일 > 0 %}stat-positive{% endif %}">{{ maintenance_stats.엔진오일 }}</td>
+                            </tr>
+                            <tr>
+                                <td><span class="mark-mission">미션오일</span></td>
+                                <td class="num {% if maintenance_stats.미션오일 > 0 %}stat-positive{% endif %}">{{ maintenance_stats.미션오일 }}</td>
+                            </tr>
+                            <tr>
+                                <td><span class="mark-tire-replace">타이어교체</span></td>
+                                <td class="num {% if maintenance_stats.타이어교체 > 0 %}stat-positive{% endif %}">{{ maintenance_stats.타이어교체 }}</td>
+                            </tr>
+                            <tr>
+                                <td><span class="mark-tire-puncture">타이어펑크</span></td>
+                                <td class="num {% if maintenance_stats.타이어펑크 > 0 %}stat-positive{% endif %}">{{ maintenance_stats.타이어펑크 }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -439,9 +763,14 @@
         <div class="maintenance-sheet-tabs">
             <div class="sheet-tab-buttons">
                 {% for m in maintenance_available_months %}
-                <a href="?month={{ m }}" class="sheet-tab-button {% if m == maintenance_selected_month %}active{% endif %}">{{ m.split('-')[1] }}월</a>
+                <a href="?year={{ selected_maintenance_year }}&month={{ m }}" class="sheet-tab-button {% if m == maintenance_selected_month %}active{% endif %}">{{ m.split('-')[1] }}월</a>
                 {% endfor %}
             </div>
+            <div class="view-tab-buttons">
+                <button type="button" class="view-tab-button active" onclick="openMaintenanceViewTab(event, 'maint-view-calendar')">캘린더</button>
+                <button type="button" class="view-tab-button" onclick="openMaintenanceViewTab(event, 'maint-view-stats')">통계 · 표</button>
+            </div>
+            <div id="maint-view-stats" class="view-content">
             <div style="margin-bottom:12px;">
                 <input type="text" id="maintenanceFilter" placeholder="쉼표(,) 구분 · 차번 / 차종 / 정비유형 (예방, 일반, 사고, 검사, 명일) · 차종은 정확히 일치 (K5 ≠ K5H)" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
             </div>
@@ -475,6 +804,46 @@
                 </table>
             </div>
             {% endif %}
+            </div>
+            <div id="maint-view-calendar" class="view-content active">
+                {% if maintenance_selected_month %}
+                <div class="maint-calendar-title" id="maintCalendarTitle">{{ maintenance_selected_month.split('-')[0] }}년 {{ maintenance_selected_month.split('-')[1]|int }}월 정비 일정</div>
+                <div class="maint-calendar-legend">
+                    <span class="cat-예방">예방</span>
+                    <span class="cat-일반">일반</span>
+                    <span class="cat-사고">사고</span>
+                    <span class="cat-검사">검사</span>
+                    <span class="cat-엔진">엔진</span>
+                    <span class="cat-미션">미션</span>
+                    <span class="cat-교체">교체</span>
+                    <span class="cat-펑크">펑크</span>
+                    <span class="cat-명일">명일</span>
+                </div>
+                <div class="maint-calendar-layout">
+                    <div class="maint-calendar-board">
+                        <div class="maint-calendar-weekdays">
+                            <span>월</span>
+                            <span>화</span>
+                            <span>수</span>
+                            <span>목</span>
+                            <span>금</span>
+                            <span class="sat">토</span>
+                            <span class="sun">일</span>
+                        </div>
+                        <div class="maint-calendar-grid" id="maintCalendarGrid"></div>
+                    </div>
+                    <div class="maint-calendar-memo" id="maintCalendarMemo">
+                        <div class="maint-calendar-memo-title" id="maintCalendarMemoTitle">정비 내용</div>
+                        <div class="maint-calendar-memo-body" id="maintCalendarMemoBody">
+                            <p class="maint-calendar-memo-placeholder">날짜를 클릭하면 해당일 차량 정비 상세가 표시됩니다.</p>
+                        </div>
+                    </div>
+                </div>
+                <script type="application/json" id="maintenanceCalendarPayload">{{ {'month': maintenance_selected_month, 'days': maintenance_calendar_data | default({}), 'memos': maintenance_memo_data | default({})} | tojson }}</script>
+                {% else %}
+                <div class="schedule-empty-msg">정비 데이터가 없습니다. 엑셀 파일을 업로드해 주세요.</div>
+                {% endif %}
+            </div>
         </div>
     </div>
     {% endif %}
@@ -593,6 +962,183 @@
     </div>
 </div>
 <script>
+var MAINTENANCE_CALENDAR_CATEGORIES = ['예방', '일반', '사고', '검사', '엔진', '미션', '교체', '펑크', '명일'];
+
+function openMaintenanceViewTab(evt, viewId) {
+    var buttons = document.querySelectorAll('.maintenance-sheet-tabs .view-tab-button');
+    for (var i = 0; i < buttons.length; i++) {
+        buttons[i].classList.remove('active');
+    }
+    if (evt && evt.currentTarget) {
+        evt.currentTarget.classList.add('active');
+    }
+    var views = document.querySelectorAll('.maintenance-sheet-tabs .view-content');
+    for (var j = 0; j < views.length; j++) {
+        views[j].classList.remove('active');
+    }
+    var target = document.getElementById(viewId);
+    if (target) {
+        target.classList.add('active');
+    }
+    if (viewId === 'maint-view-calendar') {
+        renderMaintenanceCalendar();
+    }
+}
+
+function loadMaintenanceCalendarPayload() {
+    var el = document.getElementById('maintenanceCalendarPayload');
+    if (!el) return { month: null, days: {}, memos: {} };
+    try {
+        var payload = JSON.parse(el.textContent || '{}');
+        return {
+            month: payload.month || null,
+            days: payload.days || {},
+            memos: payload.memos || {}
+        };
+    } catch (e) {
+        console.error('정비 캘린더 데이터 파싱 실패:', e);
+        return { month: null, days: {}, memos: {} };
+    }
+}
+
+function maintenanceDayHasData(dayData) {
+    if (!dayData) return false;
+    for (var i = 0; i < MAINTENANCE_CALENDAR_CATEGORIES.length; i++) {
+        var cars = dayData[MAINTENANCE_CALENDAR_CATEGORIES[i]];
+        if (cars && cars.length) return true;
+    }
+    return false;
+}
+
+function formatMemoValue(value, unit) {
+    var text = (value === null || value === undefined) ? '' : String(value).trim();
+    if (!text) {
+        return '<span class="memo-empty">-</span>';
+    }
+    return unit ? (text + ' ' + unit) : text;
+}
+
+function renderMaintenanceMemo(dayKey, yearMonth) {
+    var titleEl = document.getElementById('maintCalendarMemoTitle');
+    var bodyEl = document.getElementById('maintCalendarMemoBody');
+    if (!titleEl || !bodyEl) return;
+    var payload = loadMaintenanceCalendarPayload();
+    var memos = (payload.memos && payload.memos[dayKey]) ? payload.memos[dayKey] : [];
+    var monthLabel = yearMonth || payload.month || '';
+    var dayNum = parseInt(dayKey, 10);
+    if (monthLabel && !isNaN(dayNum)) {
+        var parts = monthLabel.split('-');
+        titleEl.textContent = parts[0] + '년 ' + parseInt(parts[1], 10) + '월 ' + dayNum + '일 정비 내용';
+    } else {
+        titleEl.textContent = '정비 내용';
+    }
+    if (!memos.length) {
+        bodyEl.innerHTML = '<p class="maint-calendar-memo-placeholder">해당 날짜의 정비 상세 정보가 없습니다.</p>';
+        return;
+    }
+    var html = '';
+    for (var i = 0; i < memos.length; i++) {
+        var item = memos[i];
+        html += '<div class="maint-memo-vehicle">' +
+            '<div class="maint-memo-vehicle-head">' +
+            '<span class="memo-car-no">' + item.차번 + '</span>' +
+            (item.차종 ? item.차종 : '') +
+            '</div>' +
+            '<ul class="maint-memo-vehicle-list">' +
+            '<li>엔진오일: ' + formatMemoValue(item.엔진오일, 'L') + '</li>' +
+            '<li>미션오일: ' + formatMemoValue(item.미션오일, 'L') + '</li>' +
+            '<li>타이어 교체: ' + formatMemoValue(item.타이어_교체, '') + '</li>' +
+            '<li>타이어 펑크: ' + formatMemoValue(item.타이어_펑크, '') + '</li>' +
+            '<li>기타사항: ' + formatMemoValue(item.기타사항, '') + '</li>' +
+            '</ul></div>';
+    }
+    bodyEl.innerHTML = html;
+}
+
+function selectMaintenanceCalendarDay(cell, dayKey, yearMonth) {
+    var selected = document.querySelectorAll('.maint-calendar-day.selected');
+    for (var i = 0; i < selected.length; i++) {
+        selected[i].classList.remove('selected');
+    }
+    if (cell) cell.classList.add('selected');
+    renderMaintenanceMemo(dayKey, yearMonth);
+}
+
+function buildMaintenanceDayCars(dayData) {
+    var rows = [];
+    for (var i = 0; i < MAINTENANCE_CALENDAR_CATEGORIES.length; i++) {
+        var cat = MAINTENANCE_CALENDAR_CATEGORIES[i];
+        var cars = (dayData && dayData[cat]) ? dayData[cat] : [];
+        if (!cars.length) continue;
+        var items = [];
+        for (var j = 0; j < cars.length; j++) {
+            items.push('<span class="maint-calendar-car cat-' + cat + '" title="' + cat + '">' + cars[j] + '</span>');
+        }
+        rows.push('<div class="maint-calendar-cat-row">' + items.join('') + '</div>');
+    }
+    if (!rows.length) return '';
+    return '<div class="maint-calendar-cars">' + rows.join('') + '</div>';
+}
+
+function renderMaintenanceCalendar() {
+    var grid = document.getElementById('maintCalendarGrid');
+    if (!grid) return;
+    var payload = loadMaintenanceCalendarPayload();
+    var calendarData = payload.days || {};
+    var yearMonth = payload.month;
+    if (!yearMonth) {
+        grid.innerHTML = '';
+        return;
+    }
+    var parts = yearMonth.split('-');
+    var year = parseInt(parts[0], 10);
+    var month = parseInt(parts[1], 10);
+    if (isNaN(year) || isNaN(month)) {
+        grid.innerHTML = '';
+        return;
+    }
+    var firstDay = new Date(year, month - 1, 1);
+    var daysInMonth = new Date(year, month, 0).getDate();
+    var startOffset = (firstDay.getDay() + 6) % 7;
+    grid.innerHTML = '';
+    var dayNum = 1;
+    var weekCount = Math.ceil((startOffset + daysInMonth) / 7);
+    for (var w = 0; w < weekCount; w++) {
+        var weekEl = document.createElement('div');
+        weekEl.className = 'maint-calendar-week';
+        for (var d = 0; d < 7; d++) {
+            var cellIndex = w * 7 + d;
+            var cell = document.createElement('div');
+            cell.className = 'maint-calendar-day';
+            if (cellIndex < startOffset || dayNum > daysInMonth) {
+                cell.classList.add('empty');
+                weekEl.appendChild(cell);
+                continue;
+            }
+            var weekday = (startOffset + dayNum - 1) % 7;
+            if (weekday === 5) cell.classList.add('sat');
+            if (weekday === 6) cell.classList.add('sun');
+            var dayKey = String(dayNum);
+            var dayData = calendarData[dayKey] || {};
+            var hasData = maintenanceDayHasData(dayData);
+            if (hasData) cell.classList.add('has-data');
+            cell.setAttribute('data-day', dayKey);
+            cell.innerHTML = '<div class="day-num">' + dayNum + '</div>' +
+                '<div class="maint-calendar-day-body">' + buildMaintenanceDayCars(dayData) + '</div>';
+            if (hasData) {
+                cell.addEventListener('click', (function(day, ym, el) {
+                    return function() {
+                        selectMaintenanceCalendarDay(el, day, ym);
+                    };
+                })(dayKey, yearMonth, cell));
+            }
+            weekEl.appendChild(cell);
+            dayNum++;
+        }
+        grid.appendChild(weekEl);
+    }
+}
+
 function applyRepairFilter() {
     var repairFilter = document.getElementById('repairFilter');
     var repairTable = document.getElementById('repairTable');
@@ -791,6 +1337,14 @@ function applyMaintenanceFilter() {
     }
 }
 document.addEventListener('DOMContentLoaded', function() {
+    var maintYearSelect = document.getElementById('maintYearSelect');
+    if (maintYearSelect) {
+        maintYearSelect.addEventListener('change', function() {
+            var baseUrl = maintYearSelect.getAttribute('data-base-url');
+            if (baseUrl) window.location.href = baseUrl + '?year=' + maintYearSelect.value;
+        });
+    }
+    renderMaintenanceCalendar();
     var maintenanceFilter = document.getElementById('maintenanceFilter');
     if (maintenanceFilter) {
         maintenanceFilter.addEventListener('input', applyMaintenanceFilter);
@@ -865,7 +1419,17 @@ function setupUploadForm(formId, fileInputId, buttonId, resultId, storageKey, up
                     history.unshift(uploadMessage);
                     history = history.slice(0, MAX_UPLOAD_HISTORY);
                     localStorage.setItem(storageKey, JSON.stringify(history));
-                    setTimeout(() => { window.location.reload(); }, 1000);
+                    setTimeout(function() {
+                        var params = new URLSearchParams(window.location.search);
+                        var month = params.get('month');
+                        var repairMonth = params.get('repair_month');
+                        var next = window.location.pathname;
+                        var qs = [];
+                        if (month) qs.push('month=' + encodeURIComponent(month));
+                        if (repairMonth) qs.push('repair_month=' + encodeURIComponent(repairMonth));
+                        if (qs.length) next += '?' + qs.join('&');
+                        window.location.href = next;
+                    }, 1000);
                 }
             })
             .catch(err => console.error('Error:', err))

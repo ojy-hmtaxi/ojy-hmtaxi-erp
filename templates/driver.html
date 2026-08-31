@@ -150,6 +150,27 @@
     .table tbody tr:hover td {
         background-color: rgba(135, 206, 235, 0.3);  /* 하늘색 투명도 30% */
     }
+
+    .driver-year-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+    .driver-year-toolbar label {
+        font-size: 14px;
+        font-weight: 600;
+        color: #333;
+    }
+    .driver-year-toolbar select {
+        min-width: 110px;
+        padding: 6px 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 14px;
+        background: #fff;
+        color: #333;
+    }
 </style>
 {% endblock %}
 
@@ -163,6 +184,9 @@
     
     <div class="excel-upload">
         <form method="POST" enctype="multipart/form-data" id="uploadForm">
+            {% if selected_driver_year %}
+            <input type="hidden" name="view_year" value="{{ selected_driver_year }}">
+            {% endif %}
             <div class="form-group">
                 <label for="excel_file">엑셀 파일 선택:</label>
                 <input type="file" id="excel_file" name="excel_file" accept=".xlsx,.xls" required>
@@ -175,6 +199,15 @@
         </div>
     </div>
     {% if driver_data and driver_data.list and driver_data.columns %}
+    {% if driver_years %}
+    <div class="driver-year-toolbar">
+        <select id="driverYearSelect" data-base-url="{{ url_for('driver') }}">
+            {% for year in driver_years %}
+            <option value="{{ year }}" {% if year == selected_driver_year %}selected{% endif %}>{{ year }}년</option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endif %}
     <div style="margin-bottom:20px;">
         <input type="text" id="searchInput" placeholder="쉼표(,) 다중 조건 · 사번 / 이름 / 근무(주간·야간·일차·교대·리스·월차) · 차종은 정확히 일치" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
     </div>
@@ -379,6 +412,13 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
     });
 });
 document.addEventListener('DOMContentLoaded', function() {
+    var driverYearSelect = document.getElementById('driverYearSelect');
+    if (driverYearSelect) {
+        driverYearSelect.addEventListener('change', function() {
+            var baseUrl = driverYearSelect.getAttribute('data-base-url');
+            if (baseUrl) window.location.href = baseUrl + '?year=' + driverYearSelect.value;
+        });
+    }
     const HISTORY_KEY = 'driverUploadHistory';
     let history = [];
     try { history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch (e) {}

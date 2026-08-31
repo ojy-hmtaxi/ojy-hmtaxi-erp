@@ -259,6 +259,26 @@
         .top-nav {
             margin-left: 100px;
         }
+        .accident-year-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .accident-year-toolbar label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+        }
+        .accident-year-toolbar select {
+            min-width: 110px;
+            padding: 6px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            background: #fff;
+            color: #333;
+        }
     </style>
 {% endblock %}
 
@@ -273,6 +293,9 @@
             
             <div class="excel-upload">
                 <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                    {% if selected_accident_year %}
+                    <input type="hidden" name="view_year" value="{{ selected_accident_year }}">
+                    {% endif %}
                     <div class="form-group">
                         <label for="excel_file">엑셀 파일 선택:</label>
                         <input type="file" id="excel_file" name="excel_file" accept=".xlsx,.xls" required>
@@ -287,6 +310,15 @@
             
             {% if accident_data %}
             <div class="tabs">
+                {% if accident_years %}
+                <div class="accident-year-toolbar">
+                    <select id="accidentYearSelect" data-base-url="{{ url_for('accident') }}">
+                        {% for year in accident_years %}
+                        <option value="{{ year }}" {% if year == selected_accident_year %}selected{% endif %}>{{ year }}년</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
                 <div class="tab-buttons">
                     <button class="tab-button active" onclick="openTab(event, 'at-fault')">가해사고</button>
                     <button class="tab-button" onclick="openTab(event, 'not-at-fault')">피해사고</button>
@@ -954,6 +986,13 @@
         
         // 요소 존재 여부 확인 후 이벤트 리스너 추가
         document.addEventListener('DOMContentLoaded', function() {
+            var accidentYearSelect = document.getElementById('accidentYearSelect');
+            if (accidentYearSelect) {
+                accidentYearSelect.addEventListener('change', function() {
+                    var baseUrl = accidentYearSelect.getAttribute('data-base-url');
+                    if (baseUrl) window.location.href = baseUrl + '?year=' + accidentYearSelect.value;
+                });
+            }
             const atFaultFilter = document.getElementById('atFaultUnifiedFilter');
             const notAtFaultFilter = document.getElementById('notAtFaultUnifiedFilter');
             
