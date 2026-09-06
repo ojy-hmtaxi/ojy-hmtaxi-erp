@@ -282,8 +282,8 @@
     <div class="buildnote-intro">
         <p>
             <strong>한미운수 ERP</strong>의 버전별 변경·추가 기능과, 수입금 데이터가 어떻게 집계되는지 안내합니다.
-            사이드바에 표시된 버전(<code>beta 0.1.6</code>)을 참고해 주세요.
-            <strong>수입금 집계 기준</strong> 탭에 T머니 CSV 대조·운전자 분리·.dat 집계 상세가 정리되어 있습니다.
+            사이드바에 표시된 버전(<code>beta 0.1.7</code>)을 참고해 주세요.
+            <strong>수입금 집계 기준</strong> 탭에 T머니 CSV 대조·운전자 분리·.dat 집계·CSV/.dat 병합·셀 표시·표 스크롤 등 집계 상세가 정리되어 있습니다.
         </p>
     </div>
 
@@ -293,6 +293,70 @@
     </nav>
 
     <div id="panel-changelog" class="buildnote-panel active" role="tabpanel" aria-labelledby="tab-changelog">
+
+    <article class="buildnote-article">
+        <header class="buildnote-article-header">
+            <div class="buildnote-meta">
+                <span class="buildnote-badge">beta 0.1.7</span>
+                <time datetime="2026-09-02">2026-09-02</time>
+            </div>
+            <h2>beta 0.1.7 — 대시보드 카드별 연도 · 수입금 병합·셀 표시 · 엑셀 내보내기</h2>
+        </header>
+        <div class="buildnote-article-body">
+            <p>
+                <strong>대시보드</strong> 배차·사고·차트 카드마다 <strong>연도를 독립</strong>으로 바꿀 수 있게 했고, 페이지 전체 새로고침 없이 API로 데이터를 갱신합니다.
+                <strong>수입금</strong>은 T머니 CSV와 .dat의 역할을 분리해 <strong>(날짜·차번·사번)</strong> 기준으로 한 행에 병합하고,
+                전 기사 공통 <strong>사번 정렬</strong>·문제 셀만 <strong>주황/보라</strong> 표시·고정 헤더 스크롤·<strong>엑셀 내보내기</strong>를 추가했습니다.
+                상세 집계 규칙은 <strong>수입금 집계 기준</strong> 탭을 참고하세요.
+            </p>
+
+            <h3>대시보드 — 카드별 연도·AJAX 갱신</h3>
+            <ul>
+                <li>배차 현황 · 사고 현황 · 월별 차트(수입금·배차·사고)마다 <strong>독립 연도 선택</strong> — <code>data-dashboard-card</code> (<code>dispatch-status</code> · <code>accident-status</code> · <code>income-chart</code> · <code>dispatch-chart</code> · <code>accident-chart</code>)</li>
+                <li>연도 변경 시 <strong>해당 카드만</strong> 갱신 (전체 URL <code>?year=</code> 새로고침 제거) — 서버 사전 로드 <code>dashboard_payload_by_year</code> + 미캐시 시 <code>/api/dashboard/year/&lt;year&gt;</code></li>
+                <li>사고 현황 숫자·차트는 <strong>destroy 후 재생성</strong>, 배차 현황은 선택 월 기준 지표·전월 대비 증감 유지</li>
+                <li>초기 데이터는 <code>dashboard-bootstrap-data</code> · <code>dashboard-payload-by-year</code> JSON 스크립트로 전달, 클라이언트 캐시·요청 순번으로 레이스 방지</li>
+            </ul>
+
+            <h3>수입금 — CSV/.dat 병합·사번 정렬</h3>
+            <ul>
+                <li><strong>T머니 CSV</strong> = 실입금·건수·기사 정보 정본, <strong>.dat</strong> = 출고·입고·시간·연료·거리 — 같은 (날짜·차번·사번)이면 <strong>한 행</strong>으로 병합 (<code>merge_complementary_sales_rows</code>)</li>
+                <li><strong>전 기사 공통</strong> 사번 정렬 — 당월 CSV 대조 행은 CSV 사번 유지, .dat-only 행은 <code>_align_dat_rows_to_month_csv</code>로 당월 주·야 CSV에 맞춤</li>
+                <li>업로드·페이지 로드 시 <code>save_sales_data(..., normalize=True)</code> — <code>no_driver_match</code>·잘못된 사번 잔존 행 자동 정리</li>
+                <li><code>sales_reconcile.py</code> 병합 로직 개선 — T머니/.dat 보유 여부에 따른 역할 분리·보완 필드 복사</li>
+            </ul>
+
+            <h3>수입금 — 셀 색상·표 스크롤</h3>
+            <ul>
+                <li>문제 있는 <strong>셀만</strong> 색상 — <span style="color:#e65100;font-weight:600;">주황</span> (<code>sales-cell-csv-warn</code>) CSV 0·배차 불일치 · <span style="color:#7b1fa2;font-weight:600;">보라</span> (<code>sales-cell-dat-warn</code>) .dat 0·CSV 불일치 (<code>compute_sales_cell_warnings</code>)</li>
+                <li>수동 편집 강조(진한/연한 파랑)와 CSV/.dat 경고 색상 <strong>우선순위</strong> 분리 — 편집 셀에는 경고색 미적용</li>
+                <li>업로드 안내 아래 <strong>셀 색상 범례</strong> (<code>sales-cell-legend</code>)</li>
+                <li>표 <strong>헤더 고정·본문 스크롤</strong> — <code>sales-table-scroll-head</code> / <code>sales-table-scroll-body</code> (높이 610px), 헤더·본문 열 너비 동기화</li>
+            </ul>
+
+            <h3>수입금 — 엑셀 내보내기</h3>
+            <ul>
+                <li><code>/sales/export</code> — 월별·전체 수입 내역 <strong>Excel(.xlsx)</strong> 또는 CSV 다운로드 (<code>format=xlsx|csv</code>, <code>month=</code>)</li>
+                <li>화면과 동일 컬럼·표시 형식 (<code>_sales_row_for_export</code>) — 영업시간 등 분 단위 라벨, 사번 정규화</li>
+                <li>월별 탭 툴바 <strong>「엑셀파일(.xlsx)받기」</strong> — 전체 데이터 · 해당 월 링크</li>
+            </ul>
+
+            <h3>문서</h3>
+            <ul>
+                <li><strong>수입금 집계 기준</strong> 탭 — CSV/.dat 역할·병합 키·사번 정렬·매칭 완료 조건·셀 색상 규칙 상세 (beta 0.1.7, 2026-09-02)</li>
+            </ul>
+
+            <div class="buildnote-tags">
+                <span class="buildnote-tag">beta 0.1.7</span>
+                <span class="buildnote-tag">대시보드</span>
+                <span class="buildnote-tag">수입금</span>
+                <span class="buildnote-tag">CSV병합</span>
+                <span class="buildnote-tag">셀색상</span>
+                <span class="buildnote-tag">엑셀내보내기</span>
+                <span class="buildnote-tag">표스크롤</span>
+            </div>
+        </div>
+    </article>
 
     <article class="buildnote-article">
         <header class="buildnote-article-header">
@@ -709,7 +773,7 @@
             <h3>배차 데이터 연동</h3>
             <ul>
                 <li>행 날짜 기준 <strong>해당 월 배차표</strong>와 차번(4자리) 매칭</li>
-                <li>자동 보정: <strong>사번·이름·차종</strong>, 매칭 상태 <code>완료</code> / <code>미매칭</code></li>
+                <li>자동 보정: <strong>사번·이름·차종</strong>, 매칭 상태 <code>완료</code> / <code>실패</code></li>
                 <li>사번 소수점 제거 (<code>6228.0</code> → <code>6228</code>)</li>
             </ul>
 
@@ -829,7 +893,7 @@
             <ul>
                 <li>택시 미터 <code>.dat</code> 업로드 (단건·일괄, 진행률)</li>
                 <li>연료 단가 → 연료비 자동 산출, 영업분 표시</li>
-                <li>배차 데이터 자동 매칭 (사번·이름·차종, 완료/미매칭)</li>
+                <li>배차 데이터 자동 매칭 (사번·이름·차종, 완료/실패)</li>
                 <li>월별 탭, 차트 필터, 표 셀 인라인 편집·저장</li>
             </ul>
 
@@ -876,6 +940,238 @@
     </div><!-- /panel-changelog -->
 
     <div id="panel-sales-guide" class="buildnote-panel" role="tabpanel" aria-labelledby="tab-sales-guide" hidden>
+
+    <article class="buildnote-article">
+        <header class="buildnote-article-header">
+            <div class="buildnote-meta">
+                <span class="buildnote-badge patch">패치</span>
+                <span class="buildnote-badge">beta 0.1.7</span>
+                <time datetime="2026-09-02">2026-09-02</time>
+            </div>
+            <h2>수입금 집계·표시 — CSV/.dat 병합 · 전 기사 사번 정렬 · 셀 색상 · 표 스크롤</h2>
+        </header>
+        <div class="buildnote-article-body">
+            <p>
+                <strong>수입금 관리</strong> 표의 데이터 병합·매칭·화면 표시 기준을 정비했습니다.
+                T머니 CSV와 미터기 .dat의 <strong>역할을 명확히 분리</strong>하고, 같은 날·같은 기사는
+                <strong>한 행</strong>으로 합칩니다. 사번 불일치(이전월 배차·CSV 차이)는 <strong>전 기사 공통</strong> 규칙으로 정렬하며,
+                문제가 있는 <strong>셀만</strong> 색으로 표시합니다.
+            </p>
+
+            <div class="buildnote-callout">
+                <strong>한 줄 요약</strong><br>
+                <strong>CSV</strong> = 날짜·차번·근무·사번·운전기사·실입금·건수·차종(배차 보조) ·
+                <strong>.dat</strong> = 출고·입고·영업/빈차/총시간·연료·충전량·거리 ·
+                <strong>병합 키</strong> = (날짜·차번·사번) ·
+                <strong>색상</strong> = 문제 셀만 주황(CSV)·보라(.dat)
+            </div>
+
+            <h3>1. T머니 CSV vs .dat — 역할 분리</h3>
+            <div class="buildnote-table-wrap">
+                <table class="buildnote-table">
+                    <thead>
+                        <tr>
+                            <th>출처</th>
+                            <th>표에 채우는 항목</th>
+                            <th>비고</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="highlight">
+                            <td><strong>T머니 CSV</strong></td>
+                            <td>날짜 · 차번 · 근무 · 사번 · 운전기사 · <strong>실입금 · 건수</strong> · 차종(배차 매칭)</td>
+                            <td>정산금액·승인 건수의 <strong>정본</strong>. CSV 대조된 행은 이름·사번 <strong>CSV 우선</strong></td>
+                        </tr>
+                        <tr>
+                            <td><strong>미터기 .dat</strong></td>
+                            <td>출고일시 · 입고일시 · 영업시간 · 빈차시간 · 총시간 · 연료비 · 충전량 · 운행거리 · 빈차거리 · 총거리</td>
+                            <td>실입금·건수는 CSV에서만 가져옴 (.dat-only 행은 0)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>배차표</strong></td>
+                            <td>근무유형 · 차종 · 차량번호 보조</td>
+                            <td>CSV가 없을 때 기사 매칭. CSV와 다르면 CSV·배차 비교로 <strong>주황</strong> 표시</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p>
+                CSV와 .dat를 <strong>함께</strong> 업로드하면 같은 (날짜·차번·사번) 조합의 T머니 항목과 .dat 항목이
+                <strong>한 행</strong>으로 병합됩니다. 하루 2줄(실입금만 / .dat만)로 나뉘던 경우가 줄어듭니다.
+            </p>
+
+            <h3>2. 행 병합 키 — (날짜 · 차번 · 사번)</h3>
+            <ul>
+                <li>중복 제거·병합의 1순위 키: <strong>(날짜, 차번, 사번)</strong></li>
+                <li>한쪽에 T머니·한쪽에 .dat만 있어도 사번이 같으면 <strong>한 행</strong>으로 합침 (<code>merge_complementary_sales_rows</code>)</li>
+                <li>사번이 다르면 별도 행 유지 — 주·야 2인 차량, CSV/배차 사번 불일치 등</li>
+                <li>장기 마감 일별 분할(<code>daily_split</code>) 행은 당일 날짜·차번·사번 기준으로 병합</li>
+            </ul>
+
+            <h3>3. 전 기사 CSV·배차 사번 정렬</h3>
+            <p>
+                특정 기사만이 아니라 <strong>모든 기사</strong>에 동일 규칙을 적용합니다.
+                (예: 당월 CSV 사번 6380, .dat·4월 배차 6370 → <strong>6380 한 행</strong>으로 정리)
+            </p>
+            <div class="buildnote-flow">
+                <span class="buildnote-flow-step">행 보정 (enrich)</span>
+                <span class="buildnote-flow-arrow">→</span>
+                <span class="buildnote-flow-step">당월 CSV 사번 정렬</span>
+                <span class="buildnote-flow-arrow">→</span>
+                <span class="buildnote-flow-step">dedupe 병합</span>
+                <span class="buildnote-flow-arrow">→</span>
+                <span class="buildnote-flow-step">매칭·셀 색상 계산</span>
+            </div>
+            <ul>
+                <li><strong>CSV 대조 행</strong> (<code>driver</code> · <code>driver_added</code> · <code>car_added</code> · <code>daily</code>):
+                    사번·이름은 <strong>CSV 유지</strong>, .dat 재매칭 시에도 CSV 사번을 덮어쓰지 않음</li>
+                <li><strong>.dat-only 행</strong>: 당월 T머니 CSV에서 같은 날·차번·주·야(근무)에 맞는 사번으로 정렬
+                    (<code>_align_dat_rows_to_month_csv</code>)</li>
+                <li><strong>CSV 대조 시 .dat 재연결</strong>: 배차표보다 <strong>당월 CSV 주·야</strong>에 맞는 운전자를 우선 매칭
+                    (<code>_csv_metrics_for_dat_row</code>)</li>
+                <li><code>no_driver_match</code> · 잘못된 사번 잔존 행은 페이지 로드·normalize 시 <strong>자동 정리</strong> 후 JSON 저장</li>
+                <li>월별 CSV 대조(<code>reconcile_month_rows</code>) 마지막에도 동일 정렬·dedupe 실행</li>
+            </ul>
+
+            <div class="buildnote-example">
+                <div class="buildnote-example-title">예문 — 사번 변경(6370 → 6380) · 1840호 · 6월</div>
+                <ul>
+                    <li><strong>이전</strong>: T머니 6380 행 + .dat 6370 행 → <strong>2행</strong></li>
+                    <li><strong>이후</strong>: CSV·.dat 병합 → <strong>6380 1행</strong> (실입금·출고일시 동시 표시)</li>
+                    <li>4월처럼 <strong>당일 CSV가 없고 .dat만</strong> 있는 날은 6370(당월 배차) 행이 남을 수 있음 → 4월 CSV 업로드 시 동일 규칙으로 정리</li>
+                </ul>
+            </div>
+
+            <h3>4. [매칭] 완료 조건</h3>
+            <p>
+                <code>매칭</code> 열은 <strong>배차관리 · T머니 CSV · .dat</strong> 세 출처에서
+                <strong>날짜 · 차번 · 사번 · 이름</strong>을 대조한 결과로 표시합니다.
+                표시 문구는 <code>완료</code> 또는 <code>실패</code>이며, <strong>텍스트 색상</strong>으로
+                어떤 출처가 어긋났는지 구분합니다.
+            </p>
+            <div class="buildnote-table-wrap">
+                <table class="buildnote-table">
+                    <thead>
+                        <tr>
+                            <th>조건</th>
+                            <th>표시</th>
+                            <th>텍스트 색상</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>배차관리 · CSV · .dat의 <strong>날짜·차번·사번·이름</strong>이 <strong>모두 일치</strong></td>
+                            <td><code>완료</code></td>
+                            <td><strong style="color:#2e7d32;">녹색</strong></td>
+                        </tr>
+                        <tr>
+                            <td>세 출처를 대조했을 때 <strong>모든 데이터가 불일치</strong></td>
+                            <td><code>실패</code></td>
+                            <td><strong style="color:#c62828;">빨간색</strong></td>
+                        </tr>
+                        <tr>
+                            <td>세 출처를 대조했을 때 <strong>배차관리</strong> 데이터만 불일치</td>
+                            <td><code>실패</code></td>
+                            <td><strong style="color:#f9a825;">노란색</strong></td>
+                        </tr>
+                        <tr>
+                            <td>세 출처를 대조했을 때 <strong>CSV</strong> 데이터만 불일치</td>
+                            <td><code>실패</code></td>
+                            <td><strong style="color:#e65100;">주황색</strong></td>
+                        </tr>
+                        <tr>
+                            <td>세 출처를 대조했을 때 <strong>.dat</strong> 데이터만 불일치</td>
+                            <td><code>실패</code></td>
+                            <td><strong style="color:#7b1fa2;">보라색</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <ul>
+                <li>대조 키: <strong>날짜 · 차번 · 사번 · 이름</strong> (배차표·CSV·.dat 각각에서 추출한 값)</li>
+                <li>한 출처에 해당 행 데이터가 없으면 그 출처는 대조에서 <strong>제외</strong> — 남은 출처끼리만 비교</li>
+                <li><code>매칭</code> 열 색상은 <strong>행 단위</strong> 표시이며, §5 셀 색상(주황·보라)과 별도입니다</li>
+            </ul>
+            <p class="buildnote-muted" style="margin-top:0.75rem;font-size:0.92rem;color:#666;">
+                예: CSV·.dat는 6380·홍길동으로 일치하는데 배차표만 6370이면 → <code>실패</code> (노란색).
+                세 출처가 서로 다른 기사·차번 조합이면 → <code>실패</code> (빨간색).
+            </p>
+
+            <h3>5. 셀 색상 — 문제 있는 셀만 표시</h3>
+            <p>업로드 안내 아래 범례와 동일합니다. <strong>열 전체가 아니라 해당 셀만</strong> 색이 바뀝니다.</p>
+            <div class="buildnote-table-wrap">
+                <table class="buildnote-table">
+                    <thead>
+                        <tr>
+                            <th>색</th>
+                            <th>대상 열</th>
+                            <th>표시 조건</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong style="color:#e65100;">주황</strong></td>
+                            <td>날짜 · 차번 · 차종 · 근무 · 사번 · 운전기사 · 실입금 · 건수</td>
+                            <td>CSV 항목이 <strong>0·비어 있음</strong>, 또는 <strong>배차표와 불일치</strong>
+                                (사번·이름·차종·근무). CSV 미대조 시 실입금·건수만 주황</td>
+                        </tr>
+                        <tr>
+                            <td><strong style="color:#7b1fa2;">보라</strong></td>
+                            <td>출고 · 입고 · 영업/빈차/총시간 · 연료비 · 충전량 · 운행/빈차/총거리</td>
+                            <td>.dat 항목이 <strong>0·비어 있음</strong>, 또는 출고 시각이 CSV <strong>근무(주·야)와 어긋남</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <ul>
+                <li>수동 수정 셀(진한·연한 <strong>파란색</strong>)은 편집 표시가 우선 — 색상과 겹치지 않음</li>
+                <li>값이 정상인 셀은 기본 글자색 유지 (같은 행에서도 열마다 다를 수 있음)</li>
+            </ul>
+
+            <h3>6. 수입금 표 UI — 1600px 스크롤</h3>
+            <ul>
+                <li>표 영역 높이 <strong>1600px</strong> 고정 — 데이터 행만 세로 스크롤</li>
+                <li><strong>열 헤더 + 합계 행</strong>은 스크롤해도 상단에 고정 (헤더·본문 분리 레이아웃)</li>
+                <li>열 많음 → <strong>가로 스크롤</strong> 가능 (내용 너비에 맞게 표시, 셀 겹침 없음)</li>
+                <li>헤더와 본문 열 너비는 화면 로드·필터·정렬 후 <strong>자동 맞춤</strong></li>
+            </ul>
+
+            <h3>7. 장기 마감 · 일별 분할 매칭 보완</h3>
+            <ul>
+                <li>장기 마감 일별 행: <strong>당일 클립 출고 시각</strong>으로 주·야 기사 판별 (파일 전체 시작 시각 오매칭 방지)</li>
+                <li>월 경계·장기 마감: 배차 조회 시 <strong>마감월</strong> 배차표 사용</li>
+                <li>.dat 일괄 업로드 시 <code>month_key</code> 미초기화로 월이 어긋나던 오류 수정</li>
+            </ul>
+
+            <h3>8. 자주 묻는 질문 (2026-09-02)</h3>
+            <ul>
+                <li><strong>Q. CSV·.dat 둘 다 있는데 [매칭]이 실패예요.</strong><br>
+                    A. <strong>§4 [매칭]</strong> — 배차·CSV·.dat의 날짜·차번·사번·이름이 일치하지 않으면 <code>실패</code>입니다.
+                    <strong>색상</strong>으로 어느 출처가 어긋났는지 확인하세요 (노랑=배차, 주황=CSV, 보라=.dat, 빨강=전체 불일치).
+                    수치 0·빈칸은 <strong>§5 셀 색상</strong>으로 별도 표시됩니다.</li>
+                <li><strong>Q. 사번만 주황색인데요?</strong><br>
+                    A. CSV 사번과 <strong>당월 배차표</strong> 사번이 다를 때입니다 (사번 변경·배차 미반영).
+                    CSV가 정본이면 배차표를 갱신하거나, 의도된 변경인지 확인하세요.</li>
+                <li><strong>Q. 같은 날·같은 차에 기사 2명인데 2행이에요.</strong><br>
+                    A. CSV상 <strong>실제 2명</strong>이면 정상입니다. 사번·근무가 다르면 병합하지 않습니다.</li>
+                <li><strong>Q. 페이지만 새로고침해도 사번이 정리되나요?</strong><br>
+                    A. 네. <code>load_sales_data</code> 시 normalize·정렬·dedupe가 실행되고,
+                    <code>no_driver_match</code> 잔존 시 JSON이 자동 저장됩니다.</li>
+                <li><strong>Q. 표가 너무 길어요.</strong><br>
+                    A. 1600px 영역 안에서 스크롤합니다. 월별 페이지네이션·통합 검색은 기존과 동일합니다.</li>
+            </ul>
+
+            <div class="buildnote-tags">
+                <span class="buildnote-tag">수입금</span>
+                <span class="buildnote-tag">CSV</span>
+                <span class="buildnote-tag">.dat</span>
+                <span class="buildnote-tag">병합</span>
+                <span class="buildnote-tag">사번정렬</span>
+                <span class="buildnote-tag">셀색상</span>
+                <span class="buildnote-tag">매칭</span>
+            </div>
+        </div>
+    </article>
 
     <article class="buildnote-article">
         <header class="buildnote-article-header">
@@ -1471,7 +1767,7 @@
                         </tr>
                         <tr>
                             <td>매칭</td>
-                            <td><code>완료</code> / <code>미매칭</code> — 배차에 없으면 기사 정보 비어 있을 수 있음</td>
+                            <td><code>완료</code> / <code>실패</code> — 배차에 없으면 기사 정보 비어 있을 수 있음</td>
                         </tr>
                     </tbody>
                 </table>

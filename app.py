@@ -1,4 +1,5 @@
-from flask import Flask, render_template, request, session, redirect, url_for, flash, send_from_directory, jsonify, Response, stream_with_context
+from flask import Flask, render_template, request, session, redirect, url_for, flash, send_from_directory, send_file, jsonify, Response, stream_with_context
+from io import BytesIO
 import pandas as pd
 import os
 import json
@@ -437,6 +438,43 @@ def _build_dashboard_accident_summary(year, month_order=None):
     }
 
 
+def _build_dashboard_payload_for_year(year, month_order=None):
+    """대시보드 카드·차트용 연도별 데이터 묶음."""
+    month_order = month_order or DASHBOARD_MONTH_ORDER
+    monthly_incomes, monthly_fuel_costs = _build_dashboard_sales_monthly(year, month_order)
+    dispatch_data = load_dispatch_data(year)
+    dispatch_stats, driver_counts, driver_counts_by_category = _build_dashboard_dispatch_metrics(
+        dispatch_data, month_order,
+    )
+    accident_summary = _build_dashboard_accident_summary(year, month_order)
+    return {
+        'monthly_incomes': monthly_incomes,
+        'monthly_fuel_costs': monthly_fuel_costs,
+        'dispatch_stats': dispatch_stats,
+        'driver_counts': driver_counts,
+        'driver_counts_by_category': driver_counts_by_category,
+        'accident_summary': accident_summary,
+    }
+
+
+def _build_dashboard_payload_by_year(years, month_order=None):
+    return {str(year): _build_dashboard_payload_for_year(year, month_order) for year in years}
+
+
+@app.route('/api/dashboard/year/<int:year>')
+@login_required
+def api_dashboard_year(year):
+    """대시보드 카드·차트용 연도별 데이터 API."""
+    years = _dashboard_available_years()
+    if year not in years:
+        return jsonify({'success': False, 'error': '연도를 찾을 수 없습니다.'}), 404
+    return jsonify({
+        'success': True,
+        'year': year,
+        'payload': _build_dashboard_payload_for_year(year),
+    })
+
+
 def _build_dashboard_income_card_metrics(monthly_incomes, monthly_fuel_costs, selected_month, month_order=None):
     month_order = month_order or DASHBOARD_MONTH_ORDER
     total_income = sum(monthly_incomes.values())
@@ -487,6 +525,7 @@ def _build_dashboard_income_card_metrics(monthly_incomes, monthly_fuel_costs, se
 def calculate_salary():
     month_order = DASHBOARD_MONTH_ORDER
     dashboard_years, selected_year = _resolve_dashboard_year()
+    dashboard_payload_by_year = _build_dashboard_payload_by_year(dashboard_years, month_order)
 
     monthly_incomes, monthly_fuel_costs = _build_dashboard_sales_monthly(selected_year, month_order)
     income_metrics = _build_dashboard_income_card_metrics(
@@ -590,6 +629,7 @@ def calculate_salary():
                                             accident_stats_by_month=empty_accident_stats,
                                             dashboard_years=dashboard_years,
                                             selected_year=selected_year,
+                                            dashboard_payload_by_year=dashboard_payload_by_year,
                                             driver_counts_by_category=driver_counts_by_category)
                     
                     session['salary_data'] = salary_data
@@ -628,6 +668,7 @@ def calculate_salary():
                                         accident_stats_by_month=accident_stats_by_month,
                                         dashboard_years=dashboard_years,
                                         selected_year=selected_year,
+                                        dashboard_payload_by_year=dashboard_payload_by_year,
                                         driver_counts_by_category=driver_counts_by_category)
                 except Exception as e:
                     empty_accident_stats = {m: {'at_fault': 0, 'at_fault_causes': {}, 'not_at_fault': 0, 'not_at_fault_causes': {}} for m in month_order}
@@ -652,6 +693,7 @@ def calculate_salary():
                                         accident_stats_by_month=empty_accident_stats,
                                         dashboard_years=dashboard_years,
                                         selected_year=selected_year,
+                                        dashboard_payload_by_year=dashboard_payload_by_year,
                                         driver_counts_by_category=driver_counts_by_category)
     
     # GET 요청이거나 세션에 저장된 데이터가 있는 경우
@@ -691,7 +733,8 @@ def calculate_salary():
                         monthly_fuel_costs=monthly_fuel_costs,
                         accident_stats_by_month=accident_stats_by_month,
                         dashboard_years=dashboard_years,
-                        selected_year=selected_year)
+                        selected_year=selected_year,
+                        dashboard_payload_by_year=dashboard_payload_by_year)
 
 @app.route('/schedule', methods=['GET', 'POST'])
 @login_required
@@ -997,7 +1040,7 @@ def sales_upload_batch():
                     merged, csv_raw, filename=csv_filename,
                 )
 
-            save_sales_data(merged, normalize=False)
+            save_sales_data(merged, normalize=True)
             if saved_names:
                 _remove_dat_files(saved_names)
             if csv_raw and csv_filename:
@@ -1075,6 +1118,147 @@ def sales_upload_complete():
     db.session.add(record)
     db.session.commit()
     return jsonify({'success': True, 'file_count': file_count})
+
+
+SALES_EXPORT_COLUMNS = (
+    '날짜', '차번', '차종', '근무유형', '사번', '운전기사', '실입금', '건수',
+    '출고일시', '입고일시', '영업시간', '빈차시간', '총시간', '연료비', '충전량',
+    '운행거리', '빈차거리', '총거리', '매칭',
+)
+
+
+def _sales_export_minutes_value(row, field, fallback_work=False):
+    value = row.get(field)
+    if field == '영업시간' and value in (None, ''):
+        value = row.get('영업분')
+    if value not in (None, ''):
+        try:
+            return format_work_minutes_label(int(value))
+        except (ValueError, TypeError):
+            pass
+    if fallback_work:
+        try:
+            return format_work_minutes_label(resolve_sales_work_minutes(row, reparse_dat=False))
+        except Exception:
+            pass
+    return format_work_minutes_label(0)
+
+
+def _sales_row_for_export(row: dict) -> dict:
+    """수입 내역 표와 동일한 컬럼·표시 형식으로 변환."""
+    try:
+        income = int(float(row.get('실입금') or 0))
+    except (ValueError, TypeError):
+        income = 0
+    try:
+        trips = int(float(row.get('건수') or 0))
+    except (ValueError, TypeError):
+        trips = 0
+    try:
+        fuel_cost = int(float(row.get('연료비') or 0))
+    except (ValueError, TypeError):
+        fuel_cost = 0
+    try:
+        fuel_l = round(float(row.get('충전량') or row.get('연료L') or 0), 2)
+    except (ValueError, TypeError):
+        fuel_l = 0.0
+
+    return {
+        '날짜': str(row.get('날짜') or '').strip(),
+        '차번': str(row.get('차번') or '').strip(),
+        '차종': str(row.get('차종') or '').strip(),
+        '근무유형': str(row.get('근무유형') or '').strip(),
+        '사번': normalize_emp_id(row.get('사번', '')),
+        '운전기사': str(row.get('이름') or '').strip(),
+        '실입금': income,
+        '건수': trips,
+        '출고일시': str(row.get('영업시작') or row.get('마감시작') or '').strip(),
+        '입고일시': str(row.get('영업종료') or row.get('마감종료') or '').strip(),
+        '영업시간': _sales_export_minutes_value(row, '영업시간', fallback_work=True),
+        '빈차시간': _sales_export_minutes_value(row, '빈차시간'),
+        '총시간': _sales_export_minutes_value(row, '총시간'),
+        '연료비': fuel_cost,
+        '충전량': fuel_l,
+        '운행거리': str(row.get('운행거리') or '').strip(),
+        '빈차거리': str(row.get('빈차거리') or '0').strip(),
+        '총거리': str(row.get('총거리') or '0').strip(),
+        '매칭': str(row.get('매칭') or '').strip(),
+    }
+
+
+def _build_sales_export_filename(fmt: str, month: str = '') -> str:
+    stamp = datetime.now().strftime('%Y%m%d')
+    if month:
+        safe_month = re.sub(r'[^\d월]', '', str(month))
+        base = f'수입금관리_{safe_month}_{stamp}'
+    else:
+        base = f'수입금관리_{stamp}'
+    return f'{base}.{"xlsx" if fmt == "xlsx" else "csv"}'
+
+
+@app.route('/sales/export')
+@login_required
+def sales_export():
+    """수입 내역 표를 CSV 또는 Excel로 다운로드."""
+    fmt = (request.args.get('format') or 'xlsx').lower()
+    if fmt not in ('csv', 'xlsx'):
+        return jsonify({'success': False, 'error': 'format은 csv 또는 xlsx만 지원합니다.'}), 400
+
+    month = (request.args.get('month') or '').strip()
+    sales_data = load_sales_data()
+    if not sales_data:
+        return jsonify({'success': False, 'error': '다운로드할 수입금 데이터가 없습니다.'}), 404
+
+    month_items = list(sales_data.items())
+    if month:
+        month_items = [(k, v) for k, v in month_items if k == month]
+        if not month_items:
+            return jsonify({'success': False, 'error': f'[{month}] 데이터가 없습니다.'}), 404
+
+    if fmt == 'xlsx':
+        buffer = BytesIO()
+        wrote_sheet = False
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            for month_key, month_data in month_items:
+                rows = [_sales_row_for_export(r) for r in month_data.get('data', [])]
+                if not rows:
+                    continue
+                df = pd.DataFrame(rows, columns=list(SALES_EXPORT_COLUMNS))
+                sheet_name = str(month_key)[:31] or '수입금'
+                df.to_excel(writer, sheet_name=sheet_name, index=False)
+                wrote_sheet = True
+        if not wrote_sheet:
+            return jsonify({'success': False, 'error': '다운로드할 행이 없습니다.'}), 404
+        buffer.seek(0)
+        return send_file(
+            buffer,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=_build_sales_export_filename('xlsx', month),
+        )
+
+    csv_rows = []
+    for month_key, month_data in month_items:
+        for row in month_data.get('data', []):
+            exported = _sales_row_for_export(row)
+            if len(month_items) > 1 or not month:
+                exported = {'월': month_key, **exported}
+            csv_rows.append(exported)
+    if not csv_rows:
+        return jsonify({'success': False, 'error': '다운로드할 행이 없습니다.'}), 404
+
+    columns = (['월'] if (len(month_items) > 1 or not month) else []) + list(SALES_EXPORT_COLUMNS)
+    df = pd.DataFrame(csv_rows, columns=columns)
+    buffer = BytesIO()
+    buffer.write('\ufeff'.encode('utf-8'))
+    buffer.write(df.to_csv(index=False).encode('utf-8'))
+    buffer.seek(0)
+    return send_file(
+        buffer,
+        mimetype='text/csv; charset=utf-8',
+        as_attachment=True,
+        download_name=_build_sales_export_filename('csv', month),
+    )
 
 
 @app.route('/sales/save', methods=['POST'])
@@ -1811,6 +1995,42 @@ def sales_dispatch_month_key(business_date: str) -> str | None:
     return f"{date_part[5:7]}월"
 
 
+def _dispatch_month_from_dat_filename(source_file: str) -> str | None:
+    """`.dat` 파일명 앞 8자리(YYYYMMDD) → 배차 월."""
+    basename = os.path.basename(str(source_file or '').replace('\\', '/'))
+    match = re.match(r'^(\d{8})_', basename)
+    if not match:
+        return None
+    raw = match.group(1)
+    return sales_dispatch_month_key(f'{raw[:4]}-{raw[4:6]}-{raw[6:8]}')
+
+
+def sales_dispatch_lookup_month(
+    business_date=None,
+    parsed=None,
+    row=None,
+    daily_date=None,
+) -> str | None:
+    """배차 조회 월 — 장기 마감·파일명은 마감월, 일반 행은 해당일 월."""
+    if parsed and is_prolonged_closing(parsed):
+        header = parsed.get('header') or {}
+        closing_ref = (
+            str(header.get('end') or '')[:10]
+            or parsed.get('closing_date')
+            or parsed.get('file_date')
+        )
+        if closing_ref:
+            month = sales_dispatch_month_key(closing_ref)
+            if month:
+                return month
+    if row and str(row.get('집계기준') or '') == 'daily_split':
+        month = _dispatch_month_from_dat_filename(row.get('원본파일'))
+        if month:
+            return month
+    day = str(daily_date or business_date or (row or {}).get('날짜') or '').strip()[:10]
+    return sales_dispatch_month_key(day) if day else None
+
+
 _DISPATCH_DAY_WORK_TYPES = ('주간', '일차', '리스')
 _DISPATCH_NIGHT_WORK_TYPES = ('야간',)
 
@@ -1955,6 +2175,40 @@ def build_vehicle_lookup(dispatch_month: str | None = None):
     return lookup
 
 
+def _should_prefer_shift_dispatch_match(row=None, daily_date=None) -> bool:
+    """장기 마감 일별 행 — 당일 클립 출고 시각으로 주·야 기사 매칭."""
+    if daily_date:
+        return True
+    if row and str(row.get('집계기준') or '') == 'daily_split':
+        return True
+    return False
+
+
+def _dispatch_shift_start_for_match(
+    parsed=None,
+    row=None,
+    business_date=None,
+    daily_date=None,
+) -> str:
+    """배차 주·야 매칭용 출고 시각. 장기 마감 일별 행은 해당 날짜로 클립한 시각 사용."""
+    day = str(daily_date or business_date or (row or {}).get('날짜') or '').strip()[:10]
+    header = (parsed or {}).get('header') or {}
+    closing_start = str(header.get('start') or '').strip()
+    prefer_shift = _should_prefer_shift_dispatch_match(row=row, daily_date=daily_date)
+    if not prefer_shift and parsed and day and is_prolonged_closing(parsed):
+        prefer_shift = True
+
+    if prefer_shift and day and closing_start:
+        clipped = clip_datetime_to_business_day(closing_start, day, 'start')
+        if clipped:
+            return clipped
+
+    row_start = str((row or {}).get('영업시작') or '').strip()
+    if row_start:
+        return row_start
+    return closing_start
+
+
 def match_vehicle_record(
     car_suffix,
     plate='',
@@ -1962,23 +2216,32 @@ def match_vehicle_record(
     business_date=None,
     parsed=None,
     row=None,
+    daily_date=None,
 ):
+    dispatch_month = sales_dispatch_lookup_month(
+        business_date=business_date, parsed=parsed, row=row, daily_date=daily_date,
+    )
     if lookup is None:
-        lookup = build_vehicle_lookup(
-            dispatch_month=sales_dispatch_month_key(business_date) if business_date else None
-        )
+        lookup = build_vehicle_lookup(dispatch_month=dispatch_month)
 
-    shift_band = ''
+    shift_start = _dispatch_shift_start_for_match(
+        parsed=parsed, row=row, business_date=business_date, daily_date=daily_date,
+    )
+    shift_band = infer_shift_band_from_start(shift_start)
+
+    prefer_shift = _should_prefer_shift_dispatch_match(row=row, daily_date=daily_date)
+    if not prefer_shift and parsed and business_date and is_prolonged_closing(parsed):
+        prefer_shift = True
+
     emp_hint = ''
-    if parsed:
-        header = parsed.get('header') or {}
-        shift_band = infer_shift_band_from_start(header.get('start', ''))
-    elif row:
-        shift_band = infer_shift_band_from_start(row.get('영업시작', ''))
+    if row and _is_tmoney_csv_matched(row):
         emp_hint = normalize_emp_id(row.get('사번', ''))
 
     entries = _lookup_car_entries(lookup, car_suffix)
-    info = _pick_dispatch_entry(entries, shift_band, emp=emp_hint)
+    if prefer_shift and shift_band and not emp_hint:
+        info = _pick_dispatch_entry(entries, shift_band, emp='')
+    else:
+        info = _pick_dispatch_entry(entries, shift_band, emp=emp_hint)
     matched = bool(info.get('이름') or info.get('사번'))
     return {
         '차번': car_suffix,
@@ -1987,30 +2250,28 @@ def match_vehicle_record(
         '이름': info.get('이름', ''),
         '차종': info.get('차종', ''),
         '근무유형': info.get('근무유형', ''),
-        '매칭': '완료' if matched else '미매칭',
+        '매칭': '완료' if matched else '실패',
     }
 
 
 def sales_record_key(row) -> tuple:
-    """수입금 행 고유 키 — (날짜, 차번, 식별자).
+    """수입금 행 고유 키 — (날짜, 차번, 사번) 우선.
 
-    같은 차번·같은 날짜에 주간/야간 2명이 각각 1행씩 저장되도록
-    영업시작 → 근무유형 → 사번 → 원본파일 순으로 구분.
-    장기 마감 일별 분할(daily_split)은 (날짜, 차번) 단위로 병합·교체.
+    T머니(CSV)와 .dat(일반·장기 마감)를 같은 기사·같은 날 한 행으로 병합.
     """
     date = str(row.get('날짜') or '').strip()
     car = str(row.get('차번') or '').strip()
-    if str(row.get('집계기준') or '') == 'daily_split':
-        return (date, car, 'daily_split')
-    start = str(row.get('영업시작') or '').strip()[:16]
-    if start:
-        return (date, car, 'start', start)
-    work = str(row.get('근무유형') or '').strip()
-    if work:
-        return (date, car, 'work', work)
     emp = normalize_emp_id(row.get('사번', ''))
     if emp:
         return (date, car, 'emp', emp)
+    if str(row.get('집계기준') or '') == 'daily_split':
+        return (date, car, 'daily_split')
+    work = str(row.get('근무유형') or '').strip()
+    if work:
+        return (date, car, 'work', work)
+    start = str(row.get('영업시작') or '').strip()[:16]
+    if start:
+        return (date, car, 'start', start)
     source = os.path.basename(str(row.get('원본파일') or '').replace('\\', '/'))
     if source:
         return (date, car, 'file', source)
@@ -2095,13 +2356,11 @@ def _sales_fuel_unit_price(row, fuel_price=None):
     return float(DEFAULT_FUEL_PRICE)
 
 
-def resolve_sales_metrics(row, parsed=None, fuel_price=None, reparse_dat=False, daily_date=None):
-    """실입금·건수·연료·거리: .dat 마감 기준.
+def resolve_dat_metrics(row, parsed=None, fuel_price=None, reparse_dat=False, daily_date=None):
+    """.dat 마감 기준 운행 지표만 (실입금·건수는 T머니 CSV 전용).
 
     - 일반 마감(1~2일): #2/#3 파일 전체 (closing).
     - 장기 마감(3일+): daily_date(또는 행 날짜)에 해당하는 당일분만 (daily_split).
-
-    reparse_dat=False(기본): sales_data.json 저장값 사용.
     """
     if parsed is None and reparse_dat:
         parsed = _load_sales_parsed_row(row)
@@ -2117,8 +2376,6 @@ def resolve_sales_metrics(row, parsed=None, fuel_price=None, reparse_dat=False, 
         unit_price = _sales_fuel_unit_price(row, fuel_price=fuel_price)
         fuel_liters = metrics['fuel_l']
         return {
-            '실입금': str(metrics['income_won']),
-            '건수': str(metrics['fare_count']),
             '충전량': str(fuel_liters),
             '연료비': str(int(round(fuel_liters * unit_price))),
             '운행거리': str(metrics['distance_km']),
@@ -2129,8 +2386,6 @@ def resolve_sales_metrics(row, parsed=None, fuel_price=None, reparse_dat=False, 
         }
 
     return {
-        '실입금': str(int(row.get('실입금') or 0)),
-        '건수': str(int(row.get('건수') or 0)),
         '충전량': str(row.get('충전량') or row.get('연료L') or '0'),
         '연료비': str(int(row.get('연료비') or 0)),
         '운행거리': str(row.get('운행거리') or '0'),
@@ -2139,6 +2394,362 @@ def resolve_sales_metrics(row, parsed=None, fuel_price=None, reparse_dat=False, 
         '빈차시간': str(row.get('빈차시간') or '0'),
         '빈차거리': str(row.get('빈차거리') or '0'),
     }
+
+
+def resolve_sales_metrics(row, parsed=None, fuel_price=None, reparse_dat=False, daily_date=None):
+    """레거시 호환 — .dat 운행 지표 + 저장된 T머니 실입금·건수."""
+    metrics = resolve_dat_metrics(
+        row, parsed=parsed, fuel_price=fuel_price,
+        reparse_dat=reparse_dat, daily_date=daily_date,
+    )
+    metrics['실입금'] = str(int(row.get('실입금') or 0))
+    metrics['건수'] = str(int(row.get('건수') or 0))
+    return metrics
+
+
+def _is_blank_sales_text(value) -> bool:
+    text = str(value or '').strip()
+    if not text or text == '-':
+        return True
+    return text.lower() in ('nan', 'none')
+
+
+_TMONEY_CSV_SOURCES = frozenset({'driver', 'driver_added', 'car_added', 'daily'})
+
+
+def _is_tmoney_csv_matched(row) -> bool:
+    """T머니 CSV와 실제 매칭된 행만 (no_driver_match 등 제외)."""
+    return str(row.get('T머니출처') or '').strip() in _TMONEY_CSV_SOURCES
+
+
+def _row_has_tmoney_source(row) -> bool:
+    return _is_tmoney_csv_matched(row)
+
+
+def _row_has_dat_source(row) -> bool:
+    source = str(row.get('원본파일') or '').lower()
+    if source and '.dat' in source:
+        return True
+    if str(row.get('집계기준') or '') in ('closing', 'daily_split'):
+        return True
+    return bool(str(row.get('영업시작') or '').strip())
+
+
+_SALES_TABLE_CSV_COLS = (
+    '날짜', '차번', '차종', '근무유형', '사번', '운전기사', '실입금', '건수',
+)
+_SALES_TABLE_DAT_COLS = (
+    '출고일시', '입고일시', '영업시간', '빈차시간', '총시간',
+    '연료비', '충전량', '운행거리', '빈차거리', '총거리',
+)
+_SALES_NUMERIC_ZERO_COLS = frozenset({
+    '실입금', '건수', '영업시간', '빈차시간', '총시간',
+    '연료비', '충전량', '운행거리', '빈차거리', '총거리',
+})
+
+
+def _sales_display_field_value(row, col: str) -> str:
+    if col == '운전기사':
+        return str(row.get('이름') or '').strip()
+    if col == '출고일시':
+        return str(row.get('영업시작') or row.get('마감시작') or '').strip()
+    if col == '입고일시':
+        return str(row.get('영업종료') or row.get('마감종료') or '').strip()
+    if col == '충전량':
+        return str(row.get('충전량') or row.get('연료L') or '').strip()
+    return str(row.get(col) or '').strip()
+
+
+def _sales_field_is_zero(row, col: str) -> bool:
+    if col in ('날짜', '차번', '차종', '근무유형', '사번', '운전기사', '출고일시', '입고일시'):
+        return _is_blank_sales_text(_sales_display_field_value(row, col))
+    if col in _SALES_NUMERIC_ZERO_COLS:
+        try:
+            return float(_sales_display_field_value(row, col) or 0) <= 0
+        except (TypeError, ValueError):
+            return True
+    return False
+
+
+def _dispatch_shift_entry(row, lookup=None) -> dict:
+    """출고 시각·근무 기준 배차 기사 (CSV 사번 힌트 없음)."""
+    car = str(row.get('차번') or '').strip()
+    if not car:
+        return {}
+    if lookup is None:
+        lookup = build_vehicle_lookup(
+            dispatch_month=sales_dispatch_lookup_month(
+                business_date=row.get('날짜', ''), row=row,
+            ),
+        )
+    entries = _lookup_car_entries(lookup, car)
+    if not entries:
+        return {}
+    daily_date = (
+        str(row.get('날짜') or '').strip()[:10]
+        if str(row.get('집계기준') or '') == 'daily_split' else None
+    )
+    shift_start = _dispatch_shift_start_for_match(
+        row=row, business_date=row.get('날짜'), daily_date=daily_date,
+    )
+    shift_band = infer_shift_band_from_start(shift_start)
+    if not shift_band:
+        work = str(row.get('근무유형') or '').strip()
+        if work in _DISPATCH_DAY_WORK_TYPES:
+            shift_band = 'day'
+        elif work in _DISPATCH_NIGHT_WORK_TYPES or work == '교대':
+            shift_band = 'night'
+    return _pick_dispatch_entry(entries, shift_band, emp='') or {}
+
+
+def _csv_field_dispatch_mismatch(row, col: str, dispatch_entry: dict) -> bool:
+    if col == '날짜':
+        return _is_blank_sales_text(row.get('날짜'))
+    if col == '차번':
+        if _is_blank_sales_text(row.get('차번')):
+            return True
+        return not dispatch_entry
+    if col in ('실입금', '건수'):
+        return False
+    if not _is_tmoney_csv_matched(row):
+        return False
+    if col == '사번':
+        val = normalize_emp_id(row.get('사번', ''))
+        if _is_blank_sales_text(val):
+            return False
+        exp = normalize_emp_id(dispatch_entry.get('사번', ''))
+        return bool(exp and val != exp)
+    if col == '운전기사':
+        val = str(row.get('이름') or '').strip()
+        if _is_blank_sales_text(val):
+            return False
+        exp = str(dispatch_entry.get('이름') or '').strip()
+        return bool(exp and val != exp)
+    if col in ('차종', '근무유형'):
+        val = str(row.get(col) or '').strip()
+        if _is_blank_sales_text(val):
+            return False
+        exp = str(dispatch_entry.get(col) or '').strip()
+        return bool(exp and val != exp)
+    return False
+
+
+def _dat_field_csv_mismatch(row, col: str) -> bool:
+    """개별 .dat 셀 — CSV(근무·사번)와 내용이 어긋날 때만."""
+    if not _is_tmoney_csv_matched(row) or _sales_field_is_zero(row, col):
+        return False
+    if col == '출고일시':
+        start = _sales_display_field_value(row, '출고일시')
+        dat_band = infer_shift_band_from_start(start)
+        if not dat_band:
+            return False
+        csv_work = str(row.get('근무유형') or '').strip()
+        if csv_work in _DISPATCH_DAY_WORK_TYPES:
+            return dat_band != 'day'
+        if csv_work in _DISPATCH_NIGHT_WORK_TYPES or csv_work == '교대':
+            return dat_band != 'night'
+    return False
+
+
+def compute_sales_cell_warnings(row, lookup=None) -> dict[str, str]:
+    """표 셀 강조 — 문제 있는 셀만 csv(주황)·dat(보라) 표시."""
+    if not isinstance(row, dict):
+        return {}
+    dispatch_entry = _dispatch_shift_entry(row, lookup=lookup)
+    has_csv = _is_tmoney_csv_matched(row)
+    warns: dict[str, str] = {}
+
+    for col in _SALES_TABLE_CSV_COLS:
+        if col in ('실입금', '건수'):
+            if not has_csv or _sales_field_is_zero(row, col):
+                warns[col] = 'csv'
+            continue
+        if _sales_field_is_zero(row, col):
+            warns[col] = 'csv'
+        elif _csv_field_dispatch_mismatch(row, col, dispatch_entry):
+            warns[col] = 'csv'
+
+    for col in _SALES_TABLE_DAT_COLS:
+        if _sales_field_is_zero(row, col):
+            warns[col] = 'dat'
+        elif _dat_field_csv_mismatch(row, col):
+            warns[col] = 'dat'
+
+    return warns
+
+
+def _memo_sales_cell_warnings(row, lookup=None) -> dict[str, str]:
+    cached = row.get('_cell_warn')
+    if isinstance(cached, dict):
+        return cached
+    warns = compute_sales_cell_warnings(row, lookup=lookup)
+    row['_cell_warn'] = warns
+    return warns
+
+
+@app.template_filter('sales_cell_warn')
+def sales_cell_warn_filter(row, col):
+    """표 열 이름 → 'csv' | 'dat' | ''."""
+    if not isinstance(row, dict):
+        return ''
+    return _memo_sales_cell_warnings(row).get(str(col or '').strip(), '')
+
+
+@app.template_filter('sales_match_class')
+def sales_match_class_filter(row):
+    """[매칭] 열 CSS — 완료(녹색)·실패(출처별 색)."""
+    if not isinstance(row, dict):
+        return 'match-fail'
+    if str(row.get('매칭') or '').strip() == '완료':
+        return 'match-ok'
+    tier = str(row.get('_match_tier') or 'all').strip()
+    return {
+        'dispatch': 'match-fail-dispatch',
+        'csv': 'match-fail-csv',
+        'dat': 'match-fail-dat',
+    }.get(tier, 'match-fail')
+
+
+def _strip_ephemeral_sales_row_fields(data) -> None:
+    if not data:
+        return
+    for month in data.values():
+        for row in month.get('data', []):
+            if isinstance(row, dict):
+                row.pop('_cell_warn', None)
+                row.pop('_dat_match_identity', None)
+                row.pop('_match_tier', None)
+
+
+def _sales_match_identity_tuple(date, car, emp, name):
+    return (
+        str(date or '').strip(),
+        str(car or '').strip(),
+        normalize_emp_id(emp),
+        str(name or '').strip(),
+    )
+
+
+def _sales_match_identity_valid(identity) -> bool:
+    if not identity or not isinstance(identity, (list, tuple)) or len(identity) < 4:
+        return False
+    date, car, emp, name = identity[:4]
+    return bool(date and car and (emp or name))
+
+
+def _snapshot_dat_match_identity(row, lookup=None) -> None:
+    """.dat 쪽 기사 정보 스냅샷 — CSV 표시값 덮어쓰기 전·병합 후 대조용."""
+    if not _row_has_dat_source(row):
+        row.pop('_dat_match_identity', None)
+        return
+    date = str(row.get('날짜') or '').strip()
+    car = str(row.get('차번') or '').strip()
+    if not date or not car:
+        row.pop('_dat_match_identity', None)
+        return
+    if _is_tmoney_csv_matched(row):
+        entry = _dispatch_shift_entry(row, lookup=lookup)
+        emp = normalize_emp_id(entry.get('사번', '')) if entry else ''
+        name = str(entry.get('이름') or '').strip() if entry else ''
+    else:
+        emp = normalize_emp_id(row.get('사번', ''))
+        name = str(row.get('이름') or '').strip()
+    if not emp and not name:
+        row.pop('_dat_match_identity', None)
+        return
+    row['_dat_match_identity'] = list(_sales_match_identity_tuple(date, car, emp, name))
+
+
+def _extract_dispatch_match_identity(row, lookup=None):
+    entry = _dispatch_shift_entry(row, lookup=lookup)
+    if not entry:
+        return None
+    identity = _sales_match_identity_tuple(
+        row.get('날짜'), row.get('차번'),
+        entry.get('사번'), entry.get('이름'),
+    )
+    return identity if _sales_match_identity_valid(identity) else None
+
+
+def _extract_csv_match_identity(row):
+    if not _is_tmoney_csv_matched(row):
+        return None
+    identity = _sales_match_identity_tuple(
+        row.get('날짜'), row.get('차번'),
+        row.get('사번'), row.get('이름'),
+    )
+    return identity if _sales_match_identity_valid(identity) else None
+
+
+def _extract_dat_match_identity(row, lookup=None):
+    if not _row_has_dat_source(row):
+        return None
+    stored = row.get('_dat_match_identity')
+    if _sales_match_identity_valid(stored):
+        return tuple(stored[:4])
+    entry = _dispatch_shift_entry(row, lookup=lookup)
+    if entry:
+        identity = _sales_match_identity_tuple(
+            row.get('날짜'), row.get('차번'),
+            entry.get('사번'), entry.get('이름'),
+        )
+        if _sales_match_identity_valid(identity):
+            return identity
+    identity = _sales_match_identity_tuple(
+        row.get('날짜'), row.get('차번'),
+        row.get('사번'), row.get('이름'),
+    )
+    return identity if _sales_match_identity_valid(identity) else None
+
+
+def _resolve_sales_match_tier(source_identities: dict[str, tuple]) -> str:
+    """배차·CSV·.dat 대조 결과 — ok | all | dispatch | csv | dat."""
+    if len(source_identities) <= 1:
+        return 'ok' if source_identities else 'all'
+
+    identities = list(source_identities.values())
+    if len(set(identities)) == 1:
+        return 'ok'
+
+    counts = {}
+    for ident in identities:
+        counts[ident] = counts.get(ident, 0) + 1
+    ranked = sorted(counts.items(), key=lambda item: (-item[1], str(item[0])))
+    top_ident, top_count = ranked[0]
+    if top_count < 2:
+        return 'all'
+    if len(ranked) > 1 and ranked[1][1] == top_count:
+        return 'all'
+
+    dissenters = [
+        source for source, ident in source_identities.items()
+        if ident != top_ident
+    ]
+    if len(dissenters) != 1:
+        return 'all'
+    return dissenters[0]
+
+
+def compute_sales_match_status(row, lookup=None) -> str:
+    """배차·CSV·.dat의 날짜·차번·사번·이름 대조 → 완료/실패 및 색상 단계."""
+    sources = {}
+    dispatch_id = _extract_dispatch_match_identity(row, lookup=lookup)
+    if dispatch_id:
+        sources['dispatch'] = dispatch_id
+    csv_id = _extract_csv_match_identity(row)
+    if csv_id:
+        sources['csv'] = csv_id
+    dat_id = _extract_dat_match_identity(row, lookup=lookup)
+    if dat_id:
+        sources['dat'] = dat_id
+
+    tier = _resolve_sales_match_tier(sources)
+    if tier == 'ok':
+        row['매칭'] = '완료'
+    else:
+        row['매칭'] = '실패'
+    row['_match_tier'] = tier
+    return row['매칭']
 
 
 def resolve_daily_sales_metrics(row, parsed=None, fuel_price=None, reparse_dat=False):
@@ -2180,44 +2791,54 @@ def resolve_sales_vehicle_match(row, parsed=None, lookup=None):
         plate = str(row.get('차량번호') or '')
 
     business_date = row.get('날짜', '')
+    dispatch_month = sales_dispatch_lookup_month(
+        business_date=business_date, parsed=parsed, row=row,
+        daily_date=str(business_date or '').strip()[:10]
+        if str(row.get('집계기준') or '') == 'daily_split' else None,
+    )
     if lookup is None:
-        lookup = build_vehicle_lookup(dispatch_month=sales_dispatch_month_key(business_date))
+        lookup = build_vehicle_lookup(dispatch_month=dispatch_month)
+    daily_date = None
+    if str(row.get('집계기준') or '') == 'daily_split':
+        daily_date = str(business_date or '').strip()[:10]
     return match_vehicle_record(
         car_suffix, plate, lookup=lookup, business_date=business_date,
-        parsed=parsed, row=row,
+        parsed=parsed, row=row, daily_date=daily_date,
     )
 
 
 def enrich_sales_row(row, parsed=None, fuel_price=None, reparse_dat=False, lookup=None, daily_date=None):
     """저장 행 보정.
 
-    - 업로드: parsed 전달 → .dat 기준 수치 계산 후 JSON에 저장.
-    - 조회/저장: reparse_dat=False → JSON 수치 유지, 배차 매칭만 갱신.
+    - .dat 업로드: 운행 지표만 계산 (실입금·건수는 T머니 CSV에서).
+    - 조회/저장: JSON 수치 유지, 배차·매칭 상태만 갱신.
     """
-    row.update(resolve_sales_metrics(
+    row.update(resolve_dat_metrics(
         row, parsed=parsed, fuel_price=fuel_price, reparse_dat=reparse_dat,
         daily_date=daily_date,
     ))
     row['영업시간'] = str(resolve_sales_work_minutes(
         row, parsed=parsed, reparse_dat=reparse_dat, daily_date=daily_date,
     ))
+    if parsed is not None:
+        row.setdefault('실입금', '0')
+        row.setdefault('건수', '0')
 
     match_info = resolve_sales_vehicle_match(row, parsed=parsed, lookup=lookup)
     tmoney_source = str(row.get('T머니출처') or '').strip()
     csv_emp = normalize_emp_id(row.get('사번', ''))
     csv_name = str(row.get('이름') or '').strip()
     if match_info:
-        if tmoney_source and csv_emp:
+        if _is_tmoney_csv_matched(row) and csv_emp:
             row['사번'] = csv_emp
             if csv_name:
                 row['이름'] = csv_name
             elif match_info.get('이름'):
                 row['이름'] = match_info.get('이름', '')
-            if not str(row.get('차종') or '').strip():
+            if _is_blank_sales_text(row.get('차종')):
                 row['차종'] = match_info.get('차종', '')
             if not str(row.get('근무유형') or '').strip():
                 row['근무유형'] = match_info.get('근무유형', '')
-            row['매칭'] = match_info.get('매칭', '')
             if not str(row.get('차량번호') or '').strip() and match_info.get('차량번호'):
                 row['차량번호'] = match_info['차량번호']
         else:
@@ -2225,7 +2846,6 @@ def enrich_sales_row(row, parsed=None, fuel_price=None, reparse_dat=False, looku
             row['이름'] = match_info.get('이름', '')
             row['차종'] = match_info.get('차종', '')
             row['근무유형'] = match_info.get('근무유형', '')
-            row['매칭'] = match_info.get('매칭', '')
             if not parsed and match_info.get('차량번호'):
                 row['차량번호'] = match_info['차량번호']
             elif parsed:
@@ -2233,6 +2853,11 @@ def enrich_sales_row(row, parsed=None, fuel_price=None, reparse_dat=False, looku
                 row['차량번호'] = header_plate or match_info.get('차량번호') or str(row.get('차번') or '')
     else:
         row['사번'] = normalize_emp_id(row.get('사번', ''))
+
+    _snapshot_dat_match_identity(row, lookup=lookup)
+
+    if not _is_tmoney_csv_matched(row) and tmoney_source in ('no_driver_match', 'no_tmoney'):
+        row.pop('T머니출처', None)
 
     row.pop('영업건수', None)
     row.pop('연료L', None)
@@ -2249,22 +2874,105 @@ def enrich_sales_row(row, parsed=None, fuel_price=None, reparse_dat=False, looku
         closing_date = parsed.get('closing_date') or ''
         if file_date and closing_date and file_date != closing_date:
             row['파일명일'] = file_date
+    if _row_has_dat_source(row) and not _row_has_tmoney_source(row):
+        row['실입금'] = '0'
+        row['건수'] = '0'
+    if str(row.get('집계기준') or '') == 'tmoney':
+        row.pop('집계기준', None)
+    row.pop('_cell_warn', None)
+    compute_sales_match_status(row, lookup=lookup)
+    _memo_sales_cell_warnings(row, lookup=lookup)
     return row
 
 
+def _shift_band_for_sales_row(row) -> str:
+    """행의 주·야 구분 — 출고 시각 우선, 없으면 근무유형."""
+    band = infer_shift_band_from_start(str(row.get('영업시작') or '').strip())
+    if band:
+        return band
+    work = str(row.get('근무유형') or '').strip()
+    if work in _DISPATCH_DAY_WORK_TYPES:
+        return 'day'
+    if work in _DISPATCH_NIGHT_WORK_TYPES or work == '교대':
+        return 'night'
+    return ''
+
+
+def _align_dat_rows_to_month_csv(month_rows: list[dict]) -> None:
+    """당월 T머니 CSV 사번 기준으로 .dat-only 행 정렬 (전 기사 공통)."""
+    csv_index: dict[tuple, dict] = {}
+    for row in month_rows:
+        if not _is_tmoney_csv_matched(row):
+            continue
+        date = str(row.get('날짜') or '').strip()
+        car = str(row.get('차번') or '').strip()
+        if not date or not car:
+            continue
+        band = _shift_band_for_sales_row(row)
+        if band:
+            csv_index[(date, car, band)] = row
+        work = str(row.get('근무유형') or '').strip()
+        if work:
+            csv_index[(date, car, work)] = row
+
+    for row in month_rows:
+        if _is_tmoney_csv_matched(row) or not _row_has_dat_source(row):
+            continue
+        date = str(row.get('날짜') or '').strip()
+        car = str(row.get('차번') or '').strip()
+        band = _shift_band_for_sales_row(row)
+        work = str(row.get('근무유형') or '').strip()
+        csv_row = None
+        for key in ((date, car, band), (date, car, work)):
+            if key[2] and key in csv_index:
+                csv_row = csv_index[key]
+                break
+        if not csv_row:
+            continue
+        csv_emp = normalize_emp_id(csv_row.get('사번', ''))
+        if not csv_emp:
+            continue
+        row['사번'] = csv_emp
+        if str(csv_row.get('이름') or '').strip():
+            row['이름'] = csv_row['이름']
+        if str(csv_row.get('근무유형') or '').strip():
+            row['근무유형'] = csv_row['근무유형']
+        if _is_blank_sales_text(row.get('차종')) and csv_row.get('차종'):
+            row['차종'] = csv_row['차종']
+
+
 def normalize_sales_data(data, reparse_dat=False):
-    """sales_data 전체 행 표시용 필드 보정 (기본: JSON 판, 배차 매칭만)."""
+    """sales_data 전체 행 표시용 필드 보정 (기본: JSON 판, 배차·매칭·중복 병합)."""
     if not data:
         return data
+    from sales_reconcile import dedupe_sales_rows
+
+    _vehicle_lookup_cache.clear()
     lookup_cache = {}
     for month in data.values():
         for row in month.get('data', []):
-            month_key = sales_dispatch_month_key(row.get('날짜', ''))
-            if month_key not in lookup_cache:
-                lookup_cache[month_key] = build_vehicle_lookup(dispatch_month=month_key)
-            enrich_sales_row(
-                row, reparse_dat=reparse_dat, lookup=lookup_cache[month_key],
+            dispatch_month = sales_dispatch_lookup_month(
+                business_date=row.get('날짜', ''), row=row,
             )
+            if dispatch_month not in lookup_cache:
+                lookup_cache[dispatch_month] = build_vehicle_lookup(
+                    dispatch_month=dispatch_month,
+                )
+            enrich_sales_row(
+                row,
+                reparse_dat=reparse_dat,
+                lookup=lookup_cache[dispatch_month],
+            )
+        _align_dat_rows_to_month_csv(month.get('data', []))
+        month['data'] = dedupe_sales_rows(month.get('data', []))
+        for row in month['data']:
+            dispatch_month = sales_dispatch_lookup_month(
+                business_date=row.get('날짜', ''), row=row,
+            )
+            compute_sales_match_status(
+                row, lookup=lookup_cache.get(dispatch_month),
+            )
+        month['summary'] = compute_sales_summary(month['data'])
     return data
 
 
@@ -2332,12 +3040,18 @@ def dat_parsed_to_sales_rows(parsed, fuel_price=DEFAULT_FUEL_PRICE, lookup=None,
         if is_handshake_closing_day(parsed, day, context):
             continue
 
-        if lookup is None:
-            lookup = build_vehicle_lookup(dispatch_month=sales_dispatch_month_key(day))
+        dispatch_month = sales_dispatch_lookup_month(
+            parsed=parsed, business_date=day, daily_date=day,
+        )
+        if lookup is None or sales_dispatch_month_key(day) != dispatch_month:
+            lookup = build_vehicle_lookup(dispatch_month=dispatch_month)
 
+        clipped_start = clip_datetime_to_business_day(closing_start, day, 'start')
+        clipped_end = clip_datetime_to_business_day(closing_end, day, 'end')
         match_info = match_vehicle_record(
             car_suffix, header.get('plate', ''), lookup=lookup,
-            business_date=day, parsed=parsed,
+            business_date=day, parsed=parsed, daily_date=day,
+            row={'영업시작': clipped_start},
         )
         metrics = compute_daily_sales_metrics(parsed, day)
         if not any((
@@ -2359,8 +3073,8 @@ def dat_parsed_to_sales_rows(parsed, fuel_price=DEFAULT_FUEL_PRICE, lookup=None,
             '근무유형': match_info.get('근무유형', ''),
             '매칭': match_info['매칭'],
             '원본파일': parsed.get('source_file', ''),
-            '영업시작': clip_datetime_to_business_day(closing_start, day, 'start'),
-            '영업종료': clip_datetime_to_business_day(closing_end, day, 'end'),
+            '영업시작': clipped_start,
+            '영업종료': clipped_end,
             '연료단가': str(float(fuel_price)),
             '집계기준': 'daily_split',
         }, parsed=parsed, fuel_price=fuel_price, lookup=lookup, daily_date=day)
@@ -2405,14 +3119,19 @@ def build_dat_upload_sales_rows(parsed_list, fuel_price=DEFAULT_FUEL_PRICE, look
         for day in iter_closing_calendar_dates(parsed):
             if is_handshake_closing_day(parsed, day, parsed_list):
                 continue
-            month_key = sales_dispatch_month_key(day)
-            if month_key not in lookup_cache:
-                lookup_cache[month_key] = build_vehicle_lookup(dispatch_month=month_key)
-            lookup = lookup_cache[month_key]
+            dispatch_month = sales_dispatch_lookup_month(
+                parsed=parsed, business_date=day, daily_date=day,
+            )
+            if dispatch_month not in lookup_cache:
+                lookup_cache[dispatch_month] = build_vehicle_lookup(dispatch_month=dispatch_month)
+            lookup = lookup_cache[dispatch_month]
 
+            clipped_start = clip_datetime_to_business_day(closing_start, day, 'start')
+            clipped_end = clip_datetime_to_business_day(closing_end, day, 'end')
             match_info = match_vehicle_record(
                 car_suffix, header.get('plate', ''), lookup=lookup,
-                business_date=day, parsed=parsed,
+                business_date=day, parsed=parsed, daily_date=day,
+                row={'영업시작': clipped_start},
             )
             metrics = compute_daily_sales_metrics(parsed, day)
             if not any((
@@ -2434,8 +3153,8 @@ def build_dat_upload_sales_rows(parsed_list, fuel_price=DEFAULT_FUEL_PRICE, look
                 '근무유형': match_info.get('근무유형', ''),
                 '매칭': match_info['매칭'],
                 '원본파일': parsed.get('source_file', ''),
-                '영업시작': clip_datetime_to_business_day(closing_start, day, 'start'),
-                '영업종료': clip_datetime_to_business_day(closing_end, day, 'end'),
+                '영업시작': clipped_start,
+                '영업종료': clipped_end,
                 '연료단가': str(float(fuel_price)),
                 '집계기준': 'daily_split',
             }, parsed=parsed, fuel_price=fuel_price, lookup=lookup, daily_date=day))
@@ -2470,6 +3189,9 @@ def _daily_split_identity(row):
     car = str(row.get('차번') or '').strip()
     if not date or not car:
         return None
+    emp = normalize_emp_id(row.get('사번', ''))
+    if emp:
+        return (date, car, emp)
     return (date, car)
 
 
@@ -2491,6 +3213,7 @@ def save_sales_data(data, normalize=True):
     data = sort_sales_data_by_month(data)
     if normalize:
         data = normalize_sales_data(data)
+    _strip_ephemeral_sales_row_fields(data)
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
@@ -2745,14 +3468,26 @@ def load_sales_data():
     data = _read_sales_data_raw()
     if data is None:
         return None
-    return normalize_sales_data(data)
+    before_rows = sum(len(m.get('data', [])) for m in data.values())
+    needs_repair = any(
+        str(row.get('T머니출처') or '') in ('no_driver_match', 'no_tmoney')
+        for month in data.values()
+        for row in month.get('data', [])
+    )
+    normalized = normalize_sales_data(data)
+    after_rows = sum(len(m.get('data', [])) for m in normalized.values())
+    if needs_repair or after_rows < before_rows:
+        save_sales_data(normalized, normalize=False)
+    return normalized
 
 
 def merge_sales_records(existing, new_rows):
     """월별 sales_data에 신규 행 병합.
 
-    daily_split(장기 마감 일별)은 같은 날짜·차번이면 **교체**(합산하지 않음).
+    같은 (날짜·차번·사번)이면 T머니·.dat 항목을 한 행으로 합칩니다.
     """
+    from sales_reconcile import merge_complementary_sales_rows
+
     if existing is None:
         existing = OrderedDict()
     if not isinstance(existing, OrderedDict):
@@ -2769,17 +3504,24 @@ def merge_sales_records(existing, new_rows):
         month_rows = existing[month_key]['data']
         daily_id = _daily_split_identity(row)
         if daily_id:
-            month_rows = [
-                r for r in month_rows if _daily_split_identity(r) != daily_id
-            ]
-            month_rows.append(row)
+            replaced = False
+            for idx, existing_row in enumerate(month_rows):
+                if _daily_split_identity(existing_row) == daily_id:
+                    month_rows[idx] = merge_complementary_sales_rows(existing_row, row)
+                    replaced = True
+                    break
+            if not replaced:
+                month_rows.append(row)
         else:
             key = sales_record_key(row)
-            month_rows = [
-                r for r in month_rows
-                if sales_record_key(r) != key
-            ]
-            month_rows.append(row)
+            replaced = False
+            for idx, existing_row in enumerate(month_rows):
+                if sales_record_key(existing_row) == key:
+                    month_rows[idx] = merge_complementary_sales_rows(existing_row, row)
+                    replaced = True
+                    break
+            if not replaced:
+                month_rows.append(row)
 
         existing[month_key]['data'] = sorted(
             month_rows,

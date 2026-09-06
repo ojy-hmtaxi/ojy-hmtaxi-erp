@@ -81,6 +81,35 @@
         .table {
             width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px;
         }
+        .sales-table-scroll {
+            height: 610px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            margin-top: 10px;
+            border: 1px solid #ddd;
+        }
+        .sales-table-scroll-head {
+            flex: 0 0 auto;
+            overflow: hidden;
+        }
+        .sales-table-scroll-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: auto;
+        }
+        .sales-table-scroll-head > .table,
+        .sales-table-scroll-body > .table {
+            margin-top: 0;
+            table-layout: fixed;
+            border-collapse: collapse;
+        }
+        .sales-table-scroll-head > .table {
+            will-change: transform;
+        }
+        .sales-table-scroll-head > .table thead tr:first-child th {
+            background-color: #f2f2f2;
+        }
         .table th, .table td {
             padding: 12px 16px; border: 1px solid #ddd;
             white-space: nowrap; vertical-align: middle;
@@ -104,6 +133,9 @@
         }
         .table td.match-ok { color: #2e7d32 !important; font-weight: 600; }
         .table td.match-fail { color: #c62828 !important; font-weight: 600; }
+        .table td.match-fail-dispatch { color: #f9a825 !important; font-weight: 600; }
+        .table td.match-fail-csv { color: #e65100 !important; font-weight: 600; }
+        .table td.match-fail-dat { color: #7b1fa2 !important; font-weight: 600; }
         .sales-table-toolbar {
             display: flex;
             justify-content: space-between;
@@ -127,6 +159,16 @@
             flex: 1;
             min-width: 0;
             font-size: 12px;
+        }
+        .sales-export-link {
+            flex-shrink: 0;
+            font-size: 14px;
+            color: #28a745;
+            text-decoration: underline;
+            white-space: nowrap;
+        }
+        .sales-export-link:hover {
+            color: #218838;
         }
         .edit-result-head {
             padding: 4px 8px;
@@ -211,6 +253,25 @@
         .table tbody td.sales-cell-modified-previous {
             color: #599eec !important;
         }
+        .table tbody td.sales-cell-csv-warn:not(.sales-cell-modified-latest):not(.sales-cell-modified-previous) {
+            color: #e65100 !important;
+        }
+        .table tbody td.sales-cell-dat-warn:not(.sales-cell-modified-latest):not(.sales-cell-modified-previous) {
+            color: #7b1fa2 !important;
+        }
+        .sales-cell-legend {
+            margin: 8px 0 0;
+            font-size: 12px;
+            color: #666;
+            line-height: 1.6;
+        }
+        .sales-cell-legend .legend-csv { color: #e65100; font-weight: 600; }
+        .sales-cell-legend .legend-dat { color: #7b1fa2; font-weight: 600; }
+        .sales-cell-legend .legend-match-ok { color: #2e7d32; font-weight: 600; }
+        .sales-cell-legend .legend-match-all { color: #c62828; font-weight: 600; }
+        .sales-cell-legend .legend-match-dispatch { color: #f9a825; font-weight: 600; }
+        .sales-cell-legend .legend-match-csv { color: #e65100; font-weight: 600; }
+        .sales-cell-legend .legend-match-dat { color: #7b1fa2; font-weight: 600; }
         .table tbody td.sales-cell-modified-latest[data-edit-tooltip],
         .table tbody td.sales-cell-modified-previous[data-edit-tooltip] {
             position: relative;
@@ -696,10 +757,14 @@
 {% endblock %}
 
 {% block content %}
+{% macro sales_cell_classes(row, col, tier='') -%}
+{%- set w = row|sales_cell_warn(col) -%}
+{%- if tier == 'latest' %}sales-cell-modified-latest{% elif tier == 'previous' %}sales-cell-modified-previous{% endif %}{% if w == 'csv' %} sales-cell-csv-warn{% elif w == 'dat' %} sales-cell-dat-warn{% endif %}
+{%- endmacro %}
 {% macro sales_edit_td(row, field, month_data, content, attrs='') -%}
 {%- set tier = row|sales_modified_tier(field, month_data) -%}
 {%- set tooltip = row|sales_field_edit_tooltip(field, data) if tier else '' -%}
-<td{% if tier == 'latest' %} class="sales-cell-modified-latest"{% elif tier == 'previous' %} class="sales-cell-modified-previous"{% endif %}{% if tooltip %} title="{{ tooltip }}" data-edit-tooltip="{{ tooltip }}"{% endif %}{% if attrs %} {{ attrs|safe }}{% endif %}>{{ content }}</td>
+<td class="{{ sales_cell_classes(row, field, tier) }}"{% if tooltip %} title="{{ tooltip }}" data-edit-tooltip="{{ tooltip }}"{% endif %}{% if attrs %} {{ attrs|safe }}{% endif %}>{{ content }}</td>
 {%- endmacro %}
     {{ right_sidebar(messages, current_user) }}
     <div class="custom-container">
@@ -717,7 +782,7 @@
             <form method="POST" enctype="multipart/form-data" id="uploadForm">
                 <div class="upload-section">
                     <div class="upload-section-title">① T머니 수입금 상세 CSV</div>
-                    <div class="upload-section-desc">운전자별수입금상세내역 CSV — 실입금·건수의 기준 데이터입니다. (월 1개 파일)</div>
+                    <div class="upload-section-desc">운전자별수입금상세내역 CSV — 날짜·차번·근무·사번·운전기사·실입금·건수·차종(배차 매칭)의 기준 데이터입니다. (월 1개 파일)</div>
                     <div class="form-group">
                         <label for="tmoney_csv">T머니 CSV 파일:</label>
                         <input type="file" id="tmoney_csv" name="tmoney_csv" accept=".csv,text/csv">
@@ -725,7 +790,7 @@
                 </div>
                 <div class="upload-section">
                     <div class="upload-section-title">② 미터기 .dat 파일</div>
-                    <div class="upload-section-desc">미터기 마감 .dat — 영업시간·빈차시간·총시간·연료비·충전량·운행거리·빈차거리·총거리 산출에 사용합니다. (복수 선택)</div>
+                    <div class="upload-section-desc">미터기 마감 .dat — 출고·입고일시, 영업시간·빈차시간·총시간, 연료비·운행거리·빈차거리·총거리 산출에 사용합니다. (복수 선택)</div>
                     <div class="form-group">
                         <label for="dat_files">.dat 파일 선택:</label>
                         <input type="file" id="dat_files" name="dat_files" accept=".dat" multiple>
@@ -737,7 +802,8 @@
                         </div>
                     </div>
                 </div>
-                <p class="upload-hint">권장: CSV와 .dat를 함께 업로드하면 표·차트에 정확한 실입금(카드)과 운행 지표가 한 번에 반영됩니다. CSV만 올리면 기존 행의 실입금·건수만 갱신됩니다.</p>
+                <p class="upload-hint">권장: CSV와 .dat를 함께 업로드하면 같은 날·같은 기사 기준으로 한 행에 합쳐집니다. T머니=실입금·건수, .dat=운행 지표. [매칭]은 배차·CSV·.dat의 날짜·차번·사번·이름이 일치하면 <strong>완료</strong>(녹색)입니다.</p>
+                <p class="sales-cell-legend">[매칭] 색상: <span class="legend-match-ok">녹색</span> = 완료 · <span class="legend-match-all">빨강</span> = 전체 불일치 · <span class="legend-match-dispatch">노랑</span> = 배차 불일치 · <span class="legend-match-csv">주황</span> = CSV 불일치 · <span class="legend-match-dat">보라</span> = .dat 불일치 &nbsp;|&nbsp; 셀 색상: <span class="legend-csv">주황</span> = CSV 값 0 또는 배차관리 불일치 · <span class="legend-dat">보라</span> = .dat 값 0 또는 CSV 불일치</p>
                 <div class="form-group" style="margin-top: 12px;">
                     <button type="submit" id="uploadButton">수입금 데이터 업로드</button>
                 </div>
@@ -782,7 +848,7 @@
                 </div>
                 <div id="result-{{ sheet_name }}" class="tab-content active">
                     <div style="margin-bottom:10px;">
-                        <input type="text" id="salesUnifiedFilter-sheet-{{ loop.index }}" class="salesFilterInput" placeholder="쉼표(,) 다중 조건 · 날짜 / 차번 / 차종 / 근무(주간·야간·일차·교대·리스) / 사번 / 운전기사 / 매칭(완료·미매칭) · 차량 모델명 정확히 구분 (K5 ≠ K5H)" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
+                        <input type="text" id="salesUnifiedFilter-sheet-{{ loop.index }}" class="salesFilterInput" placeholder="쉼표(,) 다중 조건 · 날짜 / 차번 / 차종 / 근무(주간·야간·일차·교대·리스) / 사번 / 운전기사 / 매칭(완료·실패) · 차량 모델명 정확히 구분 (K5 ≠ K5H)" style="width:100%; padding:8px; border:1px solid #ddd; box-sizing:border-box;">
                     </div>
                     <div class="sales-table-toolbar" data-month="{{ sheet_name }}" data-edit-history='{{ data|sales_edit_history_json }}'>
                         <div class="sales-toolbar-left">
@@ -806,11 +872,15 @@
                         </div>
                         <span class="sales-edit-status" id="salesEditStatus_{{ sheet_name }}"></span>
                         <div class="sales-edit-actions">
+                            <a class="sales-export-link" href="{{ url_for('sales_export', format='xlsx') }}">[엑셀파일(.xlsx)받기: 전체 데이터]</a>
+                            <a class="sales-export-link" href="{{ url_for('sales_export', format='xlsx', month=sheet_name) }}">[엑셀파일(.xlsx)받기: {{ sheet_name }}]</a>
                             <button type="button" class="sales-edit-btn" data-action="edit">수정</button>
                             <button type="button" class="sales-edit-btn" data-action="cancel" disabled>취소</button>
                         </div>
                     </div>
-                    <table class="table" id="salesTable_{{ sheet_name }}" data-month="{{ sheet_name }}">
+                    <div class="sales-table-scroll" data-month="{{ sheet_name }}">
+                    <div class="sales-table-scroll-head">
+                    <table class="table sales-table-head" id="salesTableHead_{{ sheet_name }}" style="margin-bottom: 0 !important;">
                         <thead>
                             <tr>
                                 {% for col in ['날짜', '차번', '차종', '근무유형', '사번', '운전기사', '실입금', '건수', '출고일시', '입고일시', '영업시간', '빈차시간', '총시간', '연료비', '충전량', '운행거리', '빈차거리', '총거리', '매칭'] %}
@@ -847,19 +917,23 @@
                                 <td></td>
                             </tr>
                         </thead>
+                    </table>
+                    </div>
+                    <div class="sales-table-scroll-body">
+                    <table class="table" id="salesTable_{{ sheet_name }}" data-month="{{ sheet_name }}">
                         <tbody>
                             {% for row in data.data %}
                             <tr data-day="{{ row.날짜[8:10] if row.날짜 and row.날짜|length >= 10 else '' }}" data-date="{{ row.날짜 }}" data-car="{{ row.차번 }}" data-start="{{ row.영업시작|default('') }}" data-work="{{ row.근무유형|default('') }}" data-emp="{{ row.사번|sales_emp_id }}">
-                                <td>{{ row.날짜 }}</td>
-                                <td>{{ row.차번 }}</td>
-                                <td>{{ row.차종 }}</td>
-                                <td>{{ row.근무유형|default('') }}</td>
-                                <td>{{ row.사번|sales_emp_id }}</td>
-                                <td>{{ row.이름 }}</td>
+                                <td class="{{ sales_cell_classes(row, '날짜') }}">{{ row.날짜 }}</td>
+                                <td class="{{ sales_cell_classes(row, '차번') }}">{{ row.차번 }}</td>
+                                <td class="{{ sales_cell_classes(row, '차종') }}">{{ row.차종 }}</td>
+                                <td class="{{ sales_cell_classes(row, '근무유형') }}">{{ row.근무유형|default('') }}</td>
+                                <td class="{{ sales_cell_classes(row, '사번') }}">{{ row.사번|sales_emp_id }}</td>
+                                <td class="{{ sales_cell_classes(row, '운전기사') }}">{{ row.이름 }}</td>
                                 {{ sales_edit_td(row, '실입금', data, "{:,}".format(row.실입금|int)) }}
                                 {{ sales_edit_td(row, '건수', data, "{:,}".format((row.건수|default(0))|int)) }}
-                                <td>{{ row.영업시작|default(row.마감시작|default('')) }}</td>
-                                <td>{{ row.영업종료|default(row.마감종료|default('')) }}</td>
+                                <td class="{{ sales_cell_classes(row, '출고일시') }}">{{ row.영업시작|default(row.마감시작|default('')) }}</td>
+                                <td class="{{ sales_cell_classes(row, '입고일시') }}">{{ row.영업종료|default(row.마감종료|default('')) }}</td>
                                 {{ sales_edit_td(row, '영업시간', data, row|sales_work_minutes, 'data-sort-minutes="' ~ (row.영업시간|default(0)|int) ~ '"') }}
                                 {{ sales_edit_td(row, '빈차시간', data, row.빈차시간|default(0)|sales_minutes, 'data-sort-minutes="' ~ (row.빈차시간|default(0)|int) ~ '"') }}
                                 {{ sales_edit_td(row, '총시간', data, row.총시간|default(0)|sales_minutes, 'data-sort-minutes="' ~ (row.총시간|default(0)|int) ~ '"') }}
@@ -868,11 +942,13 @@
                                 {{ sales_edit_td(row, '운행거리', data, row.운행거리) }}
                                 {{ sales_edit_td(row, '빈차거리', data, row.빈차거리|default('0')) }}
                                 {{ sales_edit_td(row, '총거리', data, row.총거리|default('0')) }}
-                                <td class="{% if row.매칭 == '완료' %}match-ok{% else %}match-fail{% endif %}">{{ row.매칭 }}</td>
+                                <td class="{{ row|sales_match_class }}">{{ '실패' if row.매칭 == '미매칭' else row.매칭 }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
+                    </div>
+                    </div>
                     <div class="sales-table-pagination" data-month="{{ sheet_name }}">
                         <button type="button" class="sales-page-nav" data-action="prev" disabled>이전</button>
                         <span class="sales-page-numbers"></span>
@@ -1266,6 +1342,130 @@
             if (tabName.includes('summary')) updateSummaryTab(currentSheet);
         }
 
+        function ensureSalesTableColgroup(table, colCount) {
+            var colgroup = table.querySelector('colgroup');
+            if (!colgroup) {
+                colgroup = document.createElement('colgroup');
+                table.insertBefore(colgroup, table.firstChild);
+            }
+            while (colgroup.children.length < colCount) {
+                colgroup.appendChild(document.createElement('col'));
+            }
+            while (colgroup.children.length > colCount) {
+                colgroup.removeChild(colgroup.lastChild);
+            }
+            Array.from(colgroup.children).forEach(function(col) {
+                col.style.width = '';
+            });
+            return colgroup;
+        }
+
+        function updateSalesTableScrollGutter(scrollEl) {
+            var bodyWrap = scrollEl.querySelector('.sales-table-scroll-body');
+            var headWrap = scrollEl.querySelector('.sales-table-scroll-head');
+            if (!bodyWrap || !headWrap) return;
+            var gutter = Math.max(0, bodyWrap.offsetWidth - bodyWrap.clientWidth);
+            headWrap.style.paddingRight = gutter + 'px';
+        }
+
+        function syncSalesTableHeadScroll(scrollEl, scrollLeft) {
+            var headTable = scrollEl.querySelector('.sales-table-head');
+            if (!headTable) return;
+            var offset = scrollLeft || 0;
+            headTable.style.transform = offset ? ('translate3d(' + (-offset) + 'px,0,0)') : '';
+        }
+
+        function syncSalesTableScrollLayout(sheet) {
+            var scrollEls = sheet
+                ? [sheet.querySelector('.sales-table-scroll')].filter(Boolean)
+                : Array.from(document.querySelectorAll('.sales-table-scroll'));
+            scrollEls.forEach(function(scrollEl) {
+                var headTable = scrollEl.querySelector('.sales-table-head');
+                var bodyTable = scrollEl.querySelector('.sales-table-scroll-body .table');
+                var bodyWrap = scrollEl.querySelector('.sales-table-scroll-body');
+                if (!headTable || !bodyTable || !bodyWrap) return;
+
+                var savedScrollLeft = bodyWrap.scrollLeft;
+
+                headTable.style.tableLayout = 'auto';
+                bodyTable.style.tableLayout = 'auto';
+                headTable.style.width = 'auto';
+                bodyTable.style.width = 'auto';
+                headTable.style.transform = '';
+
+                headTable.querySelectorAll('th, td').forEach(function(cell) {
+                    cell.style.width = '';
+                    cell.style.minWidth = '';
+                });
+                bodyTable.querySelectorAll('td').forEach(function(cell) {
+                    cell.style.width = '';
+                    cell.style.minWidth = '';
+                });
+
+                var headRow = headTable.querySelector('thead tr:first-child');
+                var totalRow = headTable.querySelector('.sales-table-total-row');
+                if (!headRow) return;
+
+                var colCount = headRow.cells.length;
+                var widths = new Array(colCount).fill(0);
+
+                function measureCell(cell, idx) {
+                    if (!cell || idx >= colCount) return;
+                    widths[idx] = Math.max(widths[idx], cell.offsetWidth);
+                }
+
+                Array.from(headRow.cells).forEach(function(cell, idx) { measureCell(cell, idx); });
+                if (totalRow) {
+                    Array.from(totalRow.cells).forEach(function(cell, idx) { measureCell(cell, idx); });
+                }
+                bodyTable.querySelectorAll('tbody tr').forEach(function(row) {
+                    Array.from(row.cells).forEach(function(cell, idx) { measureCell(cell, idx); });
+                });
+
+                var headCols = ensureSalesTableColgroup(headTable, colCount);
+                var bodyCols = ensureSalesTableColgroup(bodyTable, colCount);
+                var totalWidth = 0;
+                for (var i = 0; i < colCount; i++) {
+                    var px = Math.ceil(widths[i] || 0);
+                    if (!px) continue;
+                    var widthValue = px + 'px';
+                    headCols.children[i].style.width = widthValue;
+                    bodyCols.children[i].style.width = widthValue;
+                    totalWidth += px;
+                }
+
+                if (totalWidth > 0) {
+                    var widthPx = totalWidth + 'px';
+                    headTable.style.tableLayout = 'fixed';
+                    bodyTable.style.tableLayout = 'fixed';
+                    headTable.style.width = widthPx;
+                    bodyTable.style.width = widthPx;
+                }
+
+                updateSalesTableScrollGutter(scrollEl);
+                bodyWrap.scrollLeft = savedScrollLeft;
+                syncSalesTableHeadScroll(scrollEl, savedScrollLeft);
+            });
+        }
+
+        function initSalesTableScroll() {
+            document.querySelectorAll('.sales-table-scroll').forEach(function(scrollEl) {
+                if (scrollEl.dataset.scrollInit === '1') return;
+                scrollEl.dataset.scrollInit = '1';
+                var bodyWrap = scrollEl.querySelector('.sales-table-scroll-body');
+                if (!bodyWrap) return;
+                bodyWrap.addEventListener('scroll', function() {
+                    syncSalesTableHeadScroll(scrollEl, bodyWrap.scrollLeft);
+                });
+            });
+            syncSalesTableScrollLayout();
+            if (window.__salesTableScrollResizeBound) return;
+            window.__salesTableScrollResizeBound = true;
+            window.addEventListener('resize', function() {
+                syncSalesTableScrollLayout();
+            });
+        }
+
         function openSheetTab(evt, sheetName) {
             var editingMonth = getActiveSalesEditMonth();
             if (editingMonth && editingMonth !== sheetName) {
@@ -1282,6 +1482,7 @@
             cachedFilterCtx.sheet = null;
             invalidateTableRowCache();
             applySalesFilters(true);
+            syncSalesTableScrollLayout(document.getElementById(sheetName));
         }
 
         function getDayFromDate(dateStr) {
@@ -1554,12 +1755,21 @@
 
         function resetSalesTableHorizontalScroll(table) {
             if (!table) return;
-            var node = table.parentElement;
-            while (node) {
-                if (node.scrollWidth > node.clientWidth + 1) {
-                    node.scrollLeft = 0;
+            var scrollRoot = table.closest('.sales-table-scroll');
+            if (scrollRoot) {
+                var headWrap = scrollRoot.querySelector('.sales-table-scroll-head');
+                var bodyWrap = scrollRoot.querySelector('.sales-table-scroll-body');
+                if (bodyWrap) bodyWrap.scrollLeft = 0;
+                if (headWrap) headWrap.scrollLeft = 0;
+                syncSalesTableHeadScroll(scrollRoot, 0);
+            } else {
+                var node = table.parentElement;
+                while (node) {
+                    if (node.scrollWidth > node.clientWidth + 1) {
+                        node.scrollLeft = 0;
+                    }
+                    node = node.parentElement;
                 }
-                node = node.parentElement;
             }
             document.documentElement.scrollLeft = 0;
             document.body.scrollLeft = 0;
@@ -1612,6 +1822,7 @@
             }
             applySalesPagination(ctx.sheet);
             updateSalesTableTotals(ctx.sheet);
+            syncSalesTableScrollLayout(ctx.sheet);
         }
 
         function updateSalesTableTotals(sheet) {
@@ -1689,6 +1900,7 @@
             totalCells[16].textContent = emptyDistance.toFixed(2) + ' km';
             totalCells[17].textContent = totalDistance.toFixed(2) + ' km';
             totalCells[18].textContent = '';
+            syncSalesTableScrollLayout(sheet);
         }
 
         function scheduleSummaryUpdate(immediate) {
@@ -2950,7 +3162,10 @@
             var table = document.getElementById(tableId);
             var tbody = table.getElementsByTagName('tbody')[0];
             var rows = Array.from(tbody.getElementsByTagName('tr'));
-            var headers = table.getElementsByTagName('th');
+            var headTable = document.getElementById(tableId.replace('salesTable_', 'salesTableHead_'));
+            var headers = headTable
+                ? headTable.getElementsByTagName('th')
+                : table.getElementsByTagName('th');
             for (var i = 0; i < headers.length; i++) {
                 headers[i].querySelectorAll('.sort-btn').forEach(function(btn) { btn.classList.remove('active'); });
             }
@@ -2968,6 +3183,7 @@
                 var searchInput = activeSheet.querySelector('.salesFilterInput');
                 var ctx = buildFilterContext(activeSheet, searchInput ? searchInput.value : '');
                 applyTableFilter(getDayRangeValues(), ctx, false);
+                syncSalesTableScrollLayout(activeSheet);
             }
             refreshSummaryIfActive(activeSheet);
         }
@@ -3106,8 +3322,10 @@
             initDayRangeSlider();
             initSalesEditControls();
             initSalesPaginationControls();
+            initSalesTableScroll();
             initSummaryRankTabs();
             applySalesFilters(true);
+            syncSalesTableScrollLayout(document.querySelector('.tabs:not(.hide)'));
             var firstSheet = document.querySelector('.tabs:not(.hide)') || document.querySelector('.tabs');
             if (firstSheet) {
                 var summaryTab = firstSheet.querySelector('.tab-content[id^="summary-"]');

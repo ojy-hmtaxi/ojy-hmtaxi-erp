@@ -54,10 +54,11 @@
     font-size: 13px;
 }
 </style>
-{% macro dashboard_year_select() %}
-<select class="form-select form-select-sm dashboard-year-select" aria-label="연도 선택">
+{% macro dashboard_year_select(card_id, default_year=none) %}
+{% set year_val = default_year if default_year is not none else selected_year %}
+<select class="form-select form-select-sm dashboard-year-select" data-dashboard-card="{{ card_id }}" aria-label="연도 선택">
     {% for y in dashboard_years|default([]) %}
-    <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}년</option>
+    <option value="{{ y }}" {% if y == year_val %}selected{% endif %}>{{ y }}년</option>
     {% endfor %}
 </select>
 {% endmacro %}
@@ -134,7 +135,7 @@
                         <i class="fas fa-arrow-up"></i>
                     </button>
             </h5>
-            {{ dashboard_year_select() }}
+            {{ dashboard_year_select('dispatch-status') }}
         </div>
         <div class="card-body">
             <div class="row" >
@@ -189,35 +190,35 @@
     </div>
 
     <!-- 사고 현황 -->
-    <div class="card">
+    <div class="card" id="accidentStatusCard">
         <div class="card-header dashboard-card-header">
             <h5 class="mb-0">사고 현황</h5>
-            {{ dashboard_year_select() }}
+            {{ dashboard_year_select('accident-status') }}
         </div>
         <div class="card-body">
             <div class="row">
                 <div class="col-md-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <span>총 가해사고</span>
-                        <strong>{{ "{:,}".format(total_at_fault|default(0)) }}건</strong>
+                        <strong id="totalAtFault">{{ "{:,}".format(total_at_fault|default(0)) }}건</strong>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <span>총 피해사고</span>
-                        <strong>{{ "{:,}".format(total_not_at_fault|default(0)) }}건</strong>
+                        <strong id="totalNotAtFault">{{ "{:,}".format(total_not_at_fault|default(0)) }}건</strong>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <span>가해보상금(수리지급)</span>
-                        <strong>{{ "{:,}".format(total_at_fault_repair|default(0)) }}원</strong>
+                        <strong id="totalAtFaultRepair">{{ "{:,}".format(total_at_fault_repair|default(0)) }}원</strong>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <span>피해보상금(입금)</span>
-                        <strong>{{ "{:,}".format(total_not_at_fault_payment|default(0)) }}원</strong>
+                        <strong id="totalNotAtFaultPayment">{{ "{:,}".format(total_not_at_fault_payment|default(0)) }}원</strong>
                     </div>
                 </div>
             </div>
@@ -227,25 +228,25 @@
                     <div class="col-md-3">
                         <div class="d-flex justify-content-between align-items-center">
                             <span>미결 가해사고</span>
-                            <strong>{{ "{:,}".format(unresolved_at_fault|default(0)) }}건</strong>
+                            <strong id="unresolvedAtFault">{{ "{:,}".format(unresolved_at_fault|default(0)) }}건</strong>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="d-flex justify-content-between align-items-center">
                             <span>미결 피해사고</span>
-                            <strong>{{ "{:,}".format(unresolved_not_at_fault|default(0)) }}건</strong>
+                            <strong id="unresolvedNotAtFault">{{ "{:,}".format(unresolved_not_at_fault|default(0)) }}건</strong>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="d-flex justify-content-between align-items-center">
                             <span>미지급 가해보상금</span>
-                            <strong>{{ "{:,}".format(unpaid_at_fault_estimate|default(0)) }}원</strong>
+                            <strong id="unpaidAtFaultEstimate">{{ "{:,}".format(unpaid_at_fault_estimate|default(0)) }}원</strong>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="d-flex justify-content-between align-items-center">
                             <span>미입금 피해보상금</span>
-                            <strong>{{ "{:,}".format(unpaid_not_at_fault_estimate|default(0)) }}원</strong>
+                            <strong id="unpaidNotAtFaultEstimate">{{ "{:,}".format(unpaid_not_at_fault_estimate|default(0)) }}원</strong>
                         </div>
                     </div>
                 </div>
@@ -257,7 +258,7 @@
     <div class="card">
         <div class="card-header dashboard-card-header">
             <h5 class="mb-0">월별 수입금 현황 통계</h5>
-            {{ dashboard_year_select() }}
+            {{ dashboard_year_select('income-chart') }}
         </div>
         <div class="card-body">
             <canvas id="incomeLineChart" height="100px"></canvas>
@@ -268,7 +269,7 @@
      <div class="card">
         <div class="card-header dashboard-card-header">
             <h5 class="mb-0">월별 배차 현황 통계</h5>
-            {{ dashboard_year_select() }}
+            {{ dashboard_year_select('dispatch-chart') }}
         </div>
         <div class="card-body">
             <canvas id="dispatchLineChart" height="100px"></canvas>
@@ -279,7 +280,7 @@
     <div class="card">
         <div class="card-header dashboard-card-header">
             <h5 class="mb-0">월별 사고 현황 통계</h5>
-            {{ dashboard_year_select() }}
+            {{ dashboard_year_select('accident-chart') }}
         </div>
         <div class="card-body">
             <canvas id="accidentBarChart" height="100px"></canvas>
@@ -290,21 +291,405 @@
 {{ right_sidebar(messages, current_user) }}
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script id="dashboard-bootstrap-data" type="application/json">
+{{ {
+    "months": month_order|default([]),
+    "defaultYear": selected_year|default(2026),
+    "monthlyIncomes": monthly_incomes|default({}),
+    "monthlyFuelCosts": monthly_fuel_costs|default({}),
+    "dispatchStats": dispatch_stats|default({}),
+    "driverCounts": driver_counts|default({}),
+    "driverCountsByCategory": driver_counts_by_category|default({}),
+    "accidentStats": accident_stats_by_month|default({}),
+    "accidentSummary": {
+        "total_at_fault": total_at_fault|default(0),
+        "total_not_at_fault": total_not_at_fault|default(0),
+        "total_at_fault_repair": total_at_fault_repair|default(0),
+        "total_not_at_fault_payment": total_not_at_fault_payment|default(0),
+        "unresolved_at_fault": unresolved_at_fault|default(0),
+        "unresolved_not_at_fault": unresolved_not_at_fault|default(0),
+        "unpaid_at_fault_estimate": unpaid_at_fault_estimate|default(0),
+        "unpaid_not_at_fault_estimate": unpaid_not_at_fault_estimate|default(0),
+        "accident_stats_by_month": accident_stats_by_month|default({})
+    },
+    "selectedMonth": selected_month|default("01월")
+}|tojson }}
+</script>
+<script id="dashboard-payload-by-year" type="application/json">{{ dashboard_payload_by_year|default({})|tojson }}</script>
 <script>
-// 서버에서 전달받은 데이터
-const months = JSON.parse('{{ month_order|default("[]")|tojson|safe }}');
-const dispatchStats = JSON.parse('{{ dispatch_stats|default("{}")|tojson|safe }}');
-const categories = ['주간', '야간', '일차', '교대', '리스'];
-const driverCounts = JSON.parse('{{ driver_counts|default("{}")|tojson|safe }}');
-const driverCountsByCategory = JSON.parse('{{ driver_counts_by_category|default("{}")|tojson|safe }}');
-const monthlyIncomes = JSON.parse('{{ monthly_incomes|default("{}")|tojson|safe }}');
-const monthlyFuelCosts = JSON.parse('{{ monthly_fuel_costs|default("{}")|tojson|safe }}');
-const incomeData = months.map(m => monthlyIncomes[m] || 0);
+function parseJsonScript(id, fallback) {
+    const el = document.getElementById(id);
+    if (!el) return fallback;
+    try {
+        const parsed = JSON.parse(el.textContent || 'null');
+        return parsed == null ? fallback : parsed;
+    } catch (err) {
+        console.error('JSON parse failed:', id, err);
+        return fallback;
+    }
+}
 
-// 각 카드별 독립적인 월 변수
-let incomeMonth = '{{ selected_month }}';
-let fuelMonth = '{{ selected_month }}';
-let dispatchMonth = '{{ selected_month }}';
+function cloneDashboardData(value) {
+    return JSON.parse(JSON.stringify(value || {}));
+}
+
+function normalizeYearStore(raw) {
+    const store = {};
+    if (!raw || typeof raw !== 'object') return store;
+    Object.keys(raw).forEach(function(key) {
+        store[String(key)] = raw[key];
+    });
+    return store;
+}
+
+const dashboardBootstrap = parseJsonScript('dashboard-bootstrap-data', {});
+const months = dashboardBootstrap.months || [];
+const categories = ['주간', '야간', '일차', '교대', '리스'];
+const defaultYear = String(dashboardBootstrap.defaultYear || new Date().getFullYear());
+const dashboardPayloadCache = normalizeYearStore(parseJsonScript('dashboard-payload-by-year', {}));
+const dashboardYearRequestSeq = {};
+
+const monthlyIncomes = dashboardBootstrap.monthlyIncomes || {};
+const monthlyFuelCosts = dashboardBootstrap.monthlyFuelCosts || {};
+
+let dispatchStats = cloneDashboardData(dashboardBootstrap.dispatchStats || {});
+let driverCounts = cloneDashboardData(dashboardBootstrap.driverCounts || {});
+let driverCountsByCategory = cloneDashboardData(dashboardBootstrap.driverCountsByCategory || {});
+let accidentStats = cloneDashboardData(dashboardBootstrap.accidentStats || {});
+
+let incomeLineChart = null;
+let dispatchLineChart = null;
+let accidentBarChart = null;
+
+let incomeMonth = dashboardBootstrap.selectedMonth || '01월';
+let fuelMonth = dashboardBootstrap.selectedMonth || '01월';
+let dispatchMonth = dashboardBootstrap.selectedMonth || '01월';
+
+const bootstrapSnapshot = (function() {
+    const summary = cloneDashboardData(dashboardBootstrap.accidentSummary || {});
+    if (!summary.accident_stats_by_month) {
+        summary.accident_stats_by_month = cloneDashboardData(dashboardBootstrap.accidentStats || {});
+    }
+    return {
+        monthly_incomes: cloneDashboardData(dashboardBootstrap.monthlyIncomes || {}),
+        monthly_fuel_costs: cloneDashboardData(dashboardBootstrap.monthlyFuelCosts || {}),
+        dispatch_stats: cloneDashboardData(dashboardBootstrap.dispatchStats || {}),
+        driver_counts: cloneDashboardData(dashboardBootstrap.driverCounts || {}),
+        driver_counts_by_category: cloneDashboardData(dashboardBootstrap.driverCountsByCategory || {}),
+        accident_summary: summary
+    };
+})();
+
+function buildSnapshotPayload() {
+    return cloneDashboardData(bootstrapSnapshot);
+}
+
+function isValidDashboardPayload(payload) {
+    return !!(payload && typeof payload === 'object' && payload.dispatch_stats && payload.monthly_incomes);
+}
+
+Object.keys(dashboardPayloadCache).forEach(function(yearKey) {
+    dashboardPayloadCache[yearKey] = cloneDashboardData(dashboardPayloadCache[yearKey]);
+});
+
+if (!isValidDashboardPayload(dashboardPayloadCache[defaultYear])) {
+    dashboardPayloadCache[defaultYear] = buildSnapshotPayload();
+}
+
+function getCachedDashboardPayload(year) {
+    const key = String(year || defaultYear);
+    const payload = dashboardPayloadCache[key] || dashboardPayloadCache[defaultYear];
+    return payload ? cloneDashboardData(payload) : buildSnapshotPayload();
+}
+
+async function ensureDashboardPayload(year) {
+    const key = String(year || defaultYear);
+    const cached = dashboardPayloadCache[key];
+    if (isValidDashboardPayload(cached)) {
+        return cloneDashboardData(cached);
+    }
+    try {
+        const response = await fetch('/api/dashboard/year/' + encodeURIComponent(key), {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        });
+        const data = await response.json();
+        if (response.ok && data.success && isValidDashboardPayload(data.payload)) {
+            dashboardPayloadCache[key] = cloneDashboardData(data.payload);
+            return cloneDashboardData(data.payload);
+        }
+    } catch (err) {
+        console.error('Failed to load dashboard payload:', key, err);
+    }
+    if (key === defaultYear) {
+        return buildSnapshotPayload();
+    }
+    return getCachedDashboardPayload(defaultYear);
+}
+
+function applyDispatchStatusPayload(payload) {
+    if (!isValidDashboardPayload(payload)) {
+        return;
+    }
+    dispatchStats = cloneDashboardData(payload.dispatch_stats);
+    driverCounts = cloneDashboardData(payload.driver_counts || {});
+    driverCountsByCategory = cloneDashboardData(payload.driver_counts_by_category || {});
+}
+
+function formatCount(value, unit) {
+    return Number(value || 0).toLocaleString() + unit;
+}
+
+function formatMoney(value) {
+    return Number(value || 0).toLocaleString() + '원';
+}
+
+function updateAccidentStatusCard(summary) {
+    summary = summary || {};
+    const setText = function(id, text) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+    };
+    setText('totalAtFault', formatCount(summary.total_at_fault, '건'));
+    setText('totalNotAtFault', formatCount(summary.total_not_at_fault, '건'));
+    setText('totalAtFaultRepair', formatMoney(summary.total_at_fault_repair));
+    setText('totalNotAtFaultPayment', formatMoney(summary.total_not_at_fault_payment));
+    setText('unresolvedAtFault', formatCount(summary.unresolved_at_fault, '건'));
+    setText('unresolvedNotAtFault', formatCount(summary.unresolved_not_at_fault, '건'));
+    setText('unpaidAtFaultEstimate', formatMoney(summary.unpaid_at_fault_estimate));
+    setText('unpaidNotAtFaultEstimate', formatMoney(summary.unpaid_not_at_fault_estimate));
+}
+
+function buildIncomeChartDatasets(monthlyIncomeMap) {
+    const incomeData = months.map(function(m) { return monthlyIncomeMap[m] || 0; });
+    const monthlyAvgData = [];
+    let cumulativeSum = 0;
+    for (let i = 0; i < incomeData.length; i++) {
+        cumulativeSum += incomeData[i];
+        monthlyAvgData.push(cumulativeSum / (i + 1));
+    }
+    const totalAvg = incomeData.length > 0
+        ? incomeData.reduce(function(sum, val) { return sum + val; }, 0) / incomeData.length
+        : 0;
+    const totalAvgData = months.map(function() { return totalAvg; });
+    return {
+        incomeData: incomeData,
+        datasets: [{
+            label: '월별 수입금 합계',
+            data: incomeData,
+            borderColor: '#007bff',
+            backgroundColor: 'rgba(0,123,255,0.1)',
+            fill: true,
+            tension: 0.01
+        }, {
+            label: '월별 수입금 누적 평균',
+            data: monthlyAvgData,
+            borderColor: '#28a745',
+            borderWidth: 1,
+            borderDash: [5, 5],
+            fill: false,
+            pointRadius: 2,
+            tension: 0
+        }, {
+            label: '월 전체 수입금 평균',
+            data: totalAvgData,
+            borderColor: '#dc3545',
+            borderWidth: 1,
+            borderDash: [5, 5],
+            fill: false,
+            pointRadius: 1,
+            tension: 0
+        }]
+    };
+}
+
+function buildDispatchChartDatasets(payload) {
+    const countsByCategory = payload.driver_counts_by_category || {};
+    const counts = payload.driver_counts || {};
+    const datasets = categories.map(function(cat, index) {
+        const accumulatedData = months.map(function(m) {
+            let sum = 0;
+            for (let i = 0; i <= index; i++) {
+                const category = categories[i];
+                sum += countsByCategory[m] ? (countsByCategory[m][category] || 0) : 0;
+            }
+            return sum;
+        });
+        return {
+            label: cat,
+            type: 'line',
+            data: accumulatedData,
+            fill: index === 0 ? true : '-1',
+            backgroundColor: cat === '주간' ? 'rgba(255,159,64,0.4)' :
+                             cat === '야간' ? 'rgba(54,162,235,0.4)' :
+                             cat === '일차' ? 'rgba(153,102,255,0.4)' :
+                             cat === '교대' ? 'rgba(75,192,192,0.4)' : 'rgba(255,99,132,0.4)',
+            borderColor: cat === '주간' ? '#ff9f40' : cat === '야간' ? '#36a2eb' : cat === '일차' ? '#9966ff' : cat === '교대' ? '#4bc0c0' : '#ff6384',
+            borderWidth: 2,
+            tension: 0.01,
+            yAxisID: 'y'
+        };
+    });
+    datasets.push({
+        label: '총 운전기사(명)',
+        type: 'bar',
+        data: months.map(function(m) { return counts[m] || 0; }),
+        backgroundColor: 'rgba(100,100,100,0.1)',
+        borderColor: 'rgba(100,100,100,0.5)',
+        borderWidth: 1,
+        yAxisID: 'y'
+    });
+    return datasets;
+}
+
+function renderIncomeChart(payload) {
+    const incomeCtx = document.getElementById('incomeLineChart');
+    if (!incomeCtx) return;
+    const chartData = buildIncomeChartDatasets(payload.monthly_incomes || {});
+    if (incomeLineChart) incomeLineChart.destroy();
+    incomeLineChart = new Chart(incomeCtx.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: months,
+            datasets: chartData.datasets
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'top' } },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: { display: true, text: '수입금(만원)' },
+                    ticks: {
+                        callback: function(value) {
+                            if (value >= 100000000) {
+                                const eok = Math.floor(value / 100000000);
+                                const cheonman = Math.floor((value % 100000000) / 10000000);
+                                return cheonman === 0 ? eok + '억' : eok + '억 ' + cheonman + '천';
+                            } else if (value >= 10000000) {
+                                return Math.floor(value / 10000000) + '천';
+                            } else if (value >= 10000) {
+                                return Math.floor(value / 10000);
+                            }
+                            return value.toLocaleString();
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderDispatchChart(payload) {
+    const dispatchCtx = document.getElementById('dispatchLineChart');
+    if (!dispatchCtx) return;
+    if (dispatchLineChart) dispatchLineChart.destroy();
+    dispatchLineChart = new Chart(dispatchCtx.getContext('2d'), {
+        data: {
+            labels: months,
+            datasets: buildDispatchChartDatasets(payload)
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'top' } },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    position: 'left',
+                    ticks: { stepSize: 5 },
+                    title: { display: true, text: '운전기사(명)' }
+                }
+            }
+        }
+    });
+}
+
+function renderAccidentChart(summary) {
+    const accidentCtx = document.getElementById('accidentBarChart');
+    if (!accidentCtx) return;
+    accidentStats = cloneDashboardData((summary || {}).accident_stats_by_month || {});
+    if (accidentBarChart) accidentBarChart.destroy();
+    accidentBarChart = new Chart(accidentCtx.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: months,
+            datasets: [{
+                label: '가해사고',
+                data: months.map(function(m) { return (accidentStats[m] || {}).at_fault || 0; }),
+                backgroundColor: 'rgba(220,53,69,0.7)',
+                borderColor: '#dc3545',
+                borderWidth: 1
+            }, {
+                label: '피해사고',
+                data: months.map(function(m) { return (accidentStats[m] || {}).not_at_fault || 0; }),
+                backgroundColor: 'rgba(0,123,255,0.7)',
+                borderColor: '#007bff',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'top' },
+                tooltip: {
+                    enabled: false,
+                    external: accidentTooltipHandler
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { stepSize: 1 },
+                    title: { display: true, text: '사고 건수' }
+                }
+            }
+        }
+    });
+}
+
+async function handleDashboardYearChange(cardId, year) {
+    const seq = (dashboardYearRequestSeq[cardId] || 0) + 1;
+    dashboardYearRequestSeq[cardId] = seq;
+    let payload;
+    try {
+        payload = await ensureDashboardPayload(year);
+    } catch (err) {
+        console.error('Dashboard year change failed:', cardId, year, err);
+        return;
+    }
+    if (dashboardYearRequestSeq[cardId] !== seq) {
+        return;
+    }
+    if (!isValidDashboardPayload(payload)) {
+        return;
+    }
+    switch (cardId) {
+        case 'dispatch-status':
+            applyDispatchStatusPayload(payload);
+            updateDispatchStatus(dispatchMonth);
+            break;
+        case 'accident-status':
+            updateAccidentStatusCard(payload.accident_summary || {});
+            break;
+        case 'income-chart':
+            renderIncomeChart(payload);
+            break;
+        case 'dispatch-chart':
+            renderDispatchChart(payload);
+            break;
+        case 'accident-chart':
+            renderAccidentChart(payload.accident_summary || {});
+            break;
+    }
+}
+
+function initDashboardCardYears() {
+    document.querySelectorAll('.dashboard-year-select').forEach(function(select) {
+        select.addEventListener('change', function() {
+            handleDashboardYearChange(select.getAttribute('data-dashboard-card'), select.value);
+        });
+    });
+}
 
 function updateDispatchStatus(month) {
     const stats = dispatchStats[month] || {};
@@ -475,80 +860,16 @@ document.addEventListener('DOMContentLoaded', function() {
     updateDispatchStatus(dispatchMonth);
     updateIncomeStatus(incomeMonth);
     updateFuelStatus(fuelMonth);
-
-    document.querySelectorAll('.dashboard-year-select').forEach(function(select) {
-        select.addEventListener('change', function() {
-            var url = new URL(window.location.href);
-            url.searchParams.set('year', select.value);
-            window.location.href = url.toString();
-        });
-    });
+    initDashboardCardYears();
+    initDashboardCharts();
 });
 
-// 누적형 라인차트를 위한 데이터 준비
-const datasets = categories.map((cat, index) => {
-    // 현재까지의 누적 데이터 계산
-    const accumulatedData = months.map(m => {
-        let sum = 0;
-        for (let i = 0; i <= index; i++) {
-            const category = categories[i];
-            sum += driverCountsByCategory[m] ? (driverCountsByCategory[m][category] || 0) : 0;
-        }
-        return sum;
-    });
-    
-    return {
-        label: cat,
-        type: 'line',
-        data: accumulatedData,
-        fill: index === 0 ? true : '-1', // 첫 번째는 true, 나머지는 이전 데이터셋 위에 쌓기
-        backgroundColor: cat === '주간' ? 'rgba(255,159,64,0.4)' : 
-                         cat === '야간' ? 'rgba(54,162,235,0.4)' : 
-                         cat === '일차' ? 'rgba(153,102,255,0.4)' : 
-                         cat === '교대' ? 'rgba(75,192,192,0.4)' : 'rgba(255,99,132,0.4)',
-        borderColor: cat === '주간' ? '#ff9f40' : cat === '야간' ? '#36a2eb' : cat === '일차' ? '#9966ff' : cat === '교대' ? '#4bc0c0' : '#ff6384',
-        borderWidth: 2,
-        tension: 0.01,
-        yAxisID: 'y'
-    };
-});
-
-datasets.push({
-    label: '총 운전기사(명)',
-    type: 'bar',
-    data: months.map(m => driverCounts[m] || 0),
-    backgroundColor: 'rgba(100,100,100,0.1)',
-    borderColor: 'rgba(100,100,100,0.5)',
-    borderWidth: 1,
-    yAxisID: 'y'
-});
-
-const ctx = document.getElementById('dispatchLineChart').getContext('2d');
-new Chart(ctx, {
-    data: {
-        labels: months,
-        datasets: datasets
-    },
-    options: {
-        responsive: true,
-        plugins: {
-            legend: { position: 'top' }
-        },
-        scales: {
-            y: {
-                beginAtZero: true,
-                position: 'left',
-                ticks: { stepSize: 5 },
-                title: { display: true, text: '운전기사(명)' }
-            }
-        }
-    }
-});
-
-// 월별 사고 현황 막대차트 (호버 시 사고원인 스택)
-const accidentStats = JSON.parse('{{ accident_stats_by_month|default("{}")|tojson|safe }}');
-const accidentAtFaultData = months.map(m => (accidentStats[m] || {}).at_fault || 0);
-const accidentNotAtFaultData = months.map(m => (accidentStats[m] || {}).not_at_fault || 0);
+function initDashboardCharts() {
+    const initialPayload = getCachedDashboardPayload(defaultYear);
+    renderDispatchChart(initialPayload);
+    renderAccidentChart(initialPayload.accident_summary || {});
+    renderIncomeChart(initialPayload);
+}
 const accidentCauseColors = ['#e57373', '#64b5f6', '#ffd54f', '#66bb6a', '#ab47bc', '#ffb74d', '#4dd0e1', '#9575cd', '#f06292', '#4db6ac'];
 let accidentTooltipEl;
 function accidentTooltipHandler(context) {
@@ -591,127 +912,5 @@ function accidentTooltipHandler(context) {
     accidentTooltipEl.style.top = (rect.top + (tooltip.y || 0) - accidentTooltipEl.offsetHeight - 12) + 'px';
     accidentTooltipEl.style.opacity = 1;
 }
-const accidentCtx = document.getElementById('accidentBarChart').getContext('2d');
-new Chart(accidentCtx, {
-    type: 'bar',
-    data: {
-        labels: months,
-        datasets: [{
-            label: '가해사고',
-            data: accidentAtFaultData,
-            backgroundColor: 'rgba(220,53,69,0.7)',
-            borderColor: '#dc3545',
-            borderWidth: 1
-        }, {
-            label: '피해사고',
-            data: accidentNotAtFaultData,
-            backgroundColor: 'rgba(0,123,255,0.7)',
-            borderColor: '#007bff',
-            borderWidth: 1
-        }]
-    },
-    options: {
-        responsive: true,
-        plugins: {
-            legend: { position: 'top' },
-            tooltip: {
-                enabled: false,
-                external: accidentTooltipHandler
-            }
-        },
-        scales: {
-            y: {
-                beginAtZero: true,
-                ticks: { stepSize: 1 },
-                title: { display: true, text: '사고 건수' }
-            }
-        }
-    }
-});
-
-// 월별 수입금 라인차트 생성
-const incomeCtx = document.getElementById('incomeLineChart').getContext('2d');
-
-// 각 월별 누적 평균 계산 (각 월 시점까지의 평균값)
-const monthlyAvgData = [];
-let cumulativeSum = 0;
-for (let i = 0; i < incomeData.length; i++) {
-    cumulativeSum += incomeData[i];
-    const avg = cumulativeSum / (i + 1);
-    monthlyAvgData.push(avg);
-}
-
-// 월 전체 수입금의 평균 (1월부터 12월까지 모든 실입금 합의 평균)
-const totalAvg = incomeData.length > 0 ? incomeData.reduce((sum, val) => sum + val, 0) / incomeData.length : 0;
-const totalAvgData = months.map(() => totalAvg);
-
-new Chart(incomeCtx, {
-    type: 'line',
-    data: {
-        labels: months,
-        datasets: [{
-            label: '월별 수입금 합계',
-            data: incomeData,
-            borderColor: '#007bff',
-            backgroundColor: 'rgba(0,123,255,0.1)',
-            fill: true,
-            tension: 0.01
-        }, {
-            label: '월별 수입금 누적 평균',
-            data: monthlyAvgData,
-            borderColor: '#28a745',
-            borderWidth: 1,
-            borderDash: [5, 5],
-            fill: false,
-            pointRadius: 2,
-            tension: 0
-        }, {
-            label: '월 전체 수입금 평균',
-            data: totalAvgData,
-            borderColor: '#dc3545',
-            borderWidth: 1,
-            borderDash: [5, 5],
-            fill: false,
-            pointRadius: 1,
-            tension: 0
-        }]
-    },
-    options: {
-        responsive: true,
-        plugins: {
-            legend: { position: 'top' }
-        },
-        scales: {
-            y: {
-                beginAtZero: true,
-                title: { display: true, text: '수입금(만원)' },
-                ticks: {
-                    callback: function(value) {
-                        if (value >= 100000000) {
-                            // 억 단위
-                            const eok = Math.floor(value / 100000000);
-                            const cheonman = Math.floor((value % 100000000) / 10000000);
-                            if (cheonman === 0) {
-                                return eok + '억';
-                            } else {
-                                return eok + '억 ' + cheonman + '천';
-                            }
-                        } else if (value >= 10000000) {
-                            // 천만 단위
-                            const cheonman = Math.floor(value / 10000000);
-                            return cheonman + '천';
-                        } else if (value >= 10000) {
-                            // 만 단위
-                            const man = Math.floor(value / 10000);
-                            return man;
-                        } else {
-                            return value.toLocaleString();
-                        }
-                    }
-                }
-            }
-        }
-    }
-});
 </script>
 {% endblock %} 
