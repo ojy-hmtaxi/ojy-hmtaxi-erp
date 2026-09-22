@@ -282,7 +282,7 @@
     <div class="buildnote-intro">
         <p>
             <strong>한미운수 ERP</strong>의 버전별 변경·추가 기능과, 수입금 데이터가 어떻게 집계되는지 안내합니다.
-            사이드바에 표시된 버전(<code>beta 0.1.7</code>)을 참고해 주세요.
+            사이드바에 표시된 버전(<code>beta 0.1.8</code>)을 참고해 주세요.
             <strong>수입금 집계 기준</strong> 탭에 T머니 CSV 대조·운전자 분리·.dat 집계·CSV/.dat 병합·셀 표시·표 스크롤 등 집계 상세가 정리되어 있습니다.
         </p>
     </div>
@@ -293,6 +293,64 @@
     </nav>
 
     <div id="panel-changelog" class="buildnote-panel active" role="tabpanel" aria-labelledby="tab-changelog">
+
+    <article class="buildnote-article">
+        <header class="buildnote-article-header">
+            <div class="buildnote-meta">
+                <span class="buildnote-badge">beta 0.1.8</span>
+                <time datetime="2026-09-22">2026-09-22</time>
+            </div>
+            <h2>beta 0.1.8 — 배차 캘린더 편집·엑셀 내보내기 · 수입금 [매칭] 대조</h2>
+        </header>
+        <div class="buildnote-article-body">
+            <p>
+                <strong>배차 관리</strong> 캘린더에서 근무 심볼을 <strong>클릭·선택</strong>해 바로 저장할 수 있고,
+                연도별 배차·비고를 <strong>엑셀 양식</strong>으로 내려받을 수 있습니다.
+                <strong>수입금</strong> [매칭] 열은 배차·CSV·.dat의 <strong>날짜·차번·사번·이름</strong> 대조 결과를
+                <code>완료</code>/<code>실패</code>와 <strong>출처별 색상</strong>으로 표시합니다 (집계 기준 탭 §4).
+            </p>
+
+            <h3>배차 관리 — 캘린더 셀 편집</h3>
+            <ul>
+                <li>캘린더 근무 칸 클릭 → <strong>상태 선택 팝업</strong> (근무 O · 결근 X · 휴가 / · 공휴 H · 예정일 R · 없음)</li>
+                <li><code>POST /api/dispatch/cell</code> — 연도 · 월 시트 · 일 · 근무유형 · 차번/사번 · 값 저장 → <code>dispatch_data.json</code> 갱신</li>
+                <li>저장 시 행 통계(<strong>인정일 · 승무일 · 결근일 · 휴가</strong>) 재계산 (<code>enrich_dispatch_record</code>) 후 API 응답 반영</li>
+                <li>캘린더 UI 즉시 갱신 + <strong>통계·표</strong> 탭 해당 셀·집계 열 동기화 (<code>syncDispatchTableRow</code>)</li>
+                <li>편집 가능 셀 <code>is-editable</code> · 저장 중 <code>is-saving</code> 표시, 차량/기사 필터 모드 모두 지원</li>
+            </ul>
+
+            <h3>배차 관리 — 엑셀 내보내기</h3>
+            <ul>
+                <li><code>/schedule/export?year=</code> — 선택 연도 배차 데이터를 <strong>배차관리 엑셀 형식</strong> (.xlsx) 다운로드</li>
+                <li>월별 시트(01월~12월) + <strong>[비고]</strong> 시트(날짜 · 대체 · 결근 · 비고) — JSON에 저장된 <code>dispatch_remarks</code> 반영</li>
+                <li><code>uploads/배차관리_&lt;연도&gt;.xlsx</code> 템플릿이 있으면 서식·열 구조 유지 (<code>_find_dispatch_export_template</code>), 없으면 기본 헤더로 생성</li>
+                <li>캘린더 상단 <strong>「캘린더 정보 엑셀양식으로 다운로드」</strong> 링크</li>
+            </ul>
+
+            <h3>공통 — API 인증</h3>
+            <ul>
+                <li>미로그인 시 <code>/api/*</code> 요청은 HTML 리다이렉트 대신 <strong>JSON 401</strong> (<code>{ success: false, error: '...' }</code>) — 캘린더 AJAX 오류 처리 개선</li>
+            </ul>
+
+            <h3>수입금 관리 — [매칭] 3출처 대조 (적용)</h3>
+            <ul>
+                <li>기존 「모든 항목 채움」 규칙 → <strong>배차관리 · T머니 CSV · .dat</strong>의 날짜·차번·사번·이름 <strong>대조</strong> (<code>compute_sales_match_status</code>)</li>
+                <li>일치 → <code>완료</code> (녹색) · 전체 불일치 → <code>실패</code> (빨강) · 배차/CSV/.dat 단독 불일치 → <code>실패</code> (노랑/주황/보라)</li>
+                <li>.dat 기사 스냅샷 <code>_dat_match_identity</code> · 템플릿 <code>sales_match_class</code> · 표·업로드 안내 <strong>[매칭] 색상 범례</strong></li>
+                <li>상세 규칙: <strong>수입금 집계 기준</strong> 탭 §4 [매칭] 완료 조건</li>
+            </ul>
+
+            <div class="buildnote-tags">
+                <span class="buildnote-tag">beta 0.1.8</span>
+                <span class="buildnote-tag">배차</span>
+                <span class="buildnote-tag">캘린더편집</span>
+                <span class="buildnote-tag">엑셀내보내기</span>
+                <span class="buildnote-tag">API</span>
+                <span class="buildnote-tag">수입금</span>
+                <span class="buildnote-tag">매칭</span>
+            </div>
+        </div>
+    </article>
 
     <article class="buildnote-article">
         <header class="buildnote-article-header">

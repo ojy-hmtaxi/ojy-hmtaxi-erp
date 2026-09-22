@@ -57,6 +57,14 @@ login_manager.login_message = '이 페이지에 접근하려면 로그인이 필
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+
+@login_manager.unauthorized_handler
+def unauthorized():
+    """API 요청은 로그인 페이지 HTML 대신 JSON으로 응답."""
+    if request.path.startswith('/api/'):
+        return jsonify({'success': False, 'error': '로그인이 필요합니다.'}), 401
+    return redirect(url_for('login', next=request.url))
+
 # 모든 템플릿에서 current_user 사용 가능하도록 context processor 추가
 @app.context_processor
 def inject_user():
@@ -790,6 +798,80 @@ def schedule():
                     )
 
     return render_template('schedule.html', **_schedule_page_context())
+
+
+@app.route('/schedule/export')
+@login_required
+def schedule_export():
+    """캘린더(배차 JSON) 데이터를 배차관리 엑셀 양식으로 다운로드."""
+    year = request.args.get('year', type=int)
+    store = load_dispatch_data_store()
+    years = sorted([int(y) for y in store.keys()], reverse=True) if store else []
+    if not year or (years and year not in years):
+        year = years[0] if years else datetime.now().year
+    buffer = _build_dispatch_export_workbook(year)
+    if buffer is None:
+        return jsonify({'success': False, 'error': '다운로드할 배차 데이터가 없습니다.'}), 404
+    return send_file(
+        buffer,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'배차관리_{year}.xlsx',
+    )
+
+
+@app.route('/api/dispatch/cell', methods=['POST'])
+@login_required
+def api_update_dispatch_cell():
+    """캘린더에서 배차 셀(일자 심볼) 단건 수정."""
+    print('=== /api/dispatch/cell POST ===')
+    payload = request.get_json(silent=True) or {}
+    print(f"payload: year={payload.get('year')}, sheet={payload.get('sheet')}, day={payload.get('day')}, "
+          f"shift_type={payload.get('shift_type')}, car_no={payload.get('car_no')}, emp_id={payload.get('emp_id')}, "
+          f"value={payload.get('value')}")
+    try:
+        year = int(payload.get('year'))
+        day = int(payload.get('day'))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': '잘못된 요청입니다.'}), 400
+
+    sheet = str(payload.get('sheet', '')).strip()
+    shift_type = str(payload.get('shift_type', '')).strip()
+    car_no = str(payload.get('car_no') or '').strip() or None
+    emp_id = payload.get('emp_id')
+    value = _normalize_dispatch_cell_value(payload.get('value'))
+
+    if not sheet or not shift_type or day < 1 or day > 31:
+        return jsonify({'success': False, 'error': '필수 값이 누락되었습니다.'}), 400
+    if not car_no and emp_id in (None, ''):
+        return jsonify({'success': False, 'error': '차량 또는 사번 정보가 필요합니다.'}), 400
+
+    year_data = load_dispatch_data(year)
+    if not year_data or sheet not in year_data:
+        return jsonify({'success': False, 'error': '해당 연도·월 데이터를 찾을 수 없습니다.'}), 404
+
+    sheet_data = year_data[sheet]
+    target_row = _find_dispatch_row(sheet_data, shift_type, car_no=car_no, emp_id=emp_id)
+    if target_row is None:
+        return jsonify({'success': False, 'error': '해당 배차 행을 찾을 수 없습니다.'}), 404
+
+    target_row[str(day)] = value
+    enrich_dispatch_record(target_row)
+    year_data[sheet] = normalize_dispatch_sheet(sheet_data)
+    save_dispatch_data(year_data, year=year)
+
+    stats = {key: target_row.get(key, '') for key in ('인정일', '승무일', '결근일', '휴가')}
+    return jsonify({
+        'success': True,
+        'value': value,
+        'stats': stats,
+        'row': {
+            'car_no': str(target_row.get('차량번호', '')).strip(),
+            'emp_id': normalize_emp_id(target_row.get('사번')),
+            'shift_type': shift_type,
+        },
+    })
+
 
 @app.route('/pay_lease', methods=['GET', 'POST'])
 @login_required
@@ -1687,6 +1769,44 @@ def _dispatch_val_matches(val, symbol):
     return v == symbol
 
 
+def _normalize_dispatch_cell_value(value):
+    """캘린더·API에서 저장하는 배차 일자 심볼 형식 통일."""
+    if value is None:
+        return ''
+    v = str(value).strip()
+    if not v or v == '-':
+        return ''
+    lower = v.lower()
+    if lower == 'o':
+        return 'o'
+    if lower == 'x':
+        return 'x'
+    if v == '/':
+        return '/'
+    if v.upper() == 'H':
+        return 'H'
+    if lower == 'r':
+        return 'r'
+    return v
+
+
+def _find_dispatch_row(sheet_data, shift_type, car_no=None, emp_id=None):
+    """월별 시트에서 근무유형·차량/사번으로 배차 행 검색."""
+    shift_type = str(shift_type or '').strip()
+    car_no = str(car_no or '').strip() or None
+    emp_id = normalize_emp_id(emp_id) if emp_id not in (None, '') else None
+    for row in sheet_data.get('data', []):
+        if str(row.get('근무유형', '')).strip() != shift_type:
+            continue
+        row_car = str(row.get('차량번호', '')).strip()
+        row_emp = normalize_emp_id(row.get('사번'))
+        if car_no is not None and row_car == car_no:
+            return row
+        if emp_id and row_emp == emp_id:
+            return row
+    return None
+
+
 def compute_dispatch_row_stats(row):
     """배차 엑셀 수식: 승무일=COUNTIF(o), 결근일=x, 휴가=/, 인정일=승무일+휴가+COUNTIF(H)."""
     승무일 = 결근일 = 휴가 = h_count = 0
@@ -1762,6 +1882,241 @@ def save_dispatch_data(data, year=None):
         json.dump(store, f, ensure_ascii=False, indent=2)
     invalidate_dispatch_caches()
     print("JSON 파일 저장 완료")
+
+
+def _dispatch_canonical_header(header):
+    return DISPATCH_HEADER_RENAME.get(str(header or '').strip(), str(header or '').strip())
+
+
+def _default_dispatch_export_headers():
+    headers = ['차량번호', '차종', '근무유형', '사번', '운전기사', '인정일', '승무일', '결근일', '휴가']
+    headers.extend(str(day) for day in range(1, 32))
+    return headers
+
+
+def _find_dispatch_export_template(year):
+    """업로드된 배차관리 엑셀을 내보내기 서식 템플릿으로 사용."""
+    upload_dir = app.config['UPLOAD_FOLDER']
+    candidates = []
+    try:
+        records = (
+            UploadRecord.query.filter_by(upload_type='schedule')
+            .order_by(UploadRecord.upload_time.desc())
+            .all()
+        )
+        for record in records:
+            filename = record.filename or ''
+            if str(year) in filename:
+                path = os.path.join(upload_dir, filename)
+                if os.path.isfile(path):
+                    candidates.append(path)
+    except Exception:
+        pass
+    if os.path.isdir(upload_dir):
+        for name in sorted(os.listdir(upload_dir), reverse=True):
+            lower = name.lower()
+            if not lower.endswith(('.xlsx', '.xlsm')):
+                continue
+            if '배차' in name and str(year) in name:
+                path = os.path.join(upload_dir, name)
+                if os.path.isfile(path):
+                    candidates.append(path)
+    if candidates:
+        return candidates[0]
+    try:
+        for record in UploadRecord.query.filter_by(upload_type='schedule').order_by(
+            UploadRecord.upload_time.desc(),
+        ).all():
+            path = os.path.join(upload_dir, record.filename or '')
+            if os.path.isfile(path):
+                return path
+    except Exception:
+        pass
+    if os.path.isdir(upload_dir):
+        for name in sorted(os.listdir(upload_dir), reverse=True):
+            if '배차' in name and name.lower().endswith(('.xlsx', '.xlsm')):
+                path = os.path.join(upload_dir, name)
+                if os.path.isfile(path):
+                    return path
+    return None
+
+
+def _build_dispatch_sheet_header_index(ws):
+    header_index = {}
+    for col in range(1, ws.max_column + 1):
+        raw = ws.cell(1, col).value
+        if raw is None:
+            continue
+        raw_text = str(raw).strip()
+        if not raw_text:
+            continue
+        header_index[raw_text] = col
+        header_index[_dispatch_canonical_header(raw_text)] = col
+    return header_index
+
+
+def _lookup_dispatch_sheet_col(header_index, header):
+    header = str(header or '').strip()
+    canon = _dispatch_canonical_header(header)
+    if canon in header_index:
+        return header_index[canon]
+    if header in header_index:
+        return header_index[header]
+    for raw, renamed in DISPATCH_HEADER_RENAME.items():
+        if renamed == canon and raw in header_index:
+            return header_index[raw]
+    return None
+
+
+def _copy_dispatch_row_style(ws, source_row, target_row, max_col):
+    from copy import copy
+    for col in range(1, max_col + 1):
+        src = ws.cell(source_row, col)
+        dst = ws.cell(target_row, col)
+        if src.has_style:
+            dst.font = copy(src.font)
+            dst.border = copy(src.border)
+            dst.fill = copy(src.fill)
+            dst.number_format = src.number_format
+            dst.protection = copy(src.protection)
+            dst.alignment = copy(src.alignment)
+
+
+def _write_dispatch_cell(ws, row_num, col_num, header, value):
+    canon = _dispatch_canonical_header(header)
+    if value is None or str(value).strip() == '':
+        ws.cell(row_num, col_num, value=None)
+        return
+    if canon in ('인정일', '승무일', '결근일', '휴가'):
+        try:
+            ws.cell(row_num, col_num, value=int(value))
+            return
+        except (ValueError, TypeError):
+            pass
+    if canon == '사번':
+        ws.cell(row_num, col_num, value=normalize_emp_id(value) or None)
+        return
+    ws.cell(row_num, col_num, value=value)
+
+
+def _prepare_dispatch_sheet_rows(ws, row_count, sample_row=2):
+    max_col = max(ws.max_column, 1)
+    if ws.max_row < sample_row:
+        sample_row = max(ws.max_row, 1)
+    while ws.max_row > sample_row:
+        ws.delete_rows(ws.max_row)
+    while ws.max_row < sample_row + max(row_count, 1) - 1:
+        new_row = ws.max_row + 1
+        _copy_dispatch_row_style(ws, sample_row, new_row, max_col)
+
+
+def _fill_dispatch_month_sheet(ws, sheet_data):
+    headers = sheet_data.get('headers') or _default_dispatch_export_headers()
+    rows = sheet_data.get('data') or []
+    header_index = _build_dispatch_sheet_header_index(ws)
+    if not header_index:
+        for col, header in enumerate(headers, start=1):
+            ws.cell(1, col, value=header)
+            header_index[header] = col
+    _prepare_dispatch_sheet_rows(ws, len(rows) or 1)
+    start_row = 2 if ws.max_row >= 2 else 1
+    for offset, row_data in enumerate(rows):
+        row_num = start_row + offset
+        for header in headers:
+            col = _lookup_dispatch_sheet_col(header_index, header)
+            if not col:
+                continue
+            _write_dispatch_cell(ws, row_num, col, header, row_data.get(header, ''))
+
+
+def _apply_dispatch_export_header_style(ws, headers):
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    header_fill = PatternFill('solid', fgColor='E8EEF3')
+    header_font = Font(bold=True)
+    center = Alignment(horizontal='center', vertical='center')
+    thin = Side(style='thin', color='CCCCCC')
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    for col, header in enumerate(headers, start=1):
+        cell = ws.cell(1, col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center
+        cell.border = border
+        ws.column_dimensions[cell.column_letter].width = 5 if str(header).isdigit() else 11
+
+
+def _create_dispatch_month_sheet(wb, sheet_name, sheet_data):
+    from openpyxl.styles import Alignment
+    headers = sheet_data.get('headers') or _default_dispatch_export_headers()
+    ws = wb.create_sheet(sheet_name)
+    _apply_dispatch_export_header_style(ws, headers)
+    center = Alignment(horizontal='center', vertical='center')
+    for offset, row_data in enumerate(sheet_data.get('data') or []):
+        row_num = offset + 2
+        for col, header in enumerate(headers, start=1):
+            value = row_data.get(header, '')
+            _write_dispatch_cell(ws, row_num, col, header, value)
+            ws.cell(row_num, col).alignment = center
+    return ws
+
+
+def _fill_dispatch_remarks_sheet(wb, remarks_payload, year):
+    from openpyxl.styles import Alignment, Font, PatternFill
+    by_date = (remarks_payload or {}).get('by_date') or {}
+    year_prefix = f'{year}-'
+    rows = [
+        (date_key, item.get('대체', ''), item.get('결근', ''), item.get('비고', ''))
+        for date_key, item in sorted(by_date.items())
+        if str(date_key).startswith(year_prefix)
+    ]
+    if '비고' in wb.sheetnames:
+        ws = wb['비고']
+        if ws.max_row > 1:
+            ws.delete_rows(2, ws.max_row - 1)
+    else:
+        ws = wb.create_sheet('비고')
+        ws.append(['날짜', '대체', '결근', '비고'])
+        header_fill = PatternFill('solid', fgColor='E8EEF3')
+        header_font = Font(bold=True)
+        for col in range(1, 5):
+            cell = ws.cell(1, col)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+    for row in rows:
+        ws.append(list(row))
+
+
+def _build_dispatch_export_workbook(year):
+    from openpyxl import Workbook, load_workbook
+    dispatch_data = load_dispatch_data(year)
+    if not dispatch_data:
+        return None
+    remarks = load_dispatch_remarks(year)
+    template_path = _find_dispatch_export_template(year)
+    if template_path:
+        wb = load_workbook(template_path)
+        for sheet_name in DISPATCH_MONTH_SHEET_NAMES:
+            if sheet_name not in dispatch_data:
+                continue
+            if sheet_name in wb.sheetnames:
+                _fill_dispatch_month_sheet(wb[sheet_name], dispatch_data[sheet_name])
+            else:
+                _create_dispatch_month_sheet(wb, sheet_name, dispatch_data[sheet_name])
+        _fill_dispatch_remarks_sheet(wb, remarks, year)
+    else:
+        wb = Workbook()
+        default_sheet = wb.active
+        wb.remove(default_sheet)
+        for sheet_name in DISPATCH_MONTH_SHEET_NAMES:
+            if sheet_name not in dispatch_data:
+                continue
+            _create_dispatch_month_sheet(wb, sheet_name, dispatch_data[sheet_name])
+        _fill_dispatch_remarks_sheet(wb, remarks, year)
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer
 
 
 def parse_dispatch_remarks_excel(file_path):

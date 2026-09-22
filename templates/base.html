@@ -244,11 +244,7 @@
             return timeString; // 이미 KST 형식이면 그대로 반환
         }
 
-        // 페이지 로드 시 시간대 확인
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('현재 브라우저 시간대:', Intl.DateTimeFormat().resolvedOptions().timeZone);
-            console.log('현재 시간:', new Date().toLocaleString('ko-KR', {timeZone: 'Asia/Seoul'}));
-            
             // alert-success 메시지 9초 후 자동 사라지기
             const successAlerts = document.querySelectorAll('.alert-success');
             successAlerts.forEach(function(alert) {

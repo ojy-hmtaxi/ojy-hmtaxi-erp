@@ -731,6 +731,19 @@
             margin-bottom: 10px;
         }
 
+        .calendar-export-link {
+            margin-left: auto;
+            flex-shrink: 0;
+            font-size: 14px;
+            color: #28a745;
+            text-decoration: underline;
+            white-space: nowrap;
+        }
+
+        .calendar-export-link:hover {
+            color: #218838;
+        }
+
         .calendar-title {
             font-size: 28px;
             font-weight: bold;
@@ -757,6 +770,7 @@
         .calendar-legend-item.legend-slash { color: #ffa500; }
         .calendar-legend-item.legend-h { color: #8e24aa; }
         .calendar-legend-item.legend-r { color: #00acc1; }
+        .calendar-legend-item.legend-none { color: #757575; }
 
         .calendar-legend-item .legend-badge {
             display: inline-flex;
@@ -1017,6 +1031,73 @@
         .legend-badge.shift-bg-r { background-color: #e1f5fe; }
         .calendar-shift.shift-bg-h,
         .legend-badge.shift-bg-h { background-color: #f3e5f5; }
+        .calendar-shift.shift-bg-none,
+        .legend-badge.shift-bg-none { background-color: #f5f5f5; }
+
+        .calendar-shift .shift-status.status-none,
+        .calendar-legend .shift-status.status-none { color: #757575; }
+
+        .calendar-shift.is-editable {
+            cursor: pointer;
+        }
+
+        .calendar-shift.is-editable.is-empty-cell:hover {
+            background-color: #fafafa;
+        }
+
+        .calendar-shift.is-editable:hover {
+            outline: 1px solid #90caf9;
+            outline-offset: -1px;
+        }
+
+        .calendar-shift.is-saving {
+            opacity: 0.55;
+            pointer-events: none;
+        }
+
+        .shift-status-picker {
+            position: fixed;
+            z-index: 2000;
+            min-width: 132px;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+            padding: 4px 0;
+            display: none;
+        }
+
+        .shift-status-picker .shift-status-picker-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            width: 100%;
+            border: none;
+            background-color: #fff !important;
+            text-align: left;
+            padding: 6px 12px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 0;
+        }
+
+        .shift-status-picker .shift-status-picker-item:hover {
+            background-color: #f5f5f5 !important;
+        }
+
+        .shift-status-picker .shift-status-picker-item .legend-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 16px;
+            height: 15px;
+            padding: 0 3px;
+            font-size: 11px;
+            font-weight: bold;
+            line-height: 1;
+            border-radius: 2px;
+        }
 
         .calendar-empty-msg {
             padding: 40px 20px;
@@ -1249,7 +1330,13 @@
                                 <span class="calendar-legend-item legend-r">
                                     <span class="legend-badge shift-bg-r"><span class="shift-status status-r">R</span></span> 예정일
                                 </span>
+                                <span class="calendar-legend-item legend-none" title="배차 취소">
+                                    <span class="legend-badge shift-bg-none"><span class="shift-status status-none">-</span></span> 없음
+                                </span>
                             </div>
+                            {% if selected_dispatch_year and dispatch_data %}
+                            <a class="calendar-export-link" href="{{ url_for('schedule_export', year=selected_dispatch_year) }}">[캘린더 정보 엑셀양식으로 다운로드]</a>
+                            {% endif %}
                         </div>
                         <div class="calendar-remarks-panel" id="calendarRemarksPanel">
                             <div class="calendar-remarks-split">
@@ -1286,13 +1373,23 @@
     {% if dispatch_data %}
     <script type="application/json" id="dispatchDataJson">{{ dispatch_data | tojson }}</script>
     <script type="application/json" id="dispatchRemarksJson">{{ dispatch_remarks | default({'year': none, 'by_date': {}}) | tojson }}</script>
+    <script type="application/json" id="dispatchMetaJson">{{ {'year': selected_dispatch_year}|tojson }}</script>
     {% endif %}
 
     <script>
         var CALENDAR_SHIFT_TYPES = ['주간', '야간', '일차', '리스'];
+        var SHIFT_STATUS_OPTIONS = [
+            { value: 'o', text: '근무', symbol: 'O', cls: 'status-o', bgCls: 'shift-bg-o', legendCls: 'legend-o' },
+            { value: 'x', text: '결근', symbol: 'X', cls: 'status-x', bgCls: 'shift-bg-x', legendCls: 'legend-x' },
+            { value: '/', text: '휴가', symbol: '/', cls: 'status-slash', bgCls: 'shift-bg-slash', legendCls: 'legend-slash' },
+            { value: 'H', text: '공휴', symbol: 'H', cls: 'status-h', bgCls: 'shift-bg-h', legendCls: 'legend-h' },
+            { value: 'r', text: '예정일', symbol: 'R', cls: 'status-r', bgCls: 'shift-bg-r', legendCls: 'legend-r' },
+            { value: '', text: '없음', symbol: '-', cls: 'status-none', bgCls: 'shift-bg-none', legendCls: 'legend-none', title: '배차 취소' }
+        ];
         var calendarState = {
             dispatchData: null,
             dispatchRemarks: { year: new Date().getFullYear(), by_date: {} },
+            dispatchYear: null,
             currentSheet: null,
             filterMode: 'vehicle',
             selectedCar: null,
@@ -1355,6 +1452,330 @@
                     calendarState.dispatchRemarks = { year: new Date().getFullYear(), by_date: {} };
                 }
             }
+            var metaEl = document.getElementById('dispatchMetaJson');
+            if (metaEl) {
+                try {
+                    var meta = JSON.parse(metaEl.textContent || '{}');
+                    calendarState.dispatchYear = meta.year || calendarState.dispatchRemarks.year;
+                } catch (e) {
+                    calendarState.dispatchYear = calendarState.dispatchRemarks.year;
+                }
+            }
+        }
+
+        function getCalendarDispatchYear(fallbackYear) {
+            return calendarState.dispatchYear || getDispatchRemarksYear(fallbackYear);
+        }
+
+        function findDispatchRowInState(sheetName, shiftType, carNo, empId) {
+            var sheet = calendarState.dispatchData && calendarState.dispatchData[sheetName];
+            if (!sheet) return null;
+            shiftType = String(shiftType || '').trim();
+            carNo = String(carNo || '').trim();
+            empId = formatEmpId(empId);
+            for (var i = 0; i < sheet.data.length; i++) {
+                var row = sheet.data[i];
+                if (String(row['근무유형'] || '').trim() !== shiftType) continue;
+                if (carNo && String(row['차량번호'] || '').trim() === carNo) return row;
+                if (empId && formatEmpId(row['사번']) === empId) return row;
+            }
+            return null;
+        }
+
+        function applyShiftStatusClasses(shiftEl, value) {
+            SHIFT_STATUS_OPTIONS.forEach(function(opt) {
+                shiftEl.classList.remove(opt.bgCls);
+            });
+            shiftEl.classList.remove('is-empty-cell');
+            var status = statusSymbol(value);
+            var statusEl = shiftEl.querySelector('.shift-status');
+            if (statusEl) {
+                statusEl.className = 'shift-status ' + (status.cls || '');
+                statusEl.textContent = status.text;
+            }
+            if (status.bgCls) {
+                shiftEl.classList.add(status.bgCls);
+            }
+        }
+
+        function getDispatchDayValue(row, day) {
+            if (!row || day == null) return '';
+            return String(row[String(day)] || '').trim();
+        }
+
+        function updateShiftElementContent(shiftEl, row, day, isDriverMode) {
+            var dayValue = getDispatchDayValue(row, day);
+            var infoEl = shiftEl.querySelector('.shift-info');
+            if (!row || !dayValue) {
+                if (infoEl) infoEl.textContent = '';
+                applyShiftStatusClasses(shiftEl, '');
+                if (row && shiftEl.classList.contains('is-editable')) {
+                    shiftEl.classList.add('is-empty-cell');
+                }
+                return;
+            }
+            if (isDriverMode) {
+                var carNo = String(row['차량번호'] || '').trim();
+                var carType = String(row['차종'] || '').trim();
+                var info = carNo;
+                if (carType) info = info ? (info + ' ' + carType) : carType;
+                if (infoEl) infoEl.textContent = info;
+            } else {
+                var empId = formatEmpId(row['사번']);
+                var driver = String(row['운전기사'] || '').trim();
+                var infoText = '';
+                if (empId || driver) {
+                    infoText = (empId ? empId + ' ' : '') + driver;
+                }
+                if (infoEl) infoEl.textContent = infoText;
+            }
+            applyShiftStatusClasses(shiftEl, dayValue);
+        }
+
+        function setShiftElementEditable(shiftEl, row, day, shiftType, enabled) {
+            if (enabled && row) {
+                shiftEl.classList.add('is-editable');
+                shiftEl.dataset.day = String(day);
+                shiftEl.dataset.shiftType = shiftType;
+                shiftEl.dataset.carNo = String(row['차량번호'] || '').trim();
+                shiftEl.dataset.empId = formatEmpId(row['사번']);
+                shiftEl.dataset.driverName = String(row['운전기사'] || '').trim();
+                if (!shiftEl._shiftEditBound) {
+                    shiftEl._shiftEditBound = true;
+                    shiftEl.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        openShiftStatusPicker(shiftEl);
+                    });
+                }
+                return;
+            }
+            shiftEl.classList.remove('is-editable');
+            delete shiftEl.dataset.day;
+            delete shiftEl.dataset.shiftType;
+            delete shiftEl.dataset.carNo;
+            delete shiftEl.dataset.empId;
+            delete shiftEl.dataset.driverName;
+        }
+
+        function createShiftElement(row, day, shiftType, isDriverMode) {
+            var shiftEl = document.createElement('div');
+            shiftEl.className = 'calendar-shift';
+            shiftEl.innerHTML = '<span class="shift-info"></span><span class="shift-status"></span>';
+            setShiftElementEditable(shiftEl, row, day, shiftType, !!row);
+            updateShiftElementContent(shiftEl, row, day, isDriverMode);
+            return shiftEl;
+        }
+
+        function ensureShiftStatusPicker() {
+            var picker = document.getElementById('shiftStatusPicker');
+            if (picker) return picker;
+            picker = document.createElement('div');
+            picker.id = 'shiftStatusPicker';
+            picker.className = 'shift-status-picker';
+            SHIFT_STATUS_OPTIONS.forEach(function(opt) {
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'shift-status-picker-item calendar-legend-item ' + opt.legendCls;
+                btn.setAttribute('data-value', opt.value);
+                if (opt.title) btn.title = opt.title;
+                btn.innerHTML =
+                    '<span class="legend-badge ' + opt.bgCls + '">' +
+                        '<span class="shift-status ' + opt.cls + '">' + opt.symbol + '</span>' +
+                    '</span> ' + opt.text;
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    if (!picker._context) return;
+                    var selectedValue = btn.getAttribute('data-value');
+                    applyShiftStatusChange(picker._context, selectedValue === null ? '' : selectedValue);
+                    hideShiftStatusPicker();
+                });
+                picker.appendChild(btn);
+            });
+            document.body.appendChild(picker);
+            document.addEventListener('click', function(e) {
+                if (picker.style.display === 'none') return;
+                if (picker.contains(e.target) || e.target.closest('.calendar-shift.is-editable')) return;
+                hideShiftStatusPicker();
+            });
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') hideShiftStatusPicker();
+            });
+            return picker;
+        }
+
+        function hideShiftStatusPicker() {
+            var picker = document.getElementById('shiftStatusPicker');
+            if (picker) picker.style.display = 'none';
+        }
+
+        function openShiftStatusPicker(shiftEl) {
+            var picker = ensureShiftStatusPicker();
+            picker._context = {
+                shiftEl: shiftEl,
+                day: parseInt(shiftEl.dataset.day, 10),
+                shiftType: shiftEl.dataset.shiftType,
+                carNo: shiftEl.dataset.carNo || null,
+                empId: shiftEl.dataset.empId || null
+            };
+            var rect = shiftEl.getBoundingClientRect();
+            picker.style.display = 'block';
+            picker.style.visibility = 'hidden';
+            picker.style.left = '0px';
+            picker.style.top = '0px';
+            var pickerRect = picker.getBoundingClientRect();
+            var left = rect.left;
+            var top = rect.bottom + 4;
+            if (left + pickerRect.width > window.innerWidth - 8) {
+                left = window.innerWidth - pickerRect.width - 8;
+            }
+            if (top + pickerRect.height > window.innerHeight - 8) {
+                top = rect.top - pickerRect.height - 4;
+            }
+            picker.style.left = Math.max(8, left) + 'px';
+            picker.style.top = Math.max(8, top) + 'px';
+            picker.style.visibility = 'visible';
+        }
+
+        function syncDispatchTableRow(sheetName, carNo, empId, shiftType, day, value, stats) {
+            var sheetEl = document.getElementById(sheetName);
+            if (!sheetEl) return;
+            var table = sheetEl.querySelector('.dispatch-table');
+            if (!table) return;
+            var rows = table.querySelectorAll('tbody tr');
+            carNo = String(carNo || '').trim();
+            empId = formatEmpId(empId);
+            shiftType = String(shiftType || '').trim();
+            for (var i = 0; i < rows.length; i++) {
+                var tr = rows[i];
+                var typeCell = tr.querySelector('td[data-col="근무유형"]');
+                if (!typeCell || typeCell.textContent.trim() !== shiftType) continue;
+                if (carNo) {
+                    var carCell = tr.querySelector('td[data-col="차량번호"]');
+                    if (!carCell || carCell.textContent.trim() !== carNo) continue;
+                } else if (empId) {
+                    var empCell = tr.querySelector('td[data-col="사번"]');
+                    if (!empCell || formatEmpId(empCell.textContent.trim()) !== empId) continue;
+                } else {
+                    continue;
+                }
+                var dayCell = tr.querySelector('td[data-col="' + day + '"]');
+                if (dayCell) {
+                    dayCell.textContent = value;
+                    dayCell.setAttribute('data-value', value);
+                }
+                ['인정일', '승무일', '결근일', '휴가'].forEach(function(col) {
+                    var statCell = tr.querySelector('td[data-col="' + col + '"]');
+                    if (statCell && stats && stats[col] !== undefined) {
+                        statCell.textContent = stats[col];
+                        statCell.setAttribute('data-value', stats[col]);
+                    }
+                });
+                break;
+            }
+        }
+
+        function parseApiResponse(response) {
+            return response.text().then(function(text) {
+                var data = null;
+                if (text) {
+                    try {
+                        data = JSON.parse(text);
+                    } catch (err) {
+                        data = null;
+                    }
+                }
+                return { ok: response.ok, status: response.status, data: data, text: text };
+            });
+        }
+
+        function applyShiftStatusChange(context, newValue) {
+            if (!context) return;
+            if (newValue === null || newValue === undefined) {
+                newValue = '';
+            }
+            var shiftEl = context.shiftEl;
+            var sheetName = getActiveSheetName() || calendarState.currentSheet;
+            if (!sheetName) {
+                window.alert('월(시트) 정보를 찾을 수 없습니다. 상단 월 탭을 다시 선택해 주세요.');
+                return;
+            }
+            calendarState.currentSheet = sheetName;
+            var isDriverMode = calendarState.filterMode === 'driver';
+            var row = findDispatchRowInState(
+                sheetName,
+                context.shiftType,
+                context.carNo,
+                context.empId
+            );
+            if (!row) {
+                window.alert('캘린더 데이터에서 해당 배차 행을 찾을 수 없습니다.');
+                return;
+            }
+
+            var requestBody = {
+                year: Number(getCalendarDispatchYear(new Date().getFullYear())),
+                sheet: sheetName,
+                day: context.day,
+                shift_type: context.shiftType,
+                value: newValue
+            };
+            if (context.carNo) requestBody.car_no = context.carNo;
+            if (context.empId) requestBody.emp_id = context.empId;
+            if (!requestBody.car_no && !requestBody.emp_id) {
+                window.alert('차량 또는 사번 정보가 없어 저장할 수 없습니다.');
+                return;
+            }
+
+            shiftEl.classList.add('is-saving');
+            fetch('/api/dispatch/cell', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(requestBody)
+            })
+            .then(parseApiResponse)
+            .then(function(result) {
+                shiftEl.classList.remove('is-saving');
+                if (!result.data) {
+                    window.alert('서버 응답을 처리할 수 없습니다. (HTTP ' + result.status + ')');
+                    return;
+                }
+                if (!result.ok || !result.data.success) {
+                    var message = result.data.error || '상태 변경에 실패했습니다.';
+                    window.alert(message);
+                    return;
+                }
+                row[String(context.day)] = result.data.value;
+                if (result.data.stats) {
+                    ['인정일', '승무일', '결근일', '휴가'].forEach(function(key) {
+                        row[key] = result.data.stats[key];
+                    });
+                }
+                setShiftElementEditable(shiftEl, row, context.day, context.shiftType, true);
+                updateShiftElementContent(shiftEl, row, context.day, isDriverMode);
+                syncDispatchTableRow(
+                    sheetName,
+                    context.carNo || (result.data.row && result.data.row.car_no),
+                    context.empId || (result.data.row && result.data.row.emp_id),
+                    context.shiftType,
+                    context.day,
+                    result.data.value,
+                    result.data.stats
+                );
+                var statsView = document.getElementById('view-stats');
+                if (statsView && statsView.classList.contains('active')) {
+                    updateDispatchStats(sheetName);
+                }
+            })
+            .catch(function(err) {
+                shiftEl.classList.remove('is-saving');
+                console.error('Dispatch cell update failed:', err);
+                window.alert('상태 변경 중 네트워크 오류가 발생했습니다.');
+            });
         }
 
         function getDispatchRemarksYear(fallbackYear) {
@@ -1588,57 +2009,20 @@
             return { text: v.toUpperCase(), cls: '', bgCls: '' };
         }
 
-        function buildShiftHtmlDriver(row, day) {
-            var emptyRow = '<div class="calendar-shift"><span class="shift-info"></span><span class="shift-status"></span></div>';
-            if (!row) return emptyRow;
-            var dayValue = String(row[String(day)] || '').trim();
-            if (!dayValue) return emptyRow;
-
-            var carNo = String(row['차량번호'] || '').trim();
-            var carType = String(row['차종'] || '').trim();
-            var status = statusSymbol(dayValue);
-            var info = carNo;
-            if (carType) {
-                info = info ? (info + ' ' + carType) : carType;
-            }
-            return '<div class="calendar-shift ' + status.bgCls + '">' +
-                '<span class="shift-info">' + info + '</span>' +
-                '<span class="shift-status ' + status.cls + '">' + status.text + '</span>' +
-                '</div>';
-        }
-
-        function buildShiftHtml(row, day) {
-            var emptyRow = '<div class="calendar-shift"><span class="shift-info"></span><span class="shift-status"></span></div>';
-            if (!row) return emptyRow;
-            var dayValue = String(row[String(day)] || '').trim();
-            if (!dayValue) return emptyRow;
-
-            var empId = formatEmpId(row['사번']);
-            var driver = String(row['운전기사'] || '').trim();
-            var status = statusSymbol(dayValue);
-            var info = '';
-            if (empId || driver) {
-                info = (empId ? empId + ' ' : '') + driver;
-            }
-            return '<div class="calendar-shift ' + status.bgCls + '">' +
-                '<span class="shift-info">' + info + '</span>' +
-                '<span class="shift-status ' + status.cls + '">' + status.text + '</span>' +
-                '</div>';
-        }
-
         function renderCalendar(sheetName) {
             var grid = document.getElementById('calendarGrid');
             var titleEl = document.getElementById('calendarMonthTitle');
             if (!grid || !titleEl) return;
 
+            hideShiftStatusPicker();
+
             var isDriverMode = calendarState.filterMode === 'driver';
             var rowsByType = isDriverMode
                 ? getRowsForDriver(sheetName, calendarState.selectedDriver)
                 : getRowsForVehicle(sheetName, calendarState.selectedCar);
-            var shiftHtmlBuilder = isDriverMode ? buildShiftHtmlDriver : buildShiftHtml;
 
             var month = parseSheetMonth(sheetName);
-            var year = getDispatchRemarksYear(new Date().getFullYear());
+            var year = getCalendarDispatchYear(new Date().getFullYear());
             titleEl.textContent = year + '-' + String(month).padStart(2, '0');
 
             var daysInMonth = new Date(year, month, 0).getDate();
@@ -1684,10 +2068,12 @@
                     col.className = 'calendar-day-col';
                     if (dayNum === null) {
                         col.classList.add('empty');
-                        col.innerHTML = '<div class="day-num"></div>' +
-                            CALENDAR_SHIFT_TYPES.map(function() {
-                                return '<div class="calendar-shift"><span class="shift-info"></span><span class="shift-status"></span></div>';
-                            }).join('');
+                        var emptyDayNum = document.createElement('div');
+                        emptyDayNum.className = 'day-num';
+                        col.appendChild(emptyDayNum);
+                        CALENDAR_SHIFT_TYPES.forEach(function() {
+                            col.appendChild(createShiftElement(null, null, null, isDriverMode));
+                        });
                     } else {
                         var weekday = (new Date(year, month - 1, dayNum).getDay() + 6) % 7;
                         if (weekday === 5) col.classList.add('sat');
@@ -1699,13 +2085,16 @@
                         if (calendarState.selectedDay === dayNum) {
                             col.classList.add('selected-day');
                         }
-                        var html = '<div class="day-num">' + dayNum + '</div>';
+                        var dayNumEl = document.createElement('div');
+                        dayNumEl.className = 'day-num';
+                        dayNumEl.textContent = String(dayNum);
+                        col.appendChild(dayNumEl);
                         CALENDAR_SHIFT_TYPES.forEach(function(shiftType) {
-                            html += shiftHtmlBuilder(rowsByType[shiftType], dayNum);
+                            col.appendChild(createShiftElement(rowsByType[shiftType], dayNum, shiftType, isDriverMode));
                         });
-                        col.innerHTML = html;
                         col.addEventListener('click', (function(day, colRef) {
-                            return function() {
+                            return function(e) {
+                                if (e.target.closest('.calendar-shift.is-editable')) return;
                                 selectCalendarDay(colRef, year, month, day);
                             };
                         })(dayNum, col));
@@ -2222,8 +2611,8 @@ const MAX_UPLOAD_HISTORY = 3;
                         }
                     }
                 })
-                .catch(error => {
-                    console.log('최신 업로드 정보를 가져오는데 실패했습니다:', error);
+                .catch(function() {
+                    // 업로드 이력이 없을 때 API 미응답은 정상 — 콘솔 출력 생략
                 });
         }
     </script>
