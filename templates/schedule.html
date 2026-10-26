@@ -1003,6 +1003,34 @@
             font-size: 12px;
         }
 
+        .calendar-shift .shift-info.has-shift-value {
+            cursor: grab;
+            touch-action: none;
+        }
+
+        .calendar-shift .shift-info.has-shift-value:active {
+            cursor: grabbing;
+        }
+
+        .calendar-shift.is-drag-source {
+            opacity: 0.45;
+        }
+
+        .calendar-shift.is-drop-target {
+            outline: 2px dashed #28a745;
+            outline-offset: -2px;
+            background-color: #f1f8e9;
+        }
+
+        body.calendar-shift-dragging {
+            user-select: none;
+            cursor: grabbing;
+        }
+
+        body.calendar-shift-dragging .calendar-shift.is-editable {
+            cursor: copy;
+        }
+
         .calendar-shift .shift-status {
             text-align: center;
             font-weight: bold;
@@ -1498,22 +1526,77 @@
             }
         }
 
+        var DISPATCH_CELL_DISPLAY_KEY = '_cell_display';
+
         function getDispatchDayValue(row, day) {
             if (!row || day == null) return '';
             return String(row[String(day)] || '').trim();
+        }
+
+        function getDispatchCellDisplay(row, day) {
+            if (!row || day == null) {
+                return { empId: '', driverName: '' };
+            }
+            var map = row[DISPATCH_CELL_DISPLAY_KEY];
+            var override = map && map[String(day)];
+            if (override && typeof override === 'object') {
+                var oEmp = formatEmpId(override['사번']);
+                var oName = String(override['운전기사'] || override['이름'] || '').trim();
+                if (oEmp || oName) {
+                    return { empId: oEmp, driverName: oName };
+                }
+            }
+            return {
+                empId: formatEmpId(row['사번']),
+                driverName: String(row['운전기사'] || row['이름'] || '').trim()
+            };
+        }
+
+        function applyDispatchCellDisplayFromPayload(row, day, payload) {
+            if (!row || !payload || day == null) return;
+            var emp = formatEmpId(payload.cell_emp_id);
+            var name = String(payload.cell_driver_name || '').trim();
+            var rowEmp = formatEmpId(row['사번']);
+            var rowName = String(row['운전기사'] || row['이름'] || '').trim();
+            if (emp === rowEmp && name === rowName) {
+                if (row[DISPATCH_CELL_DISPLAY_KEY]) {
+                    delete row[DISPATCH_CELL_DISPLAY_KEY][String(day)];
+                    if (!Object.keys(row[DISPATCH_CELL_DISPLAY_KEY]).length) {
+                        delete row[DISPATCH_CELL_DISPLAY_KEY];
+                    }
+                }
+                return;
+            }
+            if (!row[DISPATCH_CELL_DISPLAY_KEY]) {
+                row[DISPATCH_CELL_DISPLAY_KEY] = {};
+            }
+            row[DISPATCH_CELL_DISPLAY_KEY][String(day)] = { '사번': emp, '운전기사': name };
+        }
+
+        function refreshShiftElementDatasets(shiftEl, row, day) {
+            if (!shiftEl || !row || day == null) return;
+            var disp = getDispatchCellDisplay(row, day);
+            shiftEl.dataset.empId = disp.empId;
+            shiftEl.dataset.driverName = disp.driverName;
         }
 
         function updateShiftElementContent(shiftEl, row, day, isDriverMode) {
             var dayValue = getDispatchDayValue(row, day);
             var infoEl = shiftEl.querySelector('.shift-info');
             if (!row || !dayValue) {
-                if (infoEl) infoEl.textContent = '';
+                if (infoEl) {
+                    infoEl.textContent = '';
+                    infoEl.classList.remove('has-shift-value');
+                }
                 applyShiftStatusClasses(shiftEl, '');
+                shiftEl.classList.remove('is-empty-cell');
                 if (row && shiftEl.classList.contains('is-editable')) {
                     shiftEl.classList.add('is-empty-cell');
                 }
                 return;
             }
+            shiftEl.classList.remove('is-empty-cell');
+            if (infoEl) infoEl.classList.add('has-shift-value');
             if (isDriverMode) {
                 var carNo = String(row['차량번호'] || '').trim();
                 var carType = String(row['차종'] || '').trim();
@@ -1521,15 +1604,240 @@
                 if (carType) info = info ? (info + ' ' + carType) : carType;
                 if (infoEl) infoEl.textContent = info;
             } else {
-                var empId = formatEmpId(row['사번']);
-                var driver = String(row['운전기사'] || '').trim();
+                var cellDisp = getDispatchCellDisplay(row, day);
                 var infoText = '';
-                if (empId || driver) {
-                    infoText = (empId ? empId + ' ' : '') + driver;
+                if (cellDisp.empId || cellDisp.driverName) {
+                    infoText = (cellDisp.empId ? cellDisp.empId + ' ' : '') + cellDisp.driverName;
                 }
                 if (infoEl) infoEl.textContent = infoText;
             }
             applyShiftStatusClasses(shiftEl, dayValue);
+        }
+
+        function getShiftContextFromElement(shiftEl) {
+            return {
+                shiftEl: shiftEl,
+                day: parseInt(shiftEl.dataset.day, 10),
+                shiftType: shiftEl.dataset.shiftType,
+                carNo: shiftEl.dataset.carNo || null,
+                empId: shiftEl.dataset.empId || null
+            };
+        }
+
+        function findShiftElementInGrid(day, shiftType) {
+            var grid = document.getElementById('calendarGrid');
+            if (!grid) return null;
+            var nodes = grid.querySelectorAll('.calendar-shift.is-editable');
+            for (var i = 0; i < nodes.length; i++) {
+                var el = nodes[i];
+                if (String(el.dataset.day) === String(day) && el.dataset.shiftType === shiftType) {
+                    return el;
+                }
+            }
+            return null;
+        }
+
+        function clearShiftDropTargets() {
+            document.querySelectorAll('.calendar-shift.is-drop-target').forEach(function(el) {
+                el.classList.remove('is-drop-target');
+            });
+        }
+
+        function bindShiftInfoDrag(infoEl, shiftEl) {
+            if (infoEl._dragBound) return;
+            infoEl._dragBound = true;
+            infoEl.addEventListener('pointerdown', function(e) {
+                if (e.button !== 0) return;
+                if (!infoEl.classList.contains('has-shift-value')) return;
+                e.preventDefault();
+                e.stopPropagation();
+                hideShiftStatusPicker();
+
+                var startX = e.clientX;
+                var startY = e.clientY;
+                var dragging = false;
+                var activeDropTarget = null;
+
+                function setDropTarget(targetEl) {
+                    if (activeDropTarget === targetEl) return;
+                    if (activeDropTarget) activeDropTarget.classList.remove('is-drop-target');
+                    activeDropTarget = targetEl;
+                    if (activeDropTarget) activeDropTarget.classList.add('is-drop-target');
+                }
+
+                function onPointerMove(ev) {
+                    if (!dragging) {
+                        if (Math.abs(ev.clientX - startX) < 5 && Math.abs(ev.clientY - startY) < 5) return;
+                        dragging = true;
+                        shiftEl.classList.add('is-drag-source');
+                        document.body.classList.add('calendar-shift-dragging');
+                        try { infoEl.setPointerCapture(ev.pointerId); } catch (err) {}
+                    }
+                    var hit = document.elementFromPoint(ev.clientX, ev.clientY);
+                    var dropEl = hit && hit.closest('.calendar-shift.is-editable');
+                    if (dropEl && dropEl !== shiftEl) {
+                        setDropTarget(dropEl);
+                    } else {
+                        setDropTarget(null);
+                    }
+                }
+
+                function finishDrag(ev) {
+                    document.removeEventListener('pointermove', onPointerMove);
+                    document.removeEventListener('pointerup', finishDrag);
+                    document.removeEventListener('pointercancel', finishDrag);
+                    shiftEl.classList.remove('is-drag-source');
+                    document.body.classList.remove('calendar-shift-dragging');
+                    clearShiftDropTargets();
+                    try { infoEl.releasePointerCapture(ev.pointerId); } catch (err2) {}
+
+                    if (!dragging) return;
+
+                    var hit = document.elementFromPoint(ev.clientX, ev.clientY);
+                    var targetShift = hit && hit.closest('.calendar-shift.is-editable');
+                    if (!targetShift || targetShift === shiftEl) return;
+
+                    applyShiftMove(getShiftContextFromElement(shiftEl), getShiftContextFromElement(targetShift));
+                }
+
+                document.addEventListener('pointermove', onPointerMove);
+                document.addEventListener('pointerup', finishDrag);
+                document.addEventListener('pointercancel', finishDrag);
+            });
+        }
+
+        function applyShiftMove(sourceContext, targetContext) {
+            if (!sourceContext || !targetContext) return;
+            var sheetName = getActiveSheetName() || calendarState.currentSheet;
+            if (!sheetName) {
+                window.alert('월(시트) 정보를 찾을 수 없습니다.');
+                return;
+            }
+            calendarState.currentSheet = sheetName;
+            var isDriverMode = calendarState.filterMode === 'driver';
+
+            var lookupCarNo = isDriverMode ? '' : (sourceContext.carNo || '');
+            var lookupEmpId = sourceContext.empId || targetContext.empId;
+            var sourceRow = findDispatchRowInState(
+                sheetName,
+                sourceContext.shiftType,
+                lookupCarNo,
+                lookupEmpId
+            );
+            if (!sourceRow) {
+                window.alert('배차 데이터에서 이동 대상을 찾을 수 없습니다.');
+                return;
+            }
+            if (!getDispatchDayValue(sourceRow, sourceContext.day)) {
+                return;
+            }
+
+            var requestBody = {
+                year: Number(getCalendarDispatchYear(new Date().getFullYear())),
+                sheet: sheetName,
+                source_shift_type: sourceContext.shiftType,
+                source_day: sourceContext.day,
+                target_shift_type: targetContext.shiftType,
+                target_day: targetContext.day
+            };
+            if (isDriverMode && lookupEmpId) {
+                requestBody.emp_id = lookupEmpId;
+            } else {
+                if (sourceContext.carNo) requestBody.car_no = sourceContext.carNo;
+                if (sourceContext.empId) requestBody.emp_id = sourceContext.empId;
+            }
+
+            sourceContext.shiftEl.classList.add('is-saving');
+            targetContext.shiftEl.classList.add('is-saving');
+
+            fetch('/api/dispatch/cell/move', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(requestBody)
+            })
+            .then(parseApiResponse)
+            .then(function(result) {
+                sourceContext.shiftEl.classList.remove('is-saving');
+                targetContext.shiftEl.classList.remove('is-saving');
+                if (!result.data) {
+                    window.alert('서버 응답을 처리할 수 없습니다. (HTTP ' + result.status + ')');
+                    return;
+                }
+                if (!result.ok || !result.data.success) {
+                    window.alert(result.data.error || '배차 이동에 실패했습니다.');
+                    return;
+                }
+                if (result.data.noop) return;
+
+                var sourcePayload = result.data.source;
+                var targetPayload = result.data.target;
+                sourceRow = findDispatchRowInState(
+                    sheetName,
+                    sourceContext.shiftType,
+                    lookupCarNo,
+                    lookupEmpId
+                ) || sourceRow;
+                var targetRow = ensureDispatchRowInClientState(sheetName, targetPayload, isDriverMode);
+                if (!targetRow) {
+                    window.alert('배차 데이터에 도착 행을 반영할 수 없습니다.');
+                    return;
+                }
+                sourceRow[String(sourceContext.day)] = sourcePayload.value;
+                targetRow[String(targetContext.day)] = targetPayload.value;
+                ['인정일', '승무일', '결근일', '휴가'].forEach(function(key) {
+                    sourceRow[key] = sourcePayload.stats[key];
+                    targetRow[key] = targetPayload.stats[key];
+                });
+
+                applyDispatchCellDisplayFromPayload(sourceRow, sourceContext.day, sourcePayload);
+                applyDispatchCellDisplayFromPayload(targetRow, targetContext.day, targetPayload);
+
+                var sourceEl = findShiftElementInGrid(sourceContext.day, sourceContext.shiftType) || sourceContext.shiftEl;
+                var targetEl = findShiftElementInGrid(targetContext.day, targetContext.shiftType) || targetContext.shiftEl;
+                updateShiftElementContent(sourceEl, sourceRow, sourceContext.day, isDriverMode);
+                updateShiftElementContent(targetEl, targetRow, targetContext.day, isDriverMode);
+                refreshShiftElementDatasets(sourceEl, sourceRow, sourceContext.day);
+                refreshShiftElementDatasets(targetEl, targetRow, targetContext.day);
+
+                syncDispatchTableRow(
+                    sheetName,
+                    sourcePayload.car_no,
+                    sourcePayload.emp_id,
+                    sourcePayload.shift_type,
+                    sourcePayload.day,
+                    sourcePayload.value,
+                    sourcePayload.stats
+                );
+                syncDispatchTableRow(
+                    sheetName,
+                    targetPayload.car_no,
+                    targetPayload.emp_id,
+                    targetPayload.shift_type,
+                    targetPayload.day,
+                    targetPayload.value,
+                    targetPayload.stats
+                );
+
+                if (result.data.target_row_created) {
+                    renderCalendar(sheetName);
+                }
+
+                var statsView = document.getElementById('view-stats');
+                if (statsView && statsView.classList.contains('active')) {
+                    updateDispatchStats(sheetName);
+                }
+            })
+            .catch(function(err) {
+                sourceContext.shiftEl.classList.remove('is-saving');
+                targetContext.shiftEl.classList.remove('is-saving');
+                console.error('Dispatch cell move failed:', err);
+                window.alert('배차 이동 중 네트워크 오류가 발생했습니다.');
+            });
         }
 
         function setShiftElementEditable(shiftEl, row, day, shiftType, enabled) {
@@ -1538,14 +1846,27 @@
                 shiftEl.dataset.day = String(day);
                 shiftEl.dataset.shiftType = shiftType;
                 shiftEl.dataset.carNo = String(row['차량번호'] || '').trim();
-                shiftEl.dataset.empId = formatEmpId(row['사번']);
-                shiftEl.dataset.driverName = String(row['운전기사'] || '').trim();
+                var cellDisp = getDispatchCellDisplay(row, day);
+                shiftEl.dataset.empId = cellDisp.empId;
+                shiftEl.dataset.driverName = cellDisp.driverName;
                 if (!shiftEl._shiftEditBound) {
                     shiftEl._shiftEditBound = true;
+                    var statusEl = shiftEl.querySelector('.shift-status');
+                    if (statusEl) {
+                        statusEl.style.cursor = 'pointer';
+                        statusEl.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            openShiftStatusPicker(shiftEl);
+                        });
+                    }
                     shiftEl.addEventListener('click', function(e) {
+                        if (!shiftEl.classList.contains('is-empty-cell')) return;
+                        if (e.target.closest('.shift-info')) return;
                         e.stopPropagation();
                         openShiftStatusPicker(shiftEl);
                     });
+                    var infoEl = shiftEl.querySelector('.shift-info');
+                    if (infoEl) bindShiftInfoDrag(infoEl, shiftEl);
                 }
                 return;
             }
@@ -1998,6 +2319,68 @@
             return byType;
         }
 
+        function getCalendarSeedRow(rowsByType) {
+            return rowsByType['주간'] || rowsByType['야간'] || rowsByType['일차'] || rowsByType['리스'] || null;
+        }
+
+        function buildPlaceholderDispatchRow(rowsByType, shiftType, isDriverMode) {
+            var seed = getCalendarSeedRow(rowsByType);
+            if (!seed) return null;
+            return {
+                '차량번호': String(seed['차량번호'] || '').trim(),
+                '차종': String(seed['차종'] || '').trim(),
+                '근무유형': shiftType,
+                '사번': isDriverMode ? formatEmpId(seed['사번']) : '',
+                '운전기사': isDriverMode ? String(seed['운전기사'] || seed['이름'] || '').trim() : ''
+            };
+        }
+
+        function getCalendarRowForShift(rowsByType, shiftType, isDriverMode) {
+            if (rowsByType[shiftType]) return rowsByType[shiftType];
+            return buildPlaceholderDispatchRow(rowsByType, shiftType, isDriverMode);
+        }
+
+        function ensureDispatchRowInClientState(sheetName, payload, isDriverMode) {
+            if (!payload) return null;
+            var carNo = isDriverMode ? '' : String(payload.car_no || '').trim();
+            var empId = isDriverMode ? formatEmpId(payload.emp_id) : '';
+            var existing = findDispatchRowInState(
+                sheetName,
+                payload.shift_type,
+                carNo,
+                empId
+            );
+            if (existing) return existing;
+            var sheet = calendarState.dispatchData && calendarState.dispatchData[sheetName];
+            if (!sheet) return null;
+            var rowsByType = isDriverMode
+                ? getRowsForDriver(sheetName, calendarState.selectedDriver)
+                : getRowsForVehicle(sheetName, calendarState.selectedCar);
+            var row = buildPlaceholderDispatchRow(rowsByType, payload.shift_type, isDriverMode);
+            if (!row) {
+                row = {
+                    '차량번호': payload.car_no || '',
+                    '차종': '',
+                    '근무유형': payload.shift_type,
+                    '사번': payload.emp_id || '',
+                    '운전기사': payload.driver_name || ''
+                };
+            } else {
+                row['근무유형'] = payload.shift_type;
+            }
+            row['사번'] = payload.emp_id || row['사번'] || '';
+            row['운전기사'] = payload.driver_name || row['운전기사'] || '';
+            for (var d = 1; d <= 31; d++) {
+                row[String(d)] = '';
+            }
+            ['인정일', '승무일', '결근일', '휴가'].forEach(function(key) {
+                row[key] = '0';
+            });
+            if (!sheet.data) sheet.data = [];
+            sheet.data.push(row);
+            return row;
+        }
+
         function statusSymbol(value) {
             var v = String(value || '').trim().toLowerCase();
             if (!v) return { text: '', cls: '', bgCls: '' };
@@ -2090,7 +2473,8 @@
                         dayNumEl.textContent = String(dayNum);
                         col.appendChild(dayNumEl);
                         CALENDAR_SHIFT_TYPES.forEach(function(shiftType) {
-                            col.appendChild(createShiftElement(rowsByType[shiftType], dayNum, shiftType, isDriverMode));
+                            var calRow = getCalendarRowForShift(rowsByType, shiftType, isDriverMode);
+                            col.appendChild(createShiftElement(calRow, dayNum, shiftType, isDriverMode));
                         });
                         col.addEventListener('click', (function(day, colRef) {
                             return function(e) {

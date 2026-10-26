@@ -390,6 +390,61 @@ def _build_dashboard_sales_monthly(year, month_order=None):
     return monthly_incomes, monthly_fuel_costs
 
 
+def _normalize_person_name(name):
+    return re.sub(r'\s+', '', str(name or '').strip())
+
+
+def _sales_row_matches_driver(row, driver_emp_id, driver_name):
+    target_emp = normalize_emp_id(driver_emp_id)
+    row_emp = normalize_emp_id(row.get('사번'))
+    if target_emp and row_emp and row_emp == target_emp:
+        return True
+    target_name = _normalize_person_name(driver_name)
+    row_name = _normalize_person_name(row.get('이름') or row.get('운전기사'))
+    return bool(target_name and row_name and row_name == target_name)
+
+
+def _sales_row_salary_amount(row):
+    if row.get('급여') not in (None, ''):
+        try:
+            return float(row.get('급여') or 0)
+        except (ValueError, TypeError):
+            return 0.0
+    try:
+        income = float(row.get('실입금') or 0)
+        fuel = float(row.get('연료비') or 0)
+        lease = float(row.get('리스료') or 0)
+    except (ValueError, TypeError):
+        return 0.0
+    return (income - lease - fuel) * 0.8
+
+
+def _aggregate_driver_sales_monthly(sales_data, driver_emp_id, driver_name, year=None):
+    """sales_data.json — 기사별·연도별 월 합계 (실입금·연료비·급여)."""
+    monthly = {}
+    if not sales_data:
+        return monthly
+    year_prefix = str(year) if year is not None else None
+    for month_data in sales_data.values():
+        for row in month_data.get('data', []):
+            if not _sales_row_matches_driver(row, driver_emp_id, driver_name):
+                continue
+            date = str(row.get('날짜', '')).strip()
+            if year_prefix and not date.startswith(year_prefix):
+                continue
+            if len(date) < 7:
+                continue
+            month_key = f'{date[5:7]}월'
+            bucket = monthly.setdefault(month_key, {'실입금': 0, '연료비': 0, '급여': 0.0})
+            try:
+                bucket['실입금'] += int(float(row.get('실입금') or 0))
+                bucket['연료비'] += int(float(row.get('연료비') or 0))
+                bucket['급여'] += _sales_row_salary_amount(row)
+            except (ValueError, TypeError):
+                continue
+    return monthly
+
+
 def _build_dashboard_dispatch_metrics(dispatch_data, month_order=None):
     month_order = month_order or DASHBOARD_MONTH_ORDER
     categories = DASHBOARD_DISPATCH_CATEGORIES
@@ -870,6 +925,102 @@ def api_update_dispatch_cell():
             'emp_id': normalize_emp_id(target_row.get('사번')),
             'shift_type': shift_type,
         },
+    })
+
+
+@app.route('/api/dispatch/cell/move', methods=['POST'])
+@login_required
+def api_move_dispatch_cell():
+    """캘린더 drag&drop — 이동·swap 시 해당 일자 셀 값·표시(사번/기사명)만 반영."""
+    payload = request.get_json(silent=True) or {}
+    try:
+        year = int(payload.get('year'))
+        source_day = int(payload.get('source_day'))
+        target_day = int(payload.get('target_day'))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': '잘못된 요청입니다.'}), 400
+
+    sheet = str(payload.get('sheet', '')).strip()
+    source_shift = str(payload.get('source_shift_type', '')).strip()
+    target_shift = str(payload.get('target_shift_type', '')).strip()
+    car_no = str(payload.get('car_no') or '').strip() or None
+    emp_id = payload.get('emp_id')
+
+    if not sheet or not source_shift or not target_shift:
+        return jsonify({'success': False, 'error': '필수 값이 누락되었습니다.'}), 400
+    if source_day < 1 or source_day > 31 or target_day < 1 or target_day > 31:
+        return jsonify({'success': False, 'error': '일자가 올바르지 않습니다.'}), 400
+    if not car_no and emp_id in (None, ''):
+        return jsonify({'success': False, 'error': '차량 또는 사번 정보가 필요합니다.'}), 400
+    if source_shift == target_shift and source_day == target_day:
+        return jsonify({'success': True, 'noop': True})
+
+    year_data = load_dispatch_data(year)
+    if not year_data or sheet not in year_data:
+        return jsonify({'success': False, 'error': '해당 연도·월 데이터를 찾을 수 없습니다.'}), 404
+
+    sheet_data = year_data[sheet]
+    source_row = _find_dispatch_row(sheet_data, source_shift, car_no=car_no, emp_id=emp_id)
+    if source_row is None:
+        return jsonify({'success': False, 'error': '이동할 배차 행을 찾을 수 없습니다.'}), 404
+
+    target_row, target_row_created = _ensure_dispatch_row(
+        sheet_data,
+        target_shift,
+        car_no=car_no,
+        emp_id=emp_id,
+        seed_row=source_row,
+    )
+    if target_row is None:
+        return jsonify({'success': False, 'error': '이동할 배차 행을 찾을 수 없습니다.'}), 404
+
+    source_value = _normalize_dispatch_cell_value(source_row.get(str(source_day)))
+    if not source_value:
+        return jsonify({'success': False, 'error': '이동할 배차 정보가 없습니다.'}), 400
+
+    source_display = _effective_dispatch_cell_display(source_row, source_day)
+    target_value = _normalize_dispatch_cell_value(target_row.get(str(target_day)))
+    same_row = source_row is target_row
+    if target_value and not same_row:
+        target_display = _effective_dispatch_cell_display(target_row, target_day)
+        source_row[str(source_day)] = target_value
+        target_row[str(target_day)] = source_value
+        _set_dispatch_cell_display(source_row, source_day, target_display)
+        _set_dispatch_cell_display(target_row, target_day, source_display)
+        swapped = True
+    else:
+        source_row[str(source_day)] = ''
+        _set_dispatch_cell_display(source_row, source_day, None)
+        target_row[str(target_day)] = source_value
+        _set_dispatch_cell_display(target_row, target_day, source_display)
+        swapped = False
+    enrich_dispatch_record(source_row)
+    enrich_dispatch_record(target_row)
+    year_data[sheet] = normalize_dispatch_sheet(sheet_data)
+    save_dispatch_data(year_data, year=year)
+
+    stat_keys = ('인정일', '승무일', '결근일', '휴가')
+
+    def _row_payload(row, shift_type, day):
+        cell_disp = _effective_dispatch_cell_display(row, day)
+        return {
+            'shift_type': shift_type,
+            'day': day,
+            'value': str(row.get(str(day), '')).strip(),
+            'stats': {key: row.get(key, '') for key in stat_keys},
+            'car_no': str(row.get('차량번호', '')).strip(),
+            'emp_id': normalize_emp_id(row.get('사번')),
+            'driver_name': _dispatch_driver_display_name(row),
+            'cell_emp_id': cell_disp.get('사번', ''),
+            'cell_driver_name': cell_disp.get('운전기사', ''),
+        }
+
+    return jsonify({
+        'success': True,
+        'swapped': swapped,
+        'target_row_created': target_row_created,
+        'source': _row_payload(source_row, source_shift, source_day),
+        'target': _row_payload(target_row, target_shift, target_day),
     })
 
 
@@ -1597,6 +1748,7 @@ DISPATCH_HEADER_RENAME = {
     '결근일수': '결근일',
 }
 DISPATCH_LEGACY_STAT_KEYS = ('인정일수', '근무일수', '승무일수', '결근일수')
+DISPATCH_CELL_DISPLAY_KEY = '_cell_display'
 DISPATCH_MONTH_SHEET_NAMES = [
     '01월', '02월', '03월', '04월', '05월', '06월',
     '07월', '08월', '09월', '10월', '11월', '12월',
@@ -1788,6 +1940,103 @@ def _normalize_dispatch_cell_value(value):
     if lower == 'r':
         return 'r'
     return v
+
+
+def _dispatch_driver_display_name(row):
+    return str(row.get('운전기사') or row.get('이름') or '').strip()
+
+
+def _dispatch_cell_display_map(row):
+    raw = row.get(DISPATCH_CELL_DISPLAY_KEY)
+    return raw if isinstance(raw, dict) else {}
+
+
+def _effective_dispatch_cell_display(row, day):
+    """해당 일자 셀에 표시할 사번·기사명 (일자별 override 또는 행 기본값)."""
+    override = _dispatch_cell_display_map(row).get(str(day))
+    if isinstance(override, dict):
+        emp = normalize_emp_id(override.get('사번'))
+        name = str(override.get('운전기사') or override.get('이름') or '').strip()
+        if emp or name:
+            return {'사번': emp, '운전기사': name}
+    return {
+        '사번': normalize_emp_id(row.get('사번')),
+        '운전기사': _dispatch_driver_display_name(row),
+    }
+
+
+def _set_dispatch_cell_display(row, day, display):
+    """일자별 표시 override. 행 기본과 같으면 override 제거."""
+    day_key = str(day)
+    display_map = dict(_dispatch_cell_display_map(row))
+    row_default = {
+        '사번': normalize_emp_id(row.get('사번')),
+        '운전기사': _dispatch_driver_display_name(row),
+    }
+    if not display:
+        display_map.pop(day_key, None)
+    else:
+        emp = normalize_emp_id(display.get('사번'))
+        name = str(display.get('운전기사') or display.get('이름') or '').strip()
+        if emp == row_default['사번'] and name == row_default['운전기사']:
+            display_map.pop(day_key, None)
+        elif emp or name:
+            display_map[day_key] = {'사번': emp, '운전기사': name}
+        else:
+            display_map.pop(day_key, None)
+    if display_map:
+        row[DISPATCH_CELL_DISPLAY_KEY] = display_map
+    else:
+        row.pop(DISPATCH_CELL_DISPLAY_KEY, None)
+
+
+def _find_any_dispatch_row_for_car(sheet_data, car_no):
+    car_no = str(car_no or '').strip()
+    if not car_no:
+        return None
+    for row in sheet_data.get('data', []):
+        if str(row.get('차량번호', '')).strip() == car_no:
+            return row
+    return None
+
+
+def _new_dispatch_row_template(seed_row, shift_type, car_no=None):
+    shift_type = str(shift_type or '').strip()
+    car_no = str(car_no or '').strip()
+    if seed_row:
+        car_no = car_no or str(seed_row.get('차량번호', '')).strip()
+        car_type = str(seed_row.get('차종', '')).strip()
+    else:
+        car_type = ''
+    row = {
+        '차량번호': car_no,
+        '차종': car_type,
+        '근무유형': shift_type,
+        '사번': '',
+        '운전기사': '',
+    }
+    for day in range(1, 32):
+        row[str(day)] = ''
+    return row
+
+
+def _ensure_dispatch_row(sheet_data, shift_type, car_no=None, emp_id=None, seed_row=None):
+    """배차 행이 없으면 같은 차량 정보로 새 근무유형 행 추가."""
+    existing = _find_dispatch_row(sheet_data, shift_type, car_no=car_no, emp_id=emp_id)
+    if existing is not None:
+        return existing, False
+    if not car_no and emp_id in (None, ''):
+        return None, False
+    if seed_row is None and car_no:
+        seed_row = _find_any_dispatch_row_for_car(sheet_data, car_no)
+    row = _new_dispatch_row_template(seed_row, shift_type, car_no=car_no)
+    if emp_id not in (None, ''):
+        row['사번'] = normalize_emp_id(emp_id)
+        if seed_row and not row.get('운전기사'):
+            row['운전기사'] = _dispatch_driver_display_name(seed_row)
+    sheet_data.setdefault('data', []).append(row)
+    enrich_dispatch_record(row)
+    return row, True
 
 
 def _find_dispatch_row(sheet_data, shift_type, car_no=None, emp_id=None):
@@ -5151,49 +5400,56 @@ def driver_profile(driver_id):
     if not driver_info:
         return '<h3>운전기사 정보를 찾을 수 없습니다.</h3>'
     
-    # 배차 데이터 로드
-    dispatch_data = load_dispatch_data()
-    lease_data = load_lease_data()
+    # 배차·수입금 데이터 로드
+    dispatch_store = load_dispatch_data_store()
+    profile_year = _default_dispatch_year(dispatch_store.keys()) if dispatch_store else datetime.now().year
+    dispatch_data = dispatch_store.get(str(profile_year)) if dispatch_store else None
+    sales_data = load_sales_data()
     
     # 매출/급여 데이터 집계
     salary_summary = ''
-    if dispatch_data and lease_data:
+    if dispatch_data or sales_data:
         driver_name = driver_info.get('이름', '')
         driver_emp_id = driver_info.get('사번', '')
         
         # 월별 데이터 집계
         monthly_stats = {}
         work_type = str(driver_info.get('근무유형', '') or '').strip()
-        vehicle_types = set()
+        assigned_vehicles = set()
         
         # 배차 데이터에서 승무일 수 집계
-        for month_key in dispatch_data.keys():
-            month_data = dispatch_data[month_key].get('data', [])
-            for record in month_data:
-                if record.get('운전기사', '') == driver_name:
-                    if not work_type:
-                        work_type = record.get('근무유형', '')
-                    vehicle_types.add(record.get('차종', ''))
-                    
-                    stats = compute_dispatch_row_stats(record)
-                    work_days = int(stats['승무일'])
-                    
-                    if month_key not in monthly_stats:
-                        monthly_stats[month_key] = {'승무일': 0}
-                    monthly_stats[month_key]['승무일'] += work_days
+        if dispatch_data:
+            for month_key in dispatch_data.keys():
+                month_data = dispatch_data[month_key].get('data', [])
+                for record in month_data:
+                    if record.get('운전기사', '') == driver_name:
+                        if not work_type:
+                            work_type = record.get('근무유형', '')
+                        car_no = str(record.get('차량번호', '') or '').strip()
+                        car_type = str(record.get('차종', '') or '').strip()
+                        if car_no and car_type:
+                            assigned_vehicles.add(f'{car_no}({car_type})')
+                        elif car_no:
+                            assigned_vehicles.add(car_no)
+                        elif car_type:
+                            assigned_vehicles.add(f'({car_type})')
+                        
+                        stats = compute_dispatch_row_stats(record)
+                        work_days = int(stats['승무일'])
+                        
+                        if month_key not in monthly_stats:
+                            monthly_stats[month_key] = {'승무일': 0}
+                        monthly_stats[month_key]['승무일'] += work_days
         
-        # 리스 데이터에서 급여 정보 집계
-        for month_key in lease_data.keys():
-            month_data = lease_data[month_key].get('data', [])
-            for record in month_data:
-                if record.get('사번', '') == driver_emp_id or record.get('이름', '') == driver_name:
-                    if month_key not in monthly_stats:
-                        monthly_stats[month_key] = {}
-                    
-                    monthly_stats[month_key]['실입금'] = int(record.get('실입금', 0))
-                    monthly_stats[month_key]['연료비'] = int(record.get('연료비', 0))
-                    monthly_stats[month_key]['급여'] = float(record.get('급여', 0))
-                    monthly_stats[month_key]['차종'] = record.get('차종', '')
+        # sales_data.json — 월별 실입금·연료비·급여 (날짜·사번/이름 매칭)
+        for month_key, totals in _aggregate_driver_sales_monthly(
+            sales_data, driver_emp_id, driver_name, year=profile_year
+        ).items():
+            if month_key not in monthly_stats:
+                monthly_stats[month_key] = {}
+            monthly_stats[month_key]['실입금'] = totals['실입금']
+            monthly_stats[month_key]['연료비'] = totals['연료비']
+            monthly_stats[month_key]['급여'] = totals['급여']
         
         # 월 정렬 (01월~12월)
         sorted_months = sorted(monthly_stats.keys())
@@ -5225,11 +5481,11 @@ def driver_profile(driver_id):
             
             chart_labels.append(month)
             chart_workdays.append(work_days)
-            chart_income.append(income)
-            chart_fuel.append(fuel)
-            chart_salary.append(int(salary))
+            chart_income.append(round(float(income) / 10000, 1))
+            chart_fuel.append(round(float(fuel) / 10000, 1))
+            chart_salary.append(round(float(salary) / 10000, 1))
         
-        vehicle_types_str = ', '.join(sorted(vehicle_types)) if vehicle_types else '-'
+        vehicle_types_str = ', '.join(sorted(assigned_vehicles)) if assigned_vehicles else '-'
         
         # 매출/급여 섹션 HTML
         salary_summary = f'''
@@ -5237,7 +5493,7 @@ def driver_profile(driver_id):
             <h3>매출/급여</h3>
             <table class="profile-table" style="margin-bottom:20px;">
                 <tr><td class="label">근무유형</td><td>{work_type or '-'}</td></tr>
-                <tr><td class="label">배차된 차종</td><td>{vehicle_types_str}</td></tr>
+                <tr><td class="label">배차 차량</td><td>{vehicle_types_str}</td></tr>
             </table>
             
             <div style="margin-top:20px;">
@@ -5352,7 +5608,7 @@ def driver_profile(driver_id):
                         beginAtZero: true,
                         title: {{
                             display: true,
-                            text: '금액 (원)'
+                            text: '금액 (만원)'
                         }},
                         grid: {{
                             drawOnChartArea: false
